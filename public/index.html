@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GOLD PULSE AI - JustMarket MT5 Engine</title>
+    <style>
+        :root {
+            --bg-color: #080b11;
+            --card-bg: #111622;
+            --accent-gold: #f3ba2f;
+            --gold-glow: rgba(243, 186, 47, 0.25);
+            --text-main: #ffffff;
+            --text-sub: #848e9c;
+            --green: #0ecb81;
+            --red: #f6465d;
+            --border: #1e2638;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 15px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 12px;
+            margin-bottom: 15px;
+        }
+
+        .brand-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo-emblem {
+            width: 32px;
+            height: 32px;
+            background: radial-gradient(circle, var(--accent-gold) 0%, #b8860b 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 12px var(--gold-glow);
+            animation: pulse-glow 2s infinite ease-in-out;
+            font-size: 16px;
+        }
+
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 8px rgba(243, 186, 47, 0.3); }
+            50% { box-shadow: 0 0 18px rgba(243, 186, 47, 0.7); }
+            100% { box-shadow: 0 0 8px rgba(243, 186, 47, 0.3); }
+        }
+
+        .logo-text {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--accent-gold);
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge {
+            background-color: rgba(14, 203, 129, 0.1);
+            color: var(--green);
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            border: 1px solid var(--green);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--green);
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .news-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        @media (max-width: 900px) {
+            .grid-container, .news-grid { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 15px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--accent-gold);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .signal-title {
+            font-size: 28px;
+            font-weight: 800;
+            margin: 8px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .signal-buy { color: var(--green); }
+        .signal-sell { color: var(--red); }
+        .signal-wait { color: var(--text-sub); }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            font-size: 13px;
+        }
+
+        .metric-value { font-weight: 700; }
+
+        .targets-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .target-box {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border);
+            padding: 8px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .target-box span { display: block; font-size: 11px; color: var(--text-sub); }
+        .target-box b { font-size: 14px; color: var(--accent-gold); }
+
+        .tradingview-container { height: 460px; border-radius: 10px; overflow: hidden; }
+        .widget-box { height: 380px; border-radius: 6px; overflow: hidden; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="brand-box">
+            <div class="logo-emblem">⚡</div>
+            <div>
+                <div class="logo-text">GOLD PULSE AI</div>
+                <div style="font-size: 11px; color: var(--text-sub);">Zero Drawdown Engine | JustMarket MT5</div>
+            </div>
+        </div>
+        <div class="status-badge">
+            <div class="pulse-dot"></div>
+            <span id="liveStatus">متصل بالخادم (تحديث كل ثانية)</span>
+        </div>
+    </div>
+
+    <div class="grid-container">
+        <div class="card">
+            <div style="font-size: 12px; color: var(--text-sub);">التوصية القناصة (إطار M1 / M5)</div>
+            <div class="signal-title">
+                <span>XAU/USD</span>
+                <span id="signalType" class="signal-wait">انتظار</span>
+            </div>
+
+            <div class="metric-row">
+                <span>سعر الدخول (Entry)</span>
+                <span id="entryPrice" class="metric-value">—</span>
+            </div>
+            <div class="metric-row">
+                <span>وقف الخسارة (Stop Loss)</span>
+                <span id="stopLoss" class="metric-value" style="color: var(--red);">—</span>
+            </div>
+            <div class="metric-row">
+                <span>نوع الاستراتيجية</span>
+                <span class="metric-value" style="color: var(--accent-gold);">Zero Drawdown Scalper</span>
+            </div>
+            <div class="metric-row">
+                <span>السبريد الحالي</span>
+                <span id="spreadVal" class="metric-value">—</span>
+            </div>
+
+            <div style="margin-top: 10px; font-size: 12px; color: var(--text-sub);">الأهداف المحددة:</div>
+            <div class="targets-grid">
+                <div class="target-box"><span>الهدف 1</span><b id="tp1">—</b></div>
+                <div class="target-box"><span>الهدف 2</span><b id="tp2">—</b></div>
+                <div class="target-box"><span>الهدف 3</span><b id="tp3">—</b></div>
+            </div>
+
+            <div style="margin-top: 15px; font-size: 11px; color: var(--text-sub); border-top: 1px solid var(--border); padding-top: 8px;">
+                مؤشر RSI: <b id="rsiVal" style="color: #fff;">—</b> | الفلتر: <b style="color: var(--green);">SMC Liquidity Sweep Active</b>
+            </div>
+        </div>
+
+        <div class="card tradingview-container">
+            <div id="tradingview_chart" style="height:100%;"></div>
+        </div>
+    </div>
+
+    <div class="news-grid">
+        <div class="card">
+            <div class="card-title">📅 التقويم الاقتصادي اللحظي (USD)</div>
+            <div class="widget-box">
+                <div class="tradingview-widget-container">
+                    <div class="tradingview-widget-container__widget"></div>
+                    <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-events.js" async>
+                    {
+                        "colorTheme": "dark",
+                        "isTransparent": true,
+                        "width": "100%",
+                        "height": "100%",
+                        "locale": "ar",
+                        "importanceFilter": "0,1",
+                        "currencyFilter": "USD"
+                    }
+                    </script>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">📰 أخبار الذهب المباشرة</div>
+            <div class="widget-box">
+                <div class="tradingview-widget-container">
+                    <div class="tradingview-widget-container__widget"></div>
+                    <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-timeline.js" async>
+                    {
+                        "feedMode": "symbol",
+                        "symbol": "CAPITALCOM:GOLD",
+                        "colorTheme": "dark",
+                        "isTransparent": true,
+                        "displayMode": "regular",
+                        "width": "100%",
+                        "height": "100%",
+                        "locale": "ar"
+                    }
+                    </script>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+    <script type="text/javascript">
+        new TradingView.widget({
+            "autosize": true,
+            "symbol": "CAPITALCOM:GOLD",
+            "interval": "1",
+            "timezone": "Etc/UTC",
+            "theme": "dark",
+            "style": "1",
+            "locale": "ar",
+            "container_id": "tradingview_chart"
+        });
+
+        async function fetchSignal() {
+            try {
+                const res = await fetch('/api/signal');
+                const data = await res.json();
+                
+                document.getElementById('liveStatus').innerText = 'متصل بـ JustMarket MT5';
+                
+                const signalElem = document.getElementById('signalType');
+                signalElem.innerText = data.type || 'انتظار';
+                signalElem.className = 'signal-' + (data.type ? data.type.toLowerCase() : 'wait');
+
+                document.getElementById('entryPrice').innerText = data.entry ? data.entry.toFixed(2) : '—';
+                document.getElementById('stopLoss').innerText = data.sl ? data.sl.toFixed(2) : '—';
+                document.getElementById('tp1').innerText = data.tp1 ? data.tp1.toFixed(2) : '—';
+                document.getElementById('tp2').innerText = data.tp2 ? data.tp2.toFixed(2) : '—';
+                document.getElementById('tp3').innerText = data.tp3 ? data.tp3.toFixed(2) : '—';
+                document.getElementById('spreadVal').innerText = data.spread ? data.spread + ' pips' : '—';
+                document.getElementById('rsiVal').innerText = data.rsi || '—';
+            } catch (err) {
+                document.getElementById('liveStatus').innerText = 'في انتظار إشارة MT5...';
+            }
+        }
+
+        setInterval(fetchSignal, 1000);
+        fetchSignal();
+    </script>
+</body>
+</html>
