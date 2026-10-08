@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NABD VIP TERMINAL | Institutional Gold AI & Risk Engine</title>
+    <title>NABD VIP TERMINAL | Institutional Gold AI, SMC & Risk Engine</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -146,19 +146,32 @@
             color: #fff;
             box-shadow: none;
         }
+
+        /* تأثير التنبيه الأحمر الصارخ للسيولة والأخبار العالية */
+        .high-impact-alert {
+            background: linear-gradient(90deg, #881337 0%, #4c0519 100%) !important;
+            border: 2px solid #f43f5e !important;
+            box-shadow: 0 0 25px rgba(244, 63, 94, 0.7);
+            animation: pulse-alert 1.5s infinite;
+        }
+        @keyframes pulse-alert {
+            0% { box-shadow: 0 0 10px rgba(244, 63, 94, 0.4); }
+            50% { box-shadow: 0 0 35px rgba(244, 63, 94, 0.95); }
+            100% { box-shadow: 0 0 10px rgba(244, 63, 94, 0.4); }
+        }
     </style>
 </head>
 <body class="pb-5">
     <div class="glow-bg"></div>
 
-    <!-- Navigation Header -->
+    <!-- Header Bar -->
     <nav class="navbar navbar-custom mb-4">
         <div class="container-fluid p-0 d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center gap-3">
                 <div class="logo-box"><i class="fa-solid fa-microchip text-white fs-4"></i></div>
                 <div>
-                    <span class="fw-extrabold fs-4 text-white d-block" style="line-height:1">NABD <span class="purple-gradient-text">INSTITUTIONAL AI</span></span>
-                    <small style="font-size: 0.68rem; color: #c084fc;" class="fw-bold"><i class="fa-solid fa-shield-halved me-1"></i> GOLD QUANT & RISK ENGINE v2.5</small>
+                    <span class="fw-extrabold fs-4 text-white d-block" style="line-height:1">NABD <span class="purple-gradient-text">INSTITUTIONAL AI & NEWS</span></span>
+                    <small style="font-size: 0.68rem; color: #c084fc;" class="fw-bold"><i class="fa-solid fa-shield-halved me-1"></i> GOLD QUANT, SMC & RISK TERMINAL</small>
                 </div>
             </div>
             <div class="d-flex align-items-center gap-2">
@@ -169,12 +182,15 @@
 
     <div class="container-fluid px-3">
         
-        <!-- Live News & Market Ticker Bar -->
-        <div class="card card-vip p-2 mb-3 bg-dark text-truncate" style="border-color: rgba(255,255,255,0.1);">
-            <small class="text-warning font-monospace" id="news-ticker"><i class="fa-solid fa-bullhorn me-2"></i> جاري فحص سيولة البنوك والمفكرة الاقتصادية...</small>
+        <!-- News Ticker & Market Sentiment Bar -->
+        <div id="news-card" class="card card-vip p-3 mb-3 bg-dark text-truncate" style="border-color: rgba(255,255,255,0.1);">
+            <div class="d-flex justify-content-between align-items-center">
+                <span class="fw-bold font-monospace" id="news-ticker"><i class="fa-solid fa-bullhorn me-2 text-warning"></i> جاري مسح المفكرة الاقتصادية وتتبع الأخبار...</span>
+                <span id="sentiment-badge" class="badge bg-primary px-3 py-2 font-monospace fs-7">مشاعر السوق: NEUTRAL ⚖️</span>
+            </div>
         </div>
 
-        <!-- Institutional Capital & Risk Calculator Card -->
+        <!-- Risk & Lot Calculator -->
         <div class="card card-vip p-3 mb-4" style="border: 1.5px solid var(--gold-glow); background: rgba(30, 15, 5, 0.6);">
             <div class="row g-3 align-items-center">
                 <div class="col-12 col-md-3 border-end border-secondary">
@@ -207,7 +223,7 @@
             </div>
         </div>
 
-        <!-- Price Cards Row -->
+        <!-- Live Prices and AI Status -->
         <div class="row g-3 mb-4">
             <div class="col-6 col-lg-3">
                 <div class="card card-vip p-3 text-center">
@@ -234,7 +250,34 @@
                     <h2 id="ai-decision" class="purple-gradient-text my-2 fs-2">WAITING ANALYSIS...</h2>
                     <div class="d-flex justify-content-between text-subtle" style="font-size: 0.7rem;">
                         <span>حالة المخاطرة: <strong id="risk-level" class="text-success">LOW RISK</strong></span>
-                        <span id="news-detail" class="text-truncate">جاري مطابقة اتجاه السيولة...</span>
+                        <span id="smc-structure" class="text-info font-monospace">BOS / CHoCH Waiting</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Smart Money Concept (SMC) & Institutional Order Blocks -->
+        <div class="card card-vip p-3 mb-4" style="border-color: rgba(6, 182, 212, 0.4);">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <small class="text-info fw-bold" style="font-size: 0.85rem;"><i class="fa-solid fa-cubes me-1"></i> مناطق المال الذكي والكتل (Smart Money Concepts - SMC)</small>
+            </div>
+            <div class="row g-2 text-center">
+                <div class="col-12 col-md-4">
+                    <div class="metric-vip" style="border-color: rgba(16, 185, 129, 0.3);">
+                        <small class="text-subtle d-block mb-1">كتلة الطلب الشرائية (Bullish OB)</small>
+                        <strong id="smc-ob-bull" class="text-success font-monospace fs-6">$0.00 - $0.00</strong>
+                    </div>
+                </div>
+                <div class="col-12 col-md-4">
+                    <div class="metric-vip" style="border-color: rgba(244, 63, 94, 0.3);">
+                        <small class="text-subtle d-block mb-1">كتلة العرض البيعية (Bearish OB)</small>
+                        <strong id="smc-ob-bear" class="text-danger font-monospace fs-6">$0.00 - $0.00</strong>
+                    </div>
+                </div>
+                <div class="col-12 col-md-4">
+                    <div class="metric-vip" style="border-color: rgba(245, 158, 11, 0.3);">
+                        <small class="text-subtle d-block mb-1">تجمعات السيولة البنكية (BSL / SSL)</small>
+                        <strong id="smc-pools" class="text-warning font-monospace fs-6">BSL: -- | SSL: --</strong>
                     </div>
                 </div>
             </div>
@@ -243,7 +286,7 @@
         <!-- Multi Timeframe Structure -->
         <div class="card card-vip p-3 mb-4">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <small class="text-subtle" style="font-size: 0.78rem;"><i class="fa-solid fa-layer-group me-1 text-purple-glow"></i> تحليلات الشمعات المتعددة (Multi-Timeframe Structure)</small>
+                <small class="text-subtle" style="font-size: 0.78rem;"><i class="fa-solid fa-layer-group me-1 text-purple-glow"></i> تحليلات الشمعات المتعددة (Multi-Timeframe Candle Analysis)</small>
             </div>
             <div class="row g-2 text-center">
                 <div class="col-3"><div id="tf-m5" class="tf-badge">5M: WAITING</div></div>
@@ -253,7 +296,7 @@
             </div>
         </div>
 
-        <!-- Signal & Chart Grid -->
+        <!-- Signal & Live Chart Section -->
         <div class="row g-3 mb-4">
             <div class="col-12 col-lg-5">
                 <div class="card signal-card-vip p-4 h-100 d-flex flex-column justify-content-between">
@@ -306,6 +349,7 @@
             </div>
         </div>
 
+        <!-- History Table -->
         <div class="card card-vip p-3">
             <small class="text-subtle d-block mb-2"><i class="fa-solid fa-list-check me-1 text-purple-glow"></i> سجل الصفقات والتنفيذ الفوري</small>
             <div class="table-responsive">
@@ -367,13 +411,25 @@
                     document.getElementById('ai-decision').innerText = data.aiDecision;
                     document.getElementById('ai-confidence').innerText = "التوافق: " + data.confidence;
                     document.getElementById('recommended-lot').innerText = data.calculatedLot || "0.01";
-                    
-                    if(data.accountBalance) {
-                        document.getElementById('acc-balance').value = data.accountBalance;
+                    document.getElementById('risk-level').innerText = data.riskLevel || "LOW RISK";
+
+                    // تحديث الأخبار وتفعيل تأثير الأحمر الفاقع عند وجود خبر عالي التأثير
+                    const newsCard = document.getElementById('news-card');
+                    if(data.highImpactWarning) {
+                        newsCard.className = "card card-vip p-3 mb-3 high-impact-alert";
+                    } else {
+                        newsCard.className = "card card-vip p-3 mb-3 bg-dark text-truncate";
                     }
 
-                    if(data.newsAlert) {
-                        document.getElementById('news-ticker').innerText = data.newsAlert;
+                    if(data.newsAlert) document.getElementById('news-ticker').innerText = data.newsAlert;
+                    if(data.sentimentScore) document.getElementById('sentiment-badge').innerText = "مشاعر السوق: " + data.sentimentScore;
+
+                    // تحديث بيانات مناطق المال الذكي SMC
+                    if(data.smcData) {
+                        document.getElementById('smc-ob-bull').innerText = data.smcData.orderBlockBullish;
+                        document.getElementById('smc-ob-bear').innerText = data.smcData.orderBlockBearish;
+                        document.getElementById('smc-pools').innerText = data.smcData.liquidityPools;
+                        document.getElementById('smc-structure').innerText = data.smcData.marketStructure;
                     }
 
                     document.getElementById('tf-m5').innerText = "5M: " + data.timeframes.M5;
