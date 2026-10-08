@@ -25,6 +25,7 @@
         .tf-bear { border-right: 4px solid var(--red); color: var(--red); }
         .news-banner { background: linear-gradient(90deg, #1f1704, #101726); border-right: 4px solid var(--gold); border-radius: 8px; }
         .price-val { font-size: 2rem; font-weight: 700; }
+        .signal-card { background: linear-gradient(135deg, #0d192e 0%, #101726 100%); border: 2px solid var(--gold); box-shadow: 0 0 15px rgba(243, 186, 47, 0.15); }
     </style>
 </head>
 <body class="pb-5">
@@ -57,7 +58,7 @@
             <span class="badge bg-outline-warning text-warning border border-warning">تحديث كل 60 ثانية</span>
         </div>
 
-        <!-- كروت البيانات والتحليل المزدوج -->
+        <!-- كروت البيانات والتحليل -->
         <div class="row g-3 mb-4">
             <!-- القرار الموحد -->
             <div class="col-md-3">
@@ -99,6 +100,36 @@
             </div>
         </div>
 
+        <!-- خانة الصفقة الجاهزة للتدريب والتنفيذ المباشر -->
+        <div class="card card-pro signal-card p-3 mb-4">
+            <div class="d-flex align-items-center justify-content-between border-bottom border-secondary pb-2 mb-3">
+                <h5 class="m-0 text-warning"><i class="fa-solid fa-bolt me-2"></i> خانة الصفقة الحالية الجاهزة (Live Signal Setup)</h5>
+                <span id="signal-status" class="badge bg-secondary">بانتظار إشارة من السيرفر</span>
+            </div>
+            <div class="row text-center g-3">
+                <div class="col-md-2 col-6">
+                    <small class="text-muted d-block">نوع الصفقة</small>
+                    <strong id="sig-type" class="fs-5 text-white">---</strong>
+                </div>
+                <div class="col-md-2 col-6">
+                    <small class="text-muted d-block">سعر الدخول</small>
+                    <strong id="sig-entry" class="fs-5 text-info">$0.00</strong>
+                </div>
+                <div class="col-md-3 col-6">
+                    <small class="text-muted d-block">الهدف الأول (TP1)</small>
+                    <strong id="sig-tp1" class="fs-5 text-success">$0.00 (+25 pips)</strong>
+                </div>
+                <div class="col-md-3 col-6">
+                    <small class="text-muted d-block">الهدف الثاني (TP2)</small>
+                    <strong id="sig-tp2" class="fs-5 text-success">$0.00 (+50 pips)</strong>
+                </div>
+                <div class="col-md-2 col-12">
+                    <small class="text-muted d-block">وقف الخسارة (SL)</small>
+                    <strong id="sig-sl" class="fs-5 text-danger">$0.00 (-15 pips)</strong>
+                </div>
+            </div>
+        </div>
+
         <!-- شارت TradingView التفاعلي المؤسسي -->
         <div class="card card-pro p-2" style="height: 600px;">
             <div id="tradingview_gold" style="height: 100%; width: 100%;"></div>
@@ -109,7 +140,6 @@
     <!-- TradingView JS Library -->
     <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
     <script type="text/javascript">
-        // تضمين منصة TradingView للذهب
         new TradingView.widget({
             "autosize": true,
             "symbol": "OANDA:XAUUSD",
@@ -125,14 +155,14 @@
             "container_id": "tradingview_gold"
         });
 
-        // طلب البيانات الحية من السيرفر
         async function updateDashboard() {
             try {
                 const res = await fetch('/api/state');
                 const data = await res.json();
                 
-                if(data.bid) {
-                    document.getElementById('price-ask').innerText = "$" + data.ask.toFixed(2);
+                if(data.bid && data.bid > 0) {
+                    const currentPrice = data.ask;
+                    document.getElementById('price-ask').innerText = "$" + currentPrice.toFixed(2);
                     document.getElementById('price-bid').innerText = "$" + data.bid.toFixed(2);
                     document.getElementById('spread-val').innerText = "Spread: " + data.spread + " pips";
                     document.getElementById('last-update').innerText = "آخر تحديث: " + data.lastUpdate;
@@ -147,6 +177,33 @@
 
                     if(data.newsAlert) {
                         document.getElementById('news-detail').innerText = data.newsAlert;
+                    }
+
+                    // تحديث خانة الصفقة الجاهزة تلقائياً عند ظهور قرار
+                    if(data.aiDecision.includes("STRONG BUY")) {
+                        document.getElementById('signal-status').className = "badge bg-success";
+                        document.getElementById('signal-status').innerText = "صفقة شراء قوية متاحة الان";
+                        document.getElementById('sig-type').innerText = "STRONG BUY 🟢";
+                        document.getElementById('sig-entry').innerText = "$" + currentPrice.toFixed(2);
+                        document.getElementById('sig-tp1').innerText = "$" + (currentPrice + 2.5).toFixed(2) + " (+25 pips)";
+                        document.getElementById('sig-tp2').innerText = "$" + (currentPrice + 5.0).toFixed(2) + " (+50 pips)";
+                        document.getElementById('sig-sl').innerText = "$" + (currentPrice - 1.5).toFixed(2) + " (-15 pips)";
+                    } else if(data.aiDecision.includes("STRONG SELL")) {
+                        document.getElementById('signal-status').className = "badge bg-danger";
+                        document.getElementById('signal-status').innerText = "صفقة بيع قوية متاحة الان";
+                        document.getElementById('sig-type').innerText = "STRONG SELL 🔴";
+                        document.getElementById('sig-entry').innerText = "$" + currentPrice.toFixed(2);
+                        document.getElementById('sig-tp1').innerText = "$" + (currentPrice - 2.5).toFixed(2) + " (+25 pips)";
+                        document.getElementById('sig-tp2').innerText = "$" + (currentPrice - 5.0).toFixed(2) + " (+50 pips)";
+                        document.getElementById('sig-sl').innerText = "$" + (currentPrice + 1.5).toFixed(2) + " (-15 pips)";
+                    } else {
+                        document.getElementById('signal-status').className = "badge bg-secondary";
+                        document.getElementById('signal-status').innerText = "بانتظار اكتمال شروط الصفقة";
+                        document.getElementById('sig-type').innerText = "محايد / انتظر";
+                        document.getElementById('sig-entry').innerText = "$" + currentPrice.toFixed(2);
+                        document.getElementById('sig-tp1').innerText = "---";
+                        document.getElementById('sig-tp2').innerText = "---";
+                        document.getElementById('sig-sl').innerText = "---";
                     }
                 }
             } catch(e) {}
