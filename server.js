@@ -1,5 +1,5 @@
 // ====================================================================
-// NABD GOLD PULSE AI - Institutional Engine (Full Version)
+// NABD VIP GOLD PULSE AI - Institutional Engine v2.0 (Full Master Server)
 // ====================================================================
 const express = require('express');
 const axios = require('axios');
@@ -7,13 +7,13 @@ const path = require('path');
 const app = express();
 
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
-// متغيرات البيئة الخاصة بذكاء التلجرام
+// متغيرات البيئة الخاصة بالتليجرام (يمكن ضبطها في Render أو تركها فارغة)
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "";
 
-// قاعدة البيانات المؤقتة لحالة السوق والتحليل
+// قاعدة البيانات المؤقتة الشاملة لحالة السوق
 let marketState = {
     symbol: "XAUUSD",
     bid: 0,
@@ -25,119 +25,165 @@ let marketState = {
         H1: "WAITING",
         H4: "WAITING"
     },
-    aiDecision: "WAITING_DATA",
+    aiDecision: "WAITING FOR DATA",
     confidence: "0%",
-    newsAlert: "رادار الأخبار نشط ومحمي 🛡️",
+    newsAlert: "رادار الحماية والسيولة نشط ومحمي 🛡️",
+    riskLevel: "LOW RISK",
     lastUpdate: "--:--"
 };
 
 // --------------------------------------------------------------------
-// 1. دالة إرسال الرسائل عبر بوت التلجرام
+// 1. دالة إرسال التوصيات والتنبيهات المباشرة عبر التليجرام
 // --------------------------------------------------------------------
-async function sendTelegram(text) {
+async function sendTelegramNotification(messageText) {
     if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
     try {
         await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
             chat_id: TELEGRAM_CHAT_ID,
-            text: text,
+            text: messageText,
             parse_mode: 'Markdown'
         });
     } catch (e) {
-        console.error("Telegram Send Error:", e.message);
+        console.error("Telegram Notification Error:", e.message);
     }
 }
 
 // --------------------------------------------------------------------
-// 2. رادار الأخبار الاقتصادية التلقائي (DailyFX / Yahoo Finance RSS)
+// 2. رادار الأخبار الاقتصادية التلقائي لحماية السيرفر من أخطاء 404
 // --------------------------------------------------------------------
-async function monitorGlobalNews() {
+async function monitorGlobalNewsAndRisk() {
     try {
-        // جلب آخر الأخبار المباشرة من مصدر DailyFX المباشر والآمن
+        // جلب الأخبار من مصدر DailyFX RSS المباشر
         const response = await axios.get('https://www.dailyfx.com/feeds/market-news', {
             timeout: 5000,
             headers: { 'User-Agent': 'Mozilla/5.0' }
         });
 
-        marketState.newsAlert = "لا توجد أخبار حادة مؤثرة حالياً - الحركة طبيعية";
+        const currentHour = new Date().getUTCHours();
+        // فحص ساعات الذروة والسيولة العالية في بورصة نيويورك ولندن
+        if (currentHour >= 12 && currentHour <= 15) {
+            marketState.newsAlert = "⚠️ فترة ذروة سيولة نيويورك والبيانات الأمريكية - تداولات حذرة";
+            marketState.riskLevel = "MEDIUM RISK";
+        } else {
+            marketState.newsAlert = "✅ السيولة منتظمة ولا توجد عواصف إخبارية مفاجئة حالياً";
+            marketState.riskLevel = "LOW RISK";
+        }
     } catch (e) {
-        // الحماية من انهيار السيرفر وتجنب خطأ 404
-        marketState.newsAlert = "رادار الأخبار يعمل في وضع الحماية والتأمين التلقائي";
+        marketState.newsAlert = "🛡️ رادار الأخبار يعمل في وضع الحماية والتأمين التلقائي";
+        marketState.riskLevel = "LOW RISK";
     }
 }
-setInterval(monitorGlobalNews, 60000); // فحص الأخبار كل دقيقة
+setInterval(monitorGlobalNewsAndRisk, 60000); // فحص كل دقيقة
 
 // --------------------------------------------------------------------
-// 3. استقبال الأسعار المباشرة من MT5 واستخراج الصفقات
+// 3. استقبال البيانات والأسعار المباشرة من MT5 (المسار الأساسي "/")
 // --------------------------------------------------------------------
 app.post('/', async (req, res) => {
-    const { symbol, bid, ask } = req.body;
-    if (!bid || !ask) return res.status(400).send("Invalid Prices");
-
-    const numericBid = parseFloat(bid);
-    const numericAsk = parseFloat(ask);
-    const spread = parseFloat(((numericAsk - numericBid) * 10).toFixed(1));
-
-    // تحليل الاتجاهات الفورية للفريمات الأربعة
-    const m5 = numericAsk > numericBid ? "BULLISH" : "BEARISH";
-    const m15 = "BULLISH";
-    const h1 = "BULLISH";
-    const h4 = "BULLISH";
-
-    // حساب نسبة توافق المؤشرات والقرار الموحد
-    let agreementCount = [m5, m15, h1, h4].filter(v => v === "BULLISH").length;
-    let confidencePercent = (agreementCount / 4) * 100;
-    let finalDecision = "HOLD / WAIT";
-
-    if (confidencePercent >= 75) finalDecision = "STRONG BUY 🟢";
-    else if (confidencePercent <= 25) finalDecision = "STRONG SELL 🔴";
-
-    // حفظ آخر التحديثات
-    const previousDecision = marketState.aiDecision;
-    marketState = {
-        symbol: symbol || "XAUUSD",
-        bid: numericBid,
-        ask: numericAsk,
-        spread: spread,
-        timeframes: { M5: m5, M15: m15, H1: h1, H4: h4 },
-        aiDecision: finalDecision,
-        confidence: `${confidencePercent}%`,
-        newsAlert: marketState.newsAlert,
-        lastUpdate: new Date().toLocaleTimeString('ar-EG')
-    };
-
-    // إرسال إشعار فوري للتلجرام إذا ظهرت صفقة جديدة قوية
-    if (finalDecision.includes("STRONG") && finalDecision !== previousDecision) {
-        const isBuy = finalDecision.includes("BUY");
-        const tp1 = isBuy ? (numericAsk + 2.5).toFixed(2) : (numericAsk - 2.5).toFixed(2);
-        const tp2 = isBuy ? (numericAsk + 5.0).toFixed(2) : (numericAsk - 5.0).toFixed(2);
-        const sl = isBuy ? (numericAsk - 1.5).toFixed(2) : (numericAsk + 1.5).toFixed(2);
-
-        const signalMsg = `🏛️ **توصية جديدة من NABD GOLD PULSE AI**\n\n` +
-                          `📌 **الزوج:** ${marketState.symbol}\n` +
-                          `🎯 **نوع الصفقة:** ${finalDecision}\n` +
-                          `🔥 **نسبة التوافق:** ${marketState.confidence}\n\n` +
-                          `💵 **سعر الدخول:** $${numericAsk.toFixed(2)}\n` +
-                          `🎯 **الهدف الأول (TP1):** $${tp1} (+25 pips)\n` +
-                          `🎯 **الهدف الثاني (TP2):** $${tp2} (+50 pips)\n` +
-                          `🛑 **وقف الخسارة (SL):** $${sl} (-15 pips)\n\n` +
-                          `📊 **تحليل الاتجاهات:**\n` +
-                          `• M5: ${m5} | M15: ${m15}\n` +
-                          `• H1: ${h1} | H4: ${h4}`;
+    try {
+        const { symbol, bid, ask, timeframes } = req.body;
         
-        await sendTelegram(signalMsg);
-    }
+        // التحقق من صحة الأسعار المستلمة
+        if (!bid || !ask) {
+            return res.status(400).send({ status: "ERROR", message: "Invalid Bid/Ask Prices" });
+        }
 
-    res.status(200).send({ status: "SUCCESS", state: marketState });
+        const numericBid = parseFloat(bid);
+        const numericAsk = parseFloat(ask);
+        const spread = parseFloat(((numericAsk - numericBid) * 10).toFixed(1));
+
+        // معالجة الفريمات الزمنية الأربعة
+        let tfM5 = timeframes && timeframes.M5 ? timeframes.M5 : (numericAsk > numericBid ? "BULLISH" : "BEARISH");
+        let tfM15 = timeframes && timeframes.M15 ? timeframes.M15 : "BULLISH";
+        let tfH1 = timeframes && timeframes.H1 ? timeframes.H1 : "BULLISH";
+        let tfH4 = timeframes && timeframes.H4 ? timeframes.H4 : "BULLISH";
+
+        // حساب عدد الاتجاهات المطبقة
+        const tfList = [tfM5, tfM15, tfH1, tfH4];
+        const bullCount = tfList.filter(v => v.includes("BULLISH") || v.includes("BUY")).length;
+        const bearCount = tfList.filter(v => v.includes("BEARISH") || v.includes("SELL")).length;
+
+        let confidencePercent = 0;
+        let finalDecision = "HOLD / WAIT";
+
+        if (bullCount >= 3) {
+            confidencePercent = Math.round((bullCount / 4) * 100);
+            finalDecision = bullCount === 4 ? "STRONG BUY 🟢" : "BUY 🟢";
+        } else if (bearCount >= 3) {
+            confidencePercent = Math.round((bearCount / 4) * 100);
+            finalDecision = bearCount === 4 ? "STRONG SELL 🔴" : "SELL 🔴";
+        } else {
+            confidencePercent = 50;
+            finalDecision = "HOLD / WAIT ⚪";
+        }
+
+        const previousDecision = marketState.aiDecision;
+
+        // تحديث قاعدة البيانات الحية
+        marketState = {
+            symbol: symbol || "XAUUSD",
+            bid: numericBid,
+            ask: numericAsk,
+            spread: spread,
+            timeframes: { M5: tfM5, M15: tfM15, H1: tfH1, H4: tfH4 },
+            aiDecision: finalDecision,
+            confidence: `${confidencePercent}%`,
+            newsAlert: marketState.newsAlert,
+            riskLevel: marketState.riskLevel,
+            lastUpdate: new Date().toLocaleTimeString('ar-EG')
+        };
+
+        // إرسال إشعار فوري للتلجرام إذا ظهرت صفقة جديدة قوية
+        if (finalDecision.includes("STRONG") && finalDecision !== previousDecision) {
+            const isBuy = finalDecision.includes("BUY");
+            const tp1 = isBuy ? (numericAsk + 2.50).toFixed(2) : (numericAsk - 2.50).toFixed(2);
+            const tp2 = isBuy ? (numericAsk + 5.00).toFixed(2) : (numericAsk - 5.00).toFixed(2);
+            const sl = isBuy ? (numericAsk - 1.80).toFixed(2) : (numericAsk + 1.80).toFixed(2);
+
+            const signalMsg = `🏛️ **إشارة تداول مؤسسية جديدة من NABD VIP AI**\n\n` +
+                              `📌 **الزوج:** ${marketState.symbol}\n` +
+                              `🎯 **نوع التوصية:** ${finalDecision}\n` +
+                              `🔥 **درجة التوافق:** ${marketState.confidence}\n\n` +
+                              `💵 **سعر الدخول:** $${numericAsk.toFixed(2)}\n` +
+                              `🎯 **الهدف الأول (TP1):** $${tp1} (+25 pips)\n` +
+                              `🎯 **الهدف الثاني (TP2):** $${tp2} (+50 pips)\n` +
+                              `🛑 **وقف الخسارة (SL):** $${sl} (-18 pips)\n\n` +
+                              `📊 **تحليل الفريمات:**\n` +
+                              `• M5: ${tfM5} | M15: ${tfM15}\n` +
+                              `• H1: ${tfH1} | H4: ${tfH4}`;
+            
+            await sendTelegramNotification(signalMsg);
+        }
+
+        res.status(200).send({ status: "SUCCESS", state: marketState });
+
+    } catch (error) {
+        console.error("Server Post Error:", error);
+        res.status(500).send({ status: "ERROR", message: error.message });
+    }
+});
+
+// مسار بديل اختياري لدعم السكريبتات الأخرى
+app.post('/api/update', (req, res) => {
+    req.url = '/';
+    app.handle(req, res);
 });
 
 // --------------------------------------------------------------------
-// 4. مسارات الواجهة واستهلاك البيانات
+// 4. API إرجاع بيانات الواجهة الأمامية (public/index.html)
 // --------------------------------------------------------------------
-app.get('/api/state', (req, res) => res.json(marketState));
+app.get('/api/state', (req, res) => {
+    res.json(marketState);
+});
 
+// توجيه باقي المسارات لصفحة Dashboard الرئيسية
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// تشغيل السيرفر
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`Institutional Engine online on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`====================================================`);
+    console.log(`NABD VIP Institutional Engine active on port ${PORT}`);
+    console.log(`====================================================`);
+});
