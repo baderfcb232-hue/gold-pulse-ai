@@ -1,7 +1,7 @@
 {
   "name": "nabd-gold-terminal",
   "version": "2.5.0",
-  "description": "NABD Institutional Gold AI & Risk Management Terminal",
+  "description": "NABD Institutional Gold AI, SMC, News & Risk Engine Terminal",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
