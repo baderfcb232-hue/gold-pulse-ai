@@ -68,7 +68,7 @@ async function fetchEconomicNews() {
 setInterval(fetchEconomicNews, 60000); // تحديث الأخبار كل دقيقة
 fetchEconomicNews();
 
-// 2. محرك جلب الأسعار الاحتياطي المباشر (Yahoo Finance / FMP API)
+// 2. محرك جلب الأسعار الاحتياطي المباشر (Yahoo Finance)
 async function fetchBackupGoldData() {
     // يعمل كبديل فقط إذا لم تصل بيانات حية من MT5 بعد
     if (currentState.bid === 0.00) {
@@ -95,7 +95,7 @@ async function fetchBackupGoldData() {
                 );
             }
         } catch (e) {
-            // صامت
+            // صامت في حالة عدم توفر الاتصال الاحتياطي
         }
     }
 }
