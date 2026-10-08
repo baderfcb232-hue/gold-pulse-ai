@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NABD VIP TERMINAL | Institutional Gold AI v2.0</title>
-    <!-- CSS Libraries -->
+    <title>NABD VIP TERMINAL | Institutional Gold AI & Risk Engine</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -19,6 +18,7 @@
             --green-neon: #10b981;
             --red-neon: #f43f5e;
             --cyan-glow: #06b6d4;
+            --gold-glow: #f59e0b;
             --text-main: #f3f4f6;
             --text-sub: rgba(243, 244, 246, 0.75);
         }
@@ -32,7 +32,6 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* Ambient Glow Background */
         .glow-bg {
             position: fixed;
             top: 0;
@@ -45,7 +44,6 @@
             z-index: 0;
         }
 
-        /* Top Navigation Bar */
         .navbar-custom { 
             background: rgba(10, 4, 22, 0.9); 
             backdrop-filter: blur(16px);
@@ -55,7 +53,6 @@
             z-index: 10;
         }
 
-        /* Glassmorphism Cards */
         .card-vip { 
             background: var(--card-glass); 
             backdrop-filter: blur(20px);
@@ -65,12 +62,15 @@
             transition: transform 0.2s ease, border-color 0.2s ease;
         }
 
-        .card-vip:hover {
-            border-color: rgba(168, 85, 247, 0.5);
-        }
-
         .purple-gradient-text { 
             background: linear-gradient(135deg, #c084fc 0%, #f472b6 50%, #38bdf8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+        }
+
+        .gold-gradient-text {
+            background: linear-gradient(135deg, #fef08a 0%, #f59e0b 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             font-weight: 800;
@@ -83,25 +83,11 @@
             letter-spacing: -1px;
         }
 
-        /* Signal Box Styling */
         .signal-card-vip { 
             background: linear-gradient(145deg, rgba(38, 15, 71, 0.95) 0%, rgba(15, 6, 31, 0.98) 100%); 
             border: 1.5px solid var(--purple-glow); 
             box-shadow: 0 0 35px rgba(168, 85, 247, 0.3);
             border-radius: 22px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .signal-card-vip::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, rgba(236, 72, 153, 0.12) 0%, transparent 60%);
-            pointer-events: none;
         }
 
         .metric-vip {
@@ -112,11 +98,8 @@
             font-family: 'JetBrains Mono', monospace;
         }
 
-        .text-subtle {
-            color: var(--text-sub) !important;
-        }
+        .text-subtle { color: var(--text-sub) !important; }
 
-        /* Timeframes Badges */
         .tf-badge { 
             padding: 10px 4px; 
             border-radius: 12px; 
@@ -127,8 +110,6 @@
             border: 1px solid var(--card-border); 
             font-family: 'JetBrains Mono', monospace;
         }
-        .tf-bull { border-bottom: 3px solid var(--green-neon); color: var(--green-neon); background: rgba(16, 185, 129, 0.1); }
-        .tf-bear { border-bottom: 3px solid var(--red-neon); color: var(--red-neon); background: rgba(244, 63, 94, 0.1); }
 
         .logo-box {
             background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
@@ -138,39 +119,8 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 0 20px rgba(236, 72, 153, 0.5);
         }
 
-        /* Sentiment Bar */
-        .sentiment-bar-bg {
-            height: 10px;
-            border-radius: 20px;
-            background: rgba(255, 255, 255, 0.12);
-            overflow: hidden;
-        }
-        .sentiment-bar-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--red-neon) 0%, var(--purple-glow) 50%, var(--green-neon) 100%);
-            width: 50%;
-            transition: width 0.5s ease;
-        }
-
-        /* Sessions Clocks */
-        .session-badge {
-            font-size: 0.72rem;
-            padding: 4px 10px;
-            border-radius: 20px;
-            background: rgba(255,255,255,0.06);
-            border: 1px solid rgba(255,255,255,0.15);
-            color: var(--text-sub);
-        }
-        .session-active {
-            border-color: var(--green-neon);
-            color: var(--green-neon);
-            box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
-        }
-
-        /* Chart Container */
         .chart-box {
             height: 520px;
             border-radius: 20px;
@@ -178,81 +128,87 @@
             border: 1px solid var(--card-border);
         }
 
-        /* History Table Log */
-        .history-table {
-            color: var(--text-main);
-            font-size: 0.8rem;
-        }
-        .history-table th {
-            border-bottom: 1px solid var(--card-border);
-            color: var(--text-sub);
-            font-weight: 600;
-        }
-        .history-table td {
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            padding: 10px 8px;
-        }
+        .history-table { color: var(--text-main); font-size: 0.8rem; }
+        .history-table th { border-bottom: 1px solid var(--card-border); color: var(--text-sub); }
+        .history-table td { border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding: 10px 8px; }
 
-        @media (max-width: 768px) {
-            .chart-box { height: 420px; }
-            .price-val { font-size: 1.4rem; }
+        .form-control-vip {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--card-border);
+            color: #fff;
+            border-radius: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            text-align: center;
+        }
+        .form-control-vip:focus {
+            background: rgba(0, 0, 0, 0.6);
+            border-color: var(--purple-glow);
+            color: #fff;
+            box-shadow: none;
         }
     </style>
 </head>
 <body class="pb-5">
     <div class="glow-bg"></div>
 
-    <!-- VIP Top Navbar -->
+    <!-- Navigation Header -->
     <nav class="navbar navbar-custom mb-4">
         <div class="container-fluid p-0 d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center gap-3">
-                <div class="logo-box">
-                    <i class="fa-solid fa-microchip text-white fs-4"></i>
-                </div>
+                <div class="logo-box"><i class="fa-solid fa-microchip text-white fs-4"></i></div>
                 <div>
                     <span class="fw-extrabold fs-4 text-white d-block" style="line-height:1">NABD <span class="purple-gradient-text">INSTITUTIONAL AI</span></span>
-                    <small style="font-size: 0.68rem; color: #c084fc;" class="fw-bold"><i class="fa-solid fa-shield-halved me-1"></i> GOLD QUANT TERMINAL v2.0</small>
+                    <small style="font-size: 0.68rem; color: #c084fc;" class="fw-bold"><i class="fa-solid fa-shield-halved me-1"></i> GOLD QUANT & RISK ENGINE v2.5</small>
                 </div>
             </div>
-            
-            <div class="d-none d-md-flex align-items-center gap-2">
-                <span class="session-badge" id="sess-tokyo"><i class="fa-regular fa-clock me-1"></i> طوكيو</span>
-                <span class="session-badge session-active" id="sess-london"><i class="fa-solid fa-bolt me-1"></i> لندن</span>
-                <span class="session-badge session-active" id="sess-ny"><i class="fa-solid fa-fire me-1"></i> نيويورك</span>
-            </div>
-
             <div class="d-flex align-items-center gap-2">
-                <span id="news-status" class="badge px-3 py-2 fs-7" style="background: linear-gradient(135deg, #a855f7, #ec4899); box-shadow: 0 0 15px rgba(168,85,247,0.4);">
-                    <i class="fa-solid fa-satellite me-1"></i> VIP RADAR
-                </span>
-                <span class="badge bg-success px-3 py-2 fs-7">
-                    <i class="fa-solid fa-link me-1"></i> MT5 LIVE
-                </span>
+                <span class="badge bg-success px-3 py-2 fs-7"><i class="fa-solid fa-link me-1"></i> MT5 LIVE CONNECTED</span>
             </div>
         </div>
     </nav>
 
     <div class="container-fluid px-3">
         
-        <!-- Live Alert Banner -->
-        <div class="p-3 mb-4 card-vip d-flex align-items-center justify-content-between gap-3" style="border-right: 4px solid var(--magenta-glow);">
-            <div class="d-flex align-items-center gap-3">
-                <i class="fa-solid fa-triangle-exclamation fs-3 text-warning"></i>
-                <div class="overflow-hidden">
-                    <small class="text-subtle d-block" style="font-size: 0.72rem;">رادار الحماية والمخاطر والمؤسسات</small>
-                    <div id="news-detail" class="text-white fw-bold text-truncate" style="font-size: 0.88rem;">
-                        جاري فحص سيولة البنوك والبيانات الاقتصادية...
+        <!-- Live News & Market Ticker Bar -->
+        <div class="card card-vip p-2 mb-3 bg-dark text-truncate" style="border-color: rgba(255,255,255,0.1);">
+            <small class="text-warning font-monospace" id="news-ticker"><i class="fa-solid fa-bullhorn me-2"></i> جاري فحص سيولة البنوك والمفكرة الاقتصادية...</small>
+        </div>
+
+        <!-- Institutional Capital & Risk Calculator Card -->
+        <div class="card card-vip p-3 mb-4" style="border: 1.5px solid var(--gold-glow); background: rgba(30, 15, 5, 0.6);">
+            <div class="row g-3 align-items-center">
+                <div class="col-12 col-md-3 border-end border-secondary">
+                    <small class="text-subtle d-block mb-1" style="font-size: 0.75rem;"><i class="fa-solid fa-wallet text-warning me-1"></i> رأس مال الحساب (USD)</small>
+                    <div class="input-group">
+                        <span class="input-group-text bg-dark border-secondary text-warning fw-bold">$</span>
+                        <input type="number" id="acc-balance" class="form-control form-control-vip fw-bold fs-5" value="1000" onchange="updateRiskSettings()">
                     </div>
                 </div>
-            </div>
-            <div class="text-start d-none d-sm-block">
-                <small class="text-subtle d-block" style="font-size: 0.68rem;">حالة المخاطرة</small>
-                <span class="badge bg-success" id="risk-level">LOW RISK</span>
+
+                <div class="col-12 col-md-3 border-end border-secondary">
+                    <small class="text-subtle d-block mb-1" style="font-size: 0.75rem;"><i class="fa-solid fa-gauge-high text-danger me-1"></i> نسبة المخاطرة للصفقة (%)</small>
+                    <select id="risk-select" class="form-select form-control-vip fw-bold" onchange="updateRiskSettings()">
+                        <option value="0.5">0.5% (حذر جداً)</option>
+                        <option value="1.0" selected>1.0% (إدارة مخاطر مثالية)</option>
+                        <option value="2.0">2.0% (متوسط المخاطرة)</option>
+                        <option value="3.0">3.0% (مخاطرة عالية)</option>
+                    </select>
+                </div>
+
+                <div class="col-6 col-md-3 text-center border-end border-secondary">
+                    <small class="text-subtle d-block" style="font-size: 0.72rem;">المبلغ المخاطر به (Loss Risk)</small>
+                    <span id="risk-amount" class="text-danger fw-bold font-monospace fs-4">$10.00</span>
+                </div>
+
+                <div class="col-6 col-md-3 text-center">
+                    <small class="text-subtle d-block" style="font-size: 0.72rem;">حجم اللوت المقترح (Recommended Lot)</small>
+                    <span id="recommended-lot" class="gold-gradient-text font-monospace fs-2">0.05</span>
+                </div>
             </div>
         </div>
 
+        <!-- Price Cards Row -->
         <div class="row g-3 mb-4">
-            <!-- Price Card Ask -->
             <div class="col-6 col-lg-3">
                 <div class="card card-vip p-3 text-center">
                     <small class="text-subtle" style="font-size: 0.75rem;"><i class="fa-solid fa-circle-up text-success me-1"></i> سعر الشراء (Ask)</small>
@@ -261,7 +217,6 @@
                 </div>
             </div>
 
-            <!-- Price Card Bid -->
             <div class="col-6 col-lg-3">
                 <div class="card card-vip p-3 text-center">
                     <small class="text-subtle" style="font-size: 0.75rem;"><i class="fa-solid fa-circle-down text-danger me-1"></i> سعر البيع (Bid)</small>
@@ -270,165 +225,133 @@
                 </div>
             </div>
 
-            <!-- AI Decision & Sentiment Gauge -->
             <div class="col-12 col-lg-6">
                 <div class="card card-vip p-3 text-center d-flex flex-column justify-content-between h-100">
                     <div class="d-flex justify-content-between align-items-center mb-1">
-                        <small class="text-subtle" style="font-size: 0.75rem;"><i class="fa-solid fa-brain me-1 text-purple-glow"></i> قرار الذكاء الاصطناعي المؤسسي</small>
+                        <small class="text-subtle" style="font-size: 0.75rem;"><i class="fa-solid fa-brain me-1 text-purple-glow"></i> قرار الذكاء الاصطناعي</small>
                         <small id="ai-confidence" class="text-cyan-glow fw-bold" style="font-size: 0.78rem;">التوافق: 0%</small>
                     </div>
-                    
                     <h2 id="ai-decision" class="purple-gradient-text my-2 fs-2">WAITING ANALYSIS...</h2>
-
-                    <!-- Sentiment Bar -->
-                    <div>
-                        <div class="d-flex justify-content-between text-subtle mb-1" style="font-size: 0.68rem;">
-                            <span class="text-danger"><i class="fa-solid fa-arrow-down-long"></i> بيع مؤسسي</span>
-                            <span class="text-success">شراء مؤسسي <i class="fa-solid fa-arrow-up-long"></i></span>
-                        </div>
-                        <div class="sentiment-bar-bg">
-                            <div id="sentiment-fill" class="sentiment-bar-fill"></div>
-                        </div>
+                    <div class="d-flex justify-content-between text-subtle" style="font-size: 0.7rem;">
+                        <span>حالة المخاطرة: <strong id="risk-level" class="text-success">LOW RISK</strong></span>
+                        <span id="news-detail" class="text-truncate">جاري مطابقة اتجاه السيولة...</span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Multi Timeframe Candles Status -->
+        <!-- Multi Timeframe Structure -->
         <div class="card card-vip p-3 mb-4">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <small class="text-subtle" style="font-size: 0.78rem;"><i class="fa-solid fa-layer-group me-1 text-purple-glow"></i> تحليلات الشمعات المتعددة (Multi-Timeframe Structure)</small>
-                <small class="text-subtle" style="font-size: 0.68rem;">SMC & Price Action Engine</small>
             </div>
             <div class="row g-2 text-center">
-                <div class="col-3"><div id="tf-m5" class="tf-badge tf-bull">5M: WAITING</div></div>
-                <div class="col-3"><div id="tf-m15" class="tf-badge tf-bull">15M: WAITING</div></div>
-                <div class="col-3"><div id="tf-h1" class="tf-badge tf-bull">1H: WAITING</div></div>
-                <div class="col-3"><div id="tf-h4" class="tf-badge tf-bull">4H: WAITING</div></div>
+                <div class="col-3"><div id="tf-m5" class="tf-badge">5M: WAITING</div></div>
+                <div class="col-3"><div id="tf-m15" class="tf-badge">15M: WAITING</div></div>
+                <div class="col-3"><div id="tf-h1" class="tf-badge">1H: WAITING</div></div>
+                <div class="col-3"><div id="tf-h4" class="tf-badge">4H: WAITING</div></div>
             </div>
         </div>
 
-        <!-- Signal & TradingView Chart Grid -->
+        <!-- Signal & Chart Grid -->
         <div class="row g-3 mb-4">
-            <!-- Active Signal Card -->
             <div class="col-12 col-lg-5">
                 <div class="card signal-card-vip p-4 h-100 d-flex flex-column justify-content-between">
                     <div>
                         <div class="d-flex align-items-center justify-content-between border-bottom border-secondary pb-2 mb-3">
                             <span class="fw-bold purple-gradient-text fs-5"><i class="fa-solid fa-crosshairs me-2"></i> إشارة التداول الحالية</span>
-                            <span id="signal-status" class="badge bg-secondary px-3 py-2" style="font-size: 0.78rem;">في انتظار صفقة</span>
+                            <span id="signal-status" class="badge bg-secondary px-3 py-2">في انتظار صفقة</span>
                         </div>
 
                         <div class="row g-2 text-center my-3">
                             <div class="col-6">
                                 <div class="metric-vip">
-                                    <small class="text-subtle d-block mb-1" style="font-size: 0.72rem;">نوع التوصية</small>
+                                    <small class="text-subtle d-block mb-1">نوع التوصية</small>
                                     <strong id="sig-type" class="fs-5 text-white">WAITING</strong>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="metric-vip">
-                                    <small class="text-subtle d-block mb-1" style="font-size: 0.72rem;">نقطة الدخول (Entry)</small>
+                                    <small class="text-subtle d-block mb-1">نقطة الدخول</small>
                                     <strong id="sig-entry" class="fs-5 text-info">$0.00</strong>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="metric-vip" style="border-color: rgba(16, 185, 129, 0.4);">
-                                    <small class="text-subtle d-block mb-1" style="font-size: 0.72rem;">الهدف الأول (TP1)</small>
+                                    <small class="text-subtle d-block mb-1">الهدف الأول (TP1)</small>
                                     <strong id="sig-tp1" class="fs-5 text-success">$0.00</strong>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="metric-vip" style="border-color: rgba(16, 185, 129, 0.4);">
-                                    <small class="text-subtle d-block mb-1" style="font-size: 0.72rem;">الهدف الثاني (TP2)</small>
+                                    <small class="text-subtle d-block mb-1">الهدف الثاني (TP2)</small>
                                     <strong id="sig-tp2" class="fs-5 text-success">$0.00</strong>
                                 </div>
                             </div>
                             <div class="col-12">
                                 <div class="metric-vip" style="border-color: rgba(244, 63, 94, 0.4);">
-                                    <small class="text-subtle d-block mb-1" style="font-size: 0.72rem;">وقف الخسارة المحمي (SL)</small>
+                                    <small class="text-subtle d-block mb-1">وقف الخسارة المحمي (SL)</small>
                                     <strong id="sig-sl" class="fs-5 text-danger">$0.00</strong>
                                 </div>
                             </div>
                         </div>
                     </div>
-
-                    <div class="text-center pt-2 border-top border-secondary">
-                        <small class="text-subtle" style="font-size: 0.7rem;"><i class="fa-solid fa-shield-cat me-1"></i> الحماية تلقائية لمستويات الستوب والتيك بروفيت</small>
-                    </div>
                 </div>
             </div>
 
-            <!-- TradingView Chart -->
             <div class="col-12 col-lg-7">
                 <div class="chart-box">
-                    <iframe 
-                        src="https://s.tradingview.com/widgetembed/?frameElementId=tradingview_1&symbol=OANDA%3AXAUUSD&interval=15&hidesidetoolbar=0&symboledit=1&saveimage=0&toolbarbg=05020a&theme=dark&style=1&timezone=Etc%2FUTC" 
-                        width="100%" 
-                        height="100%" 
-                        style="border:0;" 
-                        allowfullscreen>
-                    </iframe>
+                    <iframe src="https://s.tradingview.com/widgetembed/?frameElementId=tradingview_1&symbol=OANDA%3AXAUUSD&interval=15&hidesidetoolbar=0&symboledit=1&saveimage=0&toolbarbg=05020a&theme=dark&style=1&timezone=Etc%2FUTC" width="100%" height="100%" style="border:0;" allowfullscreen></iframe>
                 </div>
             </div>
         </div>
 
-        <!-- SMC Levels & Detailed Execution History Panel -->
-        <div class="row g-3">
-            <div class="col-12 col-md-5">
-                <div class="card card-vip p-3 h-100">
-                    <small class="text-subtle d-block mb-3" style="font-size: 0.78rem;"><i class="fa-solid fa-cubes me-1 text-purple-glow"></i> مناطق السيولة والكتل (Smart Money Concept)</small>
-                    <div class="d-flex justify-content-between align-items-center p-2 mb-2 rounded bg-dark border border-secondary">
-                        <small class="text-subtle">Order Block (دعم مؤسسي)</small>
-                        <span id="ob-buy" class="text-success fw-bold font-monospace">$0.00</span>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center p-2 mb-3 rounded bg-dark border border-secondary">
-                        <small class="text-subtle">Order Block (مقاومة مؤسسية)</small>
-                        <span id="ob-sell" class="text-danger fw-bold font-monospace">$0.00</span>
-                    </div>
-                    <div class="p-2 rounded bg-dark border border-secondary">
-                        <small class="text-subtle d-block mb-1">نسبة توزيع الأوامر (Market Depth)</small>
-                        <div class="progress" style="height: 8px;">
-                            <div class="progress-bar bg-success" style="width: 60%"></div>
-                            <div class="progress-bar bg-danger" style="width: 40%"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-12 col-md-7">
-                <div class="card card-vip p-3 h-100">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <small class="text-subtle" style="font-size: 0.78rem;"><i class="fa-solid fa-list-check me-1 text-purple-glow"></i> سجل الصفقات والنشاط الأخير (Live Executions)</small>
-                        <small class="text-cyan-glow fw-bold" style="font-size: 0.7rem;">تحديث فوري</small>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="table history-table mb-0 text-center">
-                            <thead>
-                                <tr>
-                                    <th>الوقت</th>
-                                    <th>النوع</th>
-                                    <th>الدخول</th>
-                                    <th>الهدف</th>
-                                    <th>الستوب</th>
-                                    <th>الحالة</th>
-                                </tr>
-                            </thead>
-                            <tbody id="signals-history-body">
-                                <tr>
-                                    <td colspan="6" class="text-subtle py-3"><i class="fa-solid fa-spinner fa-spin me-1"></i> بانتظار استلام أوامر جديدة من MT5...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+        <div class="card card-vip p-3">
+            <small class="text-subtle d-block mb-2"><i class="fa-solid fa-list-check me-1 text-purple-glow"></i> سجل الصفقات والتنفيذ الفوري</small>
+            <div class="table-responsive">
+                <table class="table history-table mb-0 text-center">
+                    <thead>
+                        <tr>
+                            <th>الوقت</th>
+                            <th>النوع</th>
+                            <th>الدخول</th>
+                            <th>الهدف</th>
+                            <th>الستوب</th>
+                            <th>اللوت المحسوب</th>
+                        </tr>
+                    </thead>
+                    <tbody id="signals-history-body">
+                        <tr>
+                            <td colspan="6" class="text-subtle py-3">بانتظار استلام بيانات التداول الحية...</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
     </div>
 
-    <!-- Script update Dashboard -->
     <script>
+        async function updateRiskSettings() {
+            const balance = parseFloat(document.getElementById('acc-balance').value) || 1000;
+            const riskPercent = parseFloat(document.getElementById('risk-select').value) || 1.0;
+            
+            const riskAmount = balance * (riskPercent / 100);
+            document.getElementById('risk-amount').innerText = "$" + riskAmount.toFixed(2);
+
+            try {
+                const res = await fetch('/api/risk-settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ riskPercent, balance })
+                });
+                const data = await res.json();
+                if(data.calculatedLot) {
+                    document.getElementById('recommended-lot').innerText = data.calculatedLot;
+                }
+            } catch(e) {}
+        }
+
         async function updateDashboard() {
             try {
                 const res = await fetch('/api/state');
@@ -443,38 +366,31 @@
                     
                     document.getElementById('ai-decision').innerText = data.aiDecision;
                     document.getElementById('ai-confidence').innerText = "التوافق: " + data.confidence;
+                    document.getElementById('recommended-lot').innerText = data.calculatedLot || "0.01";
                     
+                    if(data.accountBalance) {
+                        document.getElementById('acc-balance').value = data.accountBalance;
+                    }
+
+                    if(data.newsAlert) {
+                        document.getElementById('news-ticker').innerText = data.newsAlert;
+                    }
+
                     document.getElementById('tf-m5').innerText = "5M: " + data.timeframes.M5;
                     document.getElementById('tf-m15').innerText = "15M: " + data.timeframes.M15;
                     document.getElementById('tf-h1').innerText = "1H: " + data.timeframes.H1;
                     document.getElementById('tf-h4').innerText = "4H: " + data.timeframes.H4;
 
-                    document.getElementById('ob-buy').innerText = "$" + (currentPrice - 3.20).toFixed(2);
-                    document.getElementById('ob-sell').innerText = "$" + (currentPrice + 3.20).toFixed(2);
-
-                    if(data.newsAlert) {
-                        document.getElementById('news-detail').innerText = data.newsAlert;
-                    }
-
-                    if(data.riskLevel) {
-                        document.getElementById('risk-level').innerText = data.riskLevel;
-                        document.getElementById('risk-level').className = data.riskLevel.includes('HIGH') ? 'badge bg-danger' : 'badge bg-success';
-                    }
-
-                    const confidenceVal = parseInt(data.confidence) || 50;
-                    const fillBar = document.getElementById('sentiment-fill');
                     const historyTable = document.getElementById('signals-history-body');
 
                     if(data.aiDecision.includes("BUY")) {
-                        fillBar.style.width = Math.min(confidenceVal, 95) + "%";
-                        
                         document.getElementById('signal-status').className = "badge bg-success px-3 py-2";
                         document.getElementById('signal-status').innerText = "فرصة شراء عالية الدقة";
-                        document.getElementById('sig-type').innerText = "STRONG BUY 🟢";
+                        document.getElementById('sig-type').innerText = "BUY 🟢";
                         document.getElementById('sig-entry').innerText = "$" + currentPrice.toFixed(2);
                         document.getElementById('sig-tp1').innerText = "$" + (currentPrice + 2.50).toFixed(2);
                         document.getElementById('sig-tp2').innerText = "$" + (currentPrice + 5.00).toFixed(2);
-                        document.getElementById('sig-sl').innerText = "$" + (currentPrice - 1.80).toFixed(2);
+                        document.getElementById('sig-sl').innerText = "$" + (currentPrice - 2.00).toFixed(2);
 
                         historyTable.innerHTML = `
                             <tr>
@@ -482,21 +398,18 @@
                                 <td><span class="badge bg-success">BUY</span></td>
                                 <td class="font-monospace">$${currentPrice.toFixed(2)}</td>
                                 <td class="font-monospace text-success">$${(currentPrice + 2.50).toFixed(2)}</td>
-                                <td class="font-monospace text-danger">$${(currentPrice - 1.80).toFixed(2)}</td>
-                                <td><span class="badge bg-info text-dark">نشطة</span></td>
+                                <td class="font-monospace text-danger">$${(currentPrice - 2.00).toFixed(2)}</td>
+                                <td class="font-monospace text-warning fw-bold">${data.calculatedLot} Lot</td>
                             </tr>
                         `;
-
                     } else if(data.aiDecision.includes("SELL")) {
-                        fillBar.style.width = (100 - Math.min(confidenceVal, 95)) + "%";
-
                         document.getElementById('signal-status').className = "badge bg-danger px-3 py-2";
                         document.getElementById('signal-status').innerText = "فرصة بيع عالية الدقة";
-                        document.getElementById('sig-type').innerText = "STRONG SELL 🔴";
+                        document.getElementById('sig-type').innerText = "SELL 🔴";
                         document.getElementById('sig-entry').innerText = "$" + currentPrice.toFixed(2);
                         document.getElementById('sig-tp1').innerText = "$" + (currentPrice - 2.50).toFixed(2);
                         document.getElementById('sig-tp2').innerText = "$" + (currentPrice - 5.00).toFixed(2);
-                        document.getElementById('sig-sl').innerText = "$" + (currentPrice + 1.80).toFixed(2);
+                        document.getElementById('sig-sl').innerText = "$" + (currentPrice + 2.00).toFixed(2);
 
                         historyTable.innerHTML = `
                             <tr>
@@ -504,24 +417,8 @@
                                 <td><span class="badge bg-danger">SELL</span></td>
                                 <td class="font-monospace">$${currentPrice.toFixed(2)}</td>
                                 <td class="font-monospace text-success">$${(currentPrice - 2.50).toFixed(2)}</td>
-                                <td class="font-monospace text-danger">$${(currentPrice + 1.80).toFixed(2)}</td>
-                                <td><span class="badge bg-info text-dark">نشطة</span></td>
-                            </tr>
-                        `;
-
-                    } else {
-                        fillBar.style.width = "50%";
-                        document.getElementById('signal-status').className = "badge bg-secondary px-3 py-2";
-                        document.getElementById('signal-status').innerText = "في انتظار صفقة";
-                        document.getElementById('sig-type').innerText = "HOLD";
-                        document.getElementById('sig-entry').innerText = "$" + currentPrice.toFixed(2);
-                        document.getElementById('sig-tp1').innerText = "---";
-                        document.getElementById('sig-tp2').innerText = "---";
-                        document.getElementById('sig-sl').innerText = "---";
-
-                        historyTable.innerHTML = `
-                            <tr>
-                                <td colspan="6" class="text-subtle py-2"><i class="fa-solid fa-clock me-1"></i> [${data.lastUpdate}] السوق في حالة تذبذب - بانتظار استراتيجية مؤسسية</td>
+                                <td class="font-monospace text-danger">$${(currentPrice + 2.00).toFixed(2)}</td>
+                                <td class="font-monospace text-warning fw-bold">${data.calculatedLot} Lot</td>
                             </tr>
                         `;
                     }
