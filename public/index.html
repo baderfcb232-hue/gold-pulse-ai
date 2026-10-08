@@ -4,55 +4,112 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NABD Gold AI | Institutional Trading Terminal</title>
+    <!-- CSS Libraries -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        :root { --bg-dark: #070a12; --card-bg: #101726; --gold: #f3ba2f; --green: #02c076; --red: #f84960; }
+        :root {
+            --bg-dark: #070a12;
+            --card-bg: #101726;
+            --gold: #f3ba2f;
+            --green: #02c076;
+            --red: #f84960;
+            --border: #1a263d;
+        }
         body { background-color: var(--bg-dark); color: #e1e3e6; font-family: 'Segoe UI', Tahoma, sans-serif; }
-        .card-pro { background: var(--card-bg); border: 1px solid #1a263d; border-radius: 12px; }
+        .navbar-custom { background: #0b111e; border-bottom: 1px solid var(--border); }
+        .card-pro { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; }
         .gold-glow { color: var(--gold); text-shadow: 0 0 10px rgba(243, 186, 47, 0.3); }
-        .tf-badge { padding: 6px 12px; border-radius: 6px; font-weight: bold; background: #1a263d; }
-        .tf-bull { border-right: 3px solid var(--green); color: var(--green); }
-        .tf-bear { border-right: 3px solid var(--red); color: var(--red); }
+        .tf-badge { padding: 10px; border-radius: 8px; font-weight: bold; background: #162136; text-align: center; border: 1px solid var(--border); }
+        .tf-bull { border-right: 4px solid var(--green); color: var(--green); }
+        .tf-bear { border-right: 4px solid var(--red); color: var(--red); }
+        .news-banner { background: linear-gradient(90deg, #1f1704, #101726); border-right: 4px solid var(--gold); border-radius: 8px; }
+        .price-val { font-size: 2rem; font-weight: 700; }
     </style>
 </head>
-<body class="p-3">
-    <!-- الشريط العلوي -->
-    <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom border-secondary">
-        <h3 class="m-0"><i class="fa-solid fa-brain text-warning me-2"></i>NABD <span class="gold-glow">GOLD PULSE AI</span></h3>
-        <span id="news-status" class="badge bg-danger p-2"><i class="fa-solid fa-bullhorn me-1"></i> رادار الأخبار مفعل</span>
-    </div>
+<body class="pb-5">
 
-    <!-- كروت التحليل والقرار -->
-    <div class="row g-3 mb-3">
-        <div class="col-md-3">
-            <div class="card card-pro p-3 text-center">
-                <small class="text-muted">القرار الموحد للذكاء الاصطناعي</small>
-                <h4 id="ai-decision" class="text-warning mt-2">WAITING...</h4>
-                <small id="ai-confidence" class="text-info">درجة التوافق: 0%</small>
+    <!-- Navbar -->
+    <nav class="navbar navbar-custom py-3 mb-4">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand d-flex align-items-center gap-2" href="#">
+                <i class="fa-solid fa-brain text-warning fs-3"></i>
+                <span class="fs-4 fw-bold text-white">NABD <span class="gold-glow">GOLD PULSE AI</span></span>
+            </a>
+            <div class="d-flex align-items-center gap-3">
+                <span id="news-status" class="badge bg-warning text-dark p-2"><i class="fa-solid fa-satellite-dish me-1"></i> رادار الأخبار الاقتصادية مفعل</span>
+                <span class="badge bg-success p-2"><i class="fa-solid fa-signal me-1"></i> متصل بـ MT5</span>
             </div>
         </div>
-        <div class="col-md-9">
-            <div class="card card-pro p-3">
-                <small class="text-muted mb-2 d-block">تحليل الاتجاه الشمعي الفوري (Multi-Timeframe Analysis)</small>
-                <div class="row text-center g-2">
-                    <div class="col-3"><div id="tf-m5" class="tf-badge tf-bull">5M: ---</div></div>
-                    <div class="col-3"><div id="tf-m15" class="tf-badge tf-bull">15M: ---</div></div>
-                    <div class="col-3"><div id="tf-h1" class="tf-badge tf-bull">1H: ---</div></div>
-                    <div class="col-3"><div id="tf-h4" class="tf-badge tf-bull">4H: ---</div></div>
+    </nav>
+
+    <div class="container-fluid px-4">
+        
+        <!-- رادار الأخبار الاقتصادية المباشر -->
+        <div class="p-3 mb-4 news-banner d-flex align-items-center justify-content-between card-pro">
+            <div class="d-flex align-items-center gap-3">
+                <i class="fa-solid fa-newspaper text-warning fs-3"></i>
+                <div>
+                    <small class="text-muted d-block">مراقب الأخبار المباشر (DailyFX / ForexFactory / Finance Magnates)</small>
+                    <strong id="news-detail" class="text-white">جاري الفحص التلقائي للأخبار القوية (تنبيه مسبق قبل 30 دقيقة)...</strong>
+                </div>
+            </div>
+            <span class="badge bg-outline-warning text-warning border border-warning">تحديث كل 60 ثانية</span>
+        </div>
+
+        <!-- كروت البيانات والتحليل المزدوج -->
+        <div class="row g-3 mb-4">
+            <!-- القرار الموحد -->
+            <div class="col-md-3">
+                <div class="card card-pro p-3 text-center h-100 d-flex flex-column justify-content-center">
+                    <small class="text-muted d-block mb-1"><i class="fa-solid fa-microchip me-1"></i> قرار الذكاء الاصطناعي</small>
+                    <h3 id="ai-decision" class="text-warning my-2">WAITING...</h3>
+                    <small id="ai-confidence" class="text-info fw-bold">درجة التوافق: 0%</small>
+                </div>
+            </div>
+
+            <!-- الأسعار المباشرة -->
+            <div class="col-md-3">
+                <div class="card card-pro p-3 text-center h-100 justify-content-center">
+                    <small class="text-muted"><i class="fa-solid fa-arrow-trend-up text-success me-1"></i> سعر الشراء (Ask)</small>
+                    <div id="price-ask" class="price-val text-success my-1">$0.00</div>
+                    <small id="spread-val" class="text-muted">Spread: 0.0 pips</small>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card card-pro p-3 text-center h-100 justify-content-center">
+                    <small class="text-muted"><i class="fa-solid fa-arrow-trend-down text-danger me-1"></i> سعر البيع (Bid)</small>
+                    <div id="price-bid" class="price-val text-danger my-1">$0.00</div>
+                    <small id="last-update" class="text-muted">آخر تحديث: --:--</small>
+                </div>
+            </div>
+
+            <!-- الفريمات الأربعة -->
+            <div class="col-md-3">
+                <div class="card card-pro p-3 h-100 justify-content-center">
+                    <small class="text-muted mb-2 text-center d-block"><i class="fa-solid fa-layer-group me-1"></i> الاتجاه الفني للشمعات</small>
+                    <div class="row g-2 text-center">
+                        <div class="col-6"><div id="tf-m5" class="tf-badge tf-bull">5M: ---</div></div>
+                        <div class="col-6"><div id="tf-m15" class="tf-badge tf-bull">15M: ---</div></div>
+                        <div class="col-6"><div id="tf-h1" class="tf-badge tf-bull">1H: ---</div></div>
+                        <div class="col-6"><div id="tf-h4" class="tf-badge tf-bull">4H: ---</div></div>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <!-- شارت TradingView التفاعلي المؤسسي -->
+        <div class="card card-pro p-2" style="height: 600px;">
+            <div id="tradingview_gold" style="height: 100%; width: 100%;"></div>
+        </div>
+
     </div>
 
-    <!-- شارت TradingView التفاعلي العالمي المتكامل -->
-    <div class="card card-pro p-2 mb-3" style="height: 550px;">
-        <div id="tradingview_gold" style="height: 100%; width: 100%;"></div>
-    </div>
-
+    <!-- TradingView JS Library -->
     <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
     <script type="text/javascript">
-        // تضمين منصة TradingView العالمية المباشرة للذهب
+        // تضمين منصة TradingView للذهب
         new TradingView.widget({
             "autosize": true,
             "symbol": "OANDA:XAUUSD",
@@ -68,22 +125,33 @@
             "container_id": "tradingview_gold"
         });
 
-        // تحديث البيانات الحية من السيرفر
-        async function fetchState() {
+        // طلب البيانات الحية من السيرفر
+        async function updateDashboard() {
             try {
                 const res = await fetch('/api/state');
                 const data = await res.json();
                 
-                document.getElementById('ai-decision').innerText = data.aiDecision;
-                document.getElementById('ai-confidence').innerText = "درجة التوافق: " + data.confidence;
-                document.getElementById('tf-m5').innerText = "5M: " + data.timeframes.M5;
-                document.getElementById('tf-m15').innerText = "15M: " + data.timeframes.M15;
-                document.getElementById('tf-h1').innerText = "1H: " + data.timeframes.H1;
-                document.getElementById('tf-h4').innerText = "4H: " + data.timeframes.H4;
-                if(data.newsAlert) document.getElementById('news-status').innerText = data.newsAlert;
-            } catch(e){}
+                if(data.bid) {
+                    document.getElementById('price-ask').innerText = "$" + data.ask.toFixed(2);
+                    document.getElementById('price-bid').innerText = "$" + data.bid.toFixed(2);
+                    document.getElementById('spread-val').innerText = "Spread: " + data.spread + " pips";
+                    document.getElementById('last-update').innerText = "آخر تحديث: " + data.lastUpdate;
+                    
+                    document.getElementById('ai-decision').innerText = data.aiDecision;
+                    document.getElementById('ai-confidence').innerText = "درجة التوافق: " + data.confidence;
+                    
+                    document.getElementById('tf-m5').innerText = "5M: " + data.timeframes.M5;
+                    document.getElementById('tf-m15').innerText = "15M: " + data.timeframes.M15;
+                    document.getElementById('tf-h1').innerText = "1H: " + data.timeframes.H1;
+                    document.getElementById('tf-h4').innerText = "4H: " + data.timeframes.H4;
+
+                    if(data.newsAlert) {
+                        document.getElementById('news-detail').innerText = data.newsAlert;
+                    }
+                }
+            } catch(e) {}
         }
-        setInterval(fetchState, 3000);
+        setInterval(updateDashboard, 3000);
     </script>
 </body>
 </html>
