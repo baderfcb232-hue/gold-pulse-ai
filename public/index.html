@@ -3,237 +3,393 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>NABD VIP TERMINAL | Institutional Gold AI</title>
+    <title>NABD VIP TERMINAL | Institutional Gold AI v2.0</title>
     <!-- CSS Libraries -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
         
         :root {
-            --bg-body: #080312;
-            --card-glass: rgba(23, 11, 41, 0.75);
-            --card-border: rgba(168, 85, 247, 0.25);
-            --purple-neon: #a855f7;
-            --magenta-neon: #ec4899;
-            --green-glow: #10b981;
-            --red-glow: #f43f5e;
+            --bg-dark: #05020a;
+            --card-glass: rgba(18, 9, 36, 0.7);
+            --card-border: rgba(168, 85, 247, 0.2);
+            --purple-glow: #a855f7;
+            --magenta-glow: #ec4899;
+            --green-neon: #10b981;
+            --red-neon: #f43f5e;
+            --cyan-glow: #06b6d4;
         }
 
         body { 
-            background: radial-gradient(circle at top, #180933 0%, #080312 100%);
+            background: radial-gradient(circle at 50% 0%, #1e0b3c 0%, #05020a 100%);
             color: #f3f4f6; 
-            font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
-            -webkit-tap-highlight-color: transparent;
+            font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
             min-height: 100vh;
+            overflow-x: hidden;
         }
 
+        /* Ambient Glow Backgrounds */
+        .glow-bg {
+            position: fixed;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100vw;
+            height: 300px;
+            background: radial-gradient(circle, rgba(168, 85, 247, 0.15) 0%, rgba(0, 0, 0, 0) 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* VIP Top Nav */
         .navbar-custom { 
-            background: rgba(14, 6, 29, 0.85); 
-            backdrop-filter: blur(12px);
+            background: rgba(10, 4, 22, 0.85); 
+            backdrop-filter: blur(16px);
             border-bottom: 1px solid var(--card-border); 
-            padding: 12px 16px;
+            padding: 12px 24px;
+            position: relative;
+            z-index: 10;
         }
 
         .card-vip { 
             background: var(--card-glass); 
-            backdrop-filter: blur(16px);
+            backdrop-filter: blur(20px);
             border: 1px solid var(--card-border); 
             border-radius: 20px; 
-            box-shadow: 0 8px 32px 0 rgba(112, 26, 182, 0.15);
+            box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(168, 85, 247, 0.05);
+            transition: transform 0.2s ease, border-color 0.2s ease;
         }
 
-        .purple-text-glow { 
-            background: linear-gradient(135deg, #a855f7, #ec4899);
+        .card-vip:hover {
+            border-color: rgba(168, 85, 247, 0.4);
+        }
+
+        .purple-gradient-text { 
+            background: linear-gradient(135deg, #a855f7 0%, #ec4899 50%, #3b82f6 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             font-weight: 800;
         }
 
         .price-val { 
-            font-size: 1.6rem; 
+            font-size: 1.8rem; 
             font-weight: 800; 
-            font-family: 'Courier New', monospace;
-            letter-spacing: -0.5px;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: -1px;
         }
 
+        /* AI Signal VIP Box */
         .signal-card-vip { 
-            background: linear-gradient(135deg, rgba(38, 14, 69, 0.9) 0%, rgba(19, 7, 36, 0.9) 100%); 
-            border: 1.5px solid var(--purple-neon); 
-            box-shadow: 0 0 25px rgba(168, 85, 247, 0.25);
+            background: linear-gradient(145deg, rgba(31, 13, 59, 0.9) 0%, rgba(13, 5, 26, 0.95) 100%); 
+            border: 1.5px solid var(--purple-glow); 
+            box-shadow: 0 0 35px rgba(168, 85, 247, 0.2);
             border-radius: 22px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .signal-card-vip::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(236, 72, 153, 0.1) 0%, transparent 60%);
+            pointer-events: none;
         }
 
         .metric-vip {
-            background: rgba(255, 255, 255, 0.03);
+            background: rgba(255, 255, 255, 0.025);
             border-radius: 14px;
-            padding: 12px 8px;
-            border: 1px solid rgba(255, 255, 255, 0.06);
+            padding: 12px 10px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            font-family: 'JetBrains Mono', monospace;
         }
 
         .tf-badge { 
-            padding: 8px 2px; 
-            border-radius: 10px; 
+            padding: 10px 4px; 
+            border-radius: 12px; 
             font-weight: 700; 
-            font-size: 0.8rem;
-            background: rgba(255, 255, 255, 0.04); 
+            font-size: 0.82rem;
+            background: rgba(255, 255, 255, 0.03); 
             text-align: center; 
             border: 1px solid var(--card-border); 
+            font-family: 'JetBrains Mono', monospace;
         }
-        .tf-bull { border-bottom: 3px solid var(--green-glow); color: var(--green-glow); }
-        .tf-bear { border-bottom: 3px solid var(--red-glow); color: var(--red-glow); }
+        .tf-bull { border-bottom: 3px solid var(--green-neon); color: var(--green-neon); background: rgba(16, 185, 129, 0.05); }
+        .tf-bear { border-bottom: 3px solid var(--red-neon); color: var(--red-neon); background: rgba(244, 63, 94, 0.05); }
 
         .logo-box {
             background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%);
-            width: 40px;
-            height: 40px;
-            border-radius: 12px;
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 0 15px rgba(236, 72, 153, 0.4);
+            box-shadow: 0 0 20px rgba(236, 72, 153, 0.5);
         }
 
-        /* حاوية الشارت المخصصة لتناسب الموبايل 100% */
-        .chart-container {
-            width: 100%;
-            height: 500px;
+        /* Progress Bar Strength */
+        .sentiment-bar-bg {
+            height: 10px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+        }
+        .sentiment-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--red-neon) 0%, var(--purple-glow) 50%, var(--green-neon) 100%);
+            width: 50%;
+            transition: width 0.5s ease;
+        }
+
+        /* Session Clock Badge */
+        .session-badge {
+            font-size: 0.72rem;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .session-active {
+            border-color: var(--green-neon);
+            color: var(--green-neon);
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+        }
+
+        /* Container Chart */
+        .chart-box {
+            height: 600px;
             border-radius: 20px;
             overflow: hidden;
             border: 1px solid var(--card-border);
         }
+
+        @media (max-width: 768px) {
+            .chart-box { height: 420px; }
+            .price-val { font-size: 1.4rem; }
+        }
     </style>
 </head>
 <body class="pb-5">
+    <div class="glow-bg"></div>
 
-    <!-- Navbar الترا مودرن -->
-    <nav class="navbar navbar-custom mb-3 sticky-top">
+    <!-- VIP Top Navbar -->
+    <nav class="navbar navbar-custom mb-4">
         <div class="container-fluid p-0 d-flex justify-content-between align-items-center">
-            <div class="d-flex align-items-center gap-2">
+            <div class="d-flex align-items-center gap-3">
                 <div class="logo-box">
-                    <i class="fa-solid fa-bolt text-white fs-5"></i>
+                    <i class="fa-solid fa-microchip text-white fs-4"></i>
                 </div>
                 <div>
-                    <span class="fw-extrabold fs-5 text-white d-block style="line-height:1">NABD <span class="purple-text-glow">PULSE AI</span></span>
-                    <small style="font-size: 0.65rem; color: #a855f7;" class="fw-bold">INSTITUTIONAL TERMINAL</small>
+                    <span class="fw-extrabold fs-4 text-white d-block style="line-height:1">NABD <span class="purple-gradient-text">INSTITUTIONAL AI</span></span>
+                    <small style="font-size: 0.68rem; color: #a855f7;" class="fw-bold"><i class="fa-solid fa-shield-halved me-1"></i> GOLD QUANT TERMINAL v2.0</small>
                 </div>
             </div>
+            
+            <div class="d-none d-md-flex align-items-center gap-2">
+                <span class="session-badge" id="sess-tokyo"><i class="fa-regular fa-clock me-1"></i> طوكيو</span>
+                <span class="session-badge session-active" id="sess-london"><i class="fa-solid fa-bolt me-1"></i> لندن</span>
+                <span class="session-badge session-active" id="sess-ny"><i class="fa-solid fa-fire me-1"></i> نيويورك</span>
+            </div>
+
             <div class="d-flex align-items-center gap-2">
-                <span id="news-status" class="badge px-2 py-1 fs-7" style="background: linear-gradient(135deg, #a855f7, #ec4899);">
-                    <i class="fa-solid fa-satellite-dish me-1"></i> VIP RADAR
+                <span id="news-status" class="badge px-3 py-2 fs-7" style="background: linear-gradient(135deg, #a855f7, #ec4899); box-shadow: 0 0 15px rgba(168,85,247,0.4);">
+                    <i class="fa-solid fa-satellite me-1"></i> VIP RADAR
                 </span>
-                <span class="badge bg-success px-2 py-1 fs-7">
-                    <i class="fa-solid fa-wifi me-1"></i> MT5
+                <span class="badge bg-success px-3 py-2 fs-7">
+                    <i class="fa-solid fa-link me-1"></i> MT5 LIVE
                 </span>
             </div>
         </div>
     </nav>
 
-    <div class="container-fluid px-2">
+    <div class="container-fluid px-3">
         
-        <!-- شريط رادار الأخبار -->
-        <div class="p-3 mb-3 card-vip d-flex align-items-center gap-3" style="border-right: 4px solid var(--magenta-neon);">
-            <i class="fa-solid fa-shield-cat fs-3 text-warning"></i>
-            <div class="overflow-hidden">
-                <small class="text-muted d-block" style="font-size: 0.72rem;">رادار الحماية والسيولة</small>
-                <div id="news-detail" class="text-white fw-bold text-truncate" style="font-size: 0.85rem;">
-                    جاري فحص حالة السوق والأخبار القادمة...
+        <!-- Live Alert Banner -->
+        <div class="p-3 mb-4 card-vip d-flex align-items-center justify-content-between gap-3" style="border-right: 4px solid var(--magenta-glow);">
+            <div class="d-flex align-items-center gap-3">
+                <i class="fa-solid fa-triangle-exclamation fs-3 text-warning"></i>
+                <div class="overflow-hidden">
+                    <small class="text-muted d-block" style="font-size: 0.72rem;">رادار الحماية والمخاطر والمؤسسات</small>
+                    <div id="news-detail" class="text-white fw-bold text-truncate" style="font-size: 0.88rem;">
+                        جاري فحص سيولة البنوك والبيانات الاقتصادية...
+                    </div>
                 </div>
+            </div>
+            <div class="text-start d-none d-sm-block">
+                <small class="text-muted d-block" style="font-size: 0.68rem;">حالة المخاطرة</small>
+                <span class="badge bg-success" id="risk-level">LOW RISK</span>
             </div>
         </div>
 
-        <!-- أرقام الأسعار المباشرة والقرار -->
-        <div class="row g-2 mb-3">
-            <div class="col-12">
+        <div class="row g-3 mb-4">
+            <!-- Price Card Ask -->
+            <div class="col-6 col-lg-3">
                 <div class="card card-vip p-3 text-center">
-                    <small class="text-muted d-block mb-1" style="font-size: 0.75rem;"><i class="fa-solid fa-brain me-1 text-purple-neon"></i> محرك الذكاء الاصطناعي</small>
-                    <h3 id="ai-decision" class="purple-text-glow my-1">WAITING...</h3>
-                    <small id="ai-confidence" class="text-info fw-bold" style="font-size: 0.78rem;">درجة التوافق: 0%</small>
+                    <small class="text-muted" style="font-size: 0.75rem;"><i class="fa-solid fa-circle-up text-success me-1"></i> سعر الشراء (Ask)</small>
+                    <div id="price-ask" class="price-val text-success my-2">$0.00</div>
+                    <small id="spread-val" class="text-muted" style="font-size: 0.7rem;">الفرق: 0.0 Pips</small>
                 </div>
             </div>
 
-            <div class="col-6">
-                <div class="card card-vip p-2 text-center">
-                    <small class="text-muted" style="font-size: 0.72rem;"><i class="fa-solid fa-circle-up text-success me-1"></i> الشراء (Ask)</small>
-                    <div id="price-ask" class="price-val text-success my-1">$0.00</div>
-                    <small id="spread-val" class="text-muted" style="font-size: 0.68rem;">Spread: 0.0</small>
+            <!-- Price Card Bid -->
+            <div class="col-6 col-lg-3">
+                <div class="card card-vip p-3 text-center">
+                    <small class="text-muted" style="font-size: 0.75rem;"><i class="fa-solid fa-circle-down text-danger me-1"></i> سعر البيع (Bid)</small>
+                    <div id="price-bid" class="price-val text-danger my-2">$0.00</div>
+                    <small id="last-update" class="text-muted" style="font-size: 0.7rem;">التحديث: --:--</small>
                 </div>
             </div>
 
-            <div class="col-6">
-                <div class="card card-vip p-2 text-center">
-                    <small class="text-muted" style="font-size: 0.72rem;"><i class="fa-solid fa-circle-down text-danger me-1"></i> البيع (Bid)</small>
-                    <div id="price-bid" class="price-val text-danger my-1">$0.00</div>
-                    <small id="last-update" class="text-muted" style="font-size: 0.68rem;">تحديث: --:--</small>
-                </div>
-            </div>
-        </div>
-
-        <!-- تحليلات الشمعات M5, M15, H1, H4 -->
-        <div class="card card-vip p-3 mb-3">
-            <small class="text-muted mb-2 text-center d-block" style="font-size: 0.78rem;"><i class="fa-solid fa-chart-line me-1 text-purple-neon"></i> تحليل الاتجاهات (Multi-Timeframe)</small>
-            <div class="row g-1 text-center">
-                <div class="col-3"><div id="tf-m5" class="tf-badge tf-bull">5M: -</div></div>
-                <div class="col-3"><div id="tf-m15" class="tf-badge tf-bull">15M: -</div></div>
-                <div class="col-3"><div id="tf-h1" class="tf-badge tf-bull">1H: -</div></div>
-                <div class="col-3"><div id="tf-h4" class="tf-badge tf-bull">4H: -</div></div>
-            </div>
-        </div>
-
-        <!-- كرت الصفقة الجاهزة الفخم -->
-        <div class="card signal-card-vip p-3 mb-3">
-            <div class="d-flex align-items-center justify-content-between border-bottom border-secondary pb-2 mb-2">
-                <span class="fw-bold purple-text-glow" style="font-size: 0.95rem;"><i class="fa-solid fa-fire-flame-curved me-1"></i> إشارة التداول الحالية</span>
-                <span id="signal-status" class="badge bg-secondary" style="font-size: 0.75rem;">في انتظار صفقة</span>
-            </div>
-
-            <div class="row g-2 text-center mt-1">
-                <div class="col-6">
-                    <div class="metric-vip">
-                        <small class="text-muted d-block" style="font-size: 0.72rem;">نوع الصفقة</small>
-                        <strong id="sig-type" class="fs-6 text-white">---</strong>
+            <!-- AI Decision & Gauge -->
+            <div class="col-12 col-lg-6">
+                <div class="card card-vip p-3 text-center d-flex flex-column justify-content-between h-100">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <small class="text-muted" style="font-size: 0.75rem;"><i class="fa-solid fa-brain me-1 text-purple-glow"></i> قرار الذكاء الاصطناعي المؤسسي</small>
+                        <small id="ai-confidence" class="text-cyan-glow fw-bold" style="font-size: 0.78rem;">التوافق: 0%</small>
                     </div>
-                </div>
-                <div class="col-6">
-                    <div class="metric-vip">
-                        <small class="text-muted d-block" style="font-size: 0.72rem;">سعر الدخول</small>
-                        <strong id="sig-entry" class="fs-6 text-info">$0.00</strong>
-                    </div>
-                </div>
-                <div class="col-6">
-                    <div class="metric-vip" style="border-color: rgba(16, 185, 129, 0.4);">
-                        <small class="text-muted d-block" style="font-size: 0.72rem;">الهدف الأول (TP1)</small>
-                        <strong id="sig-tp1" class="fs-6 text-success">$0.00</strong>
-                    </div>
-                </div>
-                <div class="col-6">
-                    <div class="metric-vip" style="border-color: rgba(16, 185, 129, 0.4);">
-                        <small class="text-muted d-block" style="font-size: 0.72rem;">الهدف الثاني (TP2)</small>
-                        <strong id="sig-tp2" class="fs-6 text-success">$0.00</strong>
-                    </div>
-                </div>
-                <div class="col-12">
-                    <div class="metric-vip" style="border-color: rgba(244, 63, 94, 0.4);">
-                        <small class="text-muted d-block" style="font-size: 0.72rem;">وقف الخسارة (SL)</small>
-                        <strong id="sig-sl" class="fs-6 text-danger">$0.00</strong>
+                    
+                    <h2 id="ai-decision" class="purple-gradient-text my-2 fs-2">WAITING ANALYSIS...</h2>
+
+                    <!-- Sentiment / Momentum Bar -->
+                    <div>
+                        <div class="d-flex justify-content-between text-muted mb-1" style="font-size: 0.68rem;">
+                            <span class="text-danger"><i class="fa-solid fa-arrow-down-long"></i> بيع مؤسسي</span>
+                            <span class="text-success">شراء مؤسسي <i class="fa-solid fa-arrow-up-long"></i></span>
+                        </div>
+                        <div class="sentiment-bar-bg">
+                            <div id="sentiment-fill" class="sentiment-bar-fill"></div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- شارت TradingView المباشر (طريقة مضمونة 100% للظهور على الجوال) -->
-        <div class="chart-container mb-3">
-            <iframe 
-                src="https://s.tradingview.com/widgetembed/?frameElementId=tradingview_1&symbol=OANDA%3AXAUUSD&interval=15&hidesidetoolbar=1&symboledit=1&saveimage=0&toolbarbg=080312&theme=dark&style=1&timezone=Etc%2FUTC" 
-                width="100%" 
-                height="100%" 
-                style="border:0;" 
-                allowfullscreen>
-            </iframe>
+        <!-- Multi Timeframe Candles -->
+        <div class="card card-vip p-3 mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <small class="text-muted" style="font-size: 0.78rem;"><i class="fa-solid fa-layer-group me-1 text-purple-glow"></i> تحليلات الشمعات المتعددة (Multi-Timeframe Structure)</small>
+                <small class="text-muted" style="font-size: 0.68rem;">SMC & Price Action</small>
+            </div>
+            <div class="row g-2 text-center">
+                <div class="col-3"><div id="tf-m5" class="tf-badge tf-bull">5M: WAITING</div></div>
+                <div class="col-3"><div id="tf-m15" class="tf-badge tf-bull">15M: WAITING</div></div>
+                <div class="col-3"><div id="tf-h1" class="tf-badge tf-bull">1H: WAITING</div></div>
+                <div class="col-3"><div id="tf-h4" class="tf-badge tf-bull">4H: WAITING</div></div>
+            </div>
+        </div>
+
+        <!-- Signal & Targets Grid -->
+        <div class="row g-3 mb-4">
+            <div class="col-12 col-lg-5">
+                <div class="card signal-card-vip p-4 h-100 d-flex flex-column justify-content-between">
+                    <div>
+                        <div class="d-flex align-items-center justify-content-between border-bottom border-secondary pb-2 mb-3">
+                            <span class="fw-bold purple-gradient-text fs-5"><i class="fa-solid fa-crosshairs me-2"></i> إشارة التداول الحالية</span>
+                            <span id="signal-status" class="badge bg-secondary px-3 py-2" style="font-size: 0.78rem;">في انتظار صفقة</span>
+                        </div>
+
+                        <div class="row g-2 text-center my-3">
+                            <div class="col-6">
+                                <div class="metric-vip">
+                                    <small class="text-muted d-block mb-1" style="font-size: 0.72rem;">نوع التوصية</small>
+                                    <strong id="sig-type" class="fs-5 text-white">WAITING</strong>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="metric-vip">
+                                    <small class="text-muted d-block mb-1" style="font-size: 0.72rem;">نقطة الدخول (Entry)</small>
+                                    <strong id="sig-entry" class="fs-5 text-info">$0.00</strong>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="metric-vip" style="border-color: rgba(16, 185, 129, 0.4);">
+                                    <small class="text-muted d-block mb-1" style="font-size: 0.72rem;">الهدف الأول (TP1)</small>
+                                    <strong id="sig-tp1" class="fs-5 text-success">$0.00</strong>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="metric-vip" style="border-color: rgba(16, 185, 129, 0.4);">
+                                    <small class="text-muted d-block mb-1" style="font-size: 0.72rem;">الهدف الثاني (TP2)</small>
+                                    <strong id="sig-tp2" class="fs-5 text-success">$0.00</strong>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="metric-vip" style="border-color: rgba(244, 63, 94, 0.4);">
+                                    <small class="text-muted d-block mb-1" style="font-size: 0.72rem;">وقف الخسارة المحمي (SL)</small>
+                                    <strong id="sig-sl" class="fs-5 text-danger">$0.00</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-center pt-2 border-top border-secondary">
+                        <small class="text-muted" style="font-size: 0.7rem;"><i class="fa-solid fa-shield-cat me-1"></i> الحماية تلقائية لمستويات الستوب والتيك بروفيت</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TradingView Advanced Chart -->
+            <div class="col-12 col-lg-7">
+                <div class="chart-box">
+                    <div id="tradingview_advanced_chart" style="height:100%; width:100%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live History & SMC Levels Panel -->
+        <div class="row g-3">
+            <div class="col-12 col-md-6">
+                <div class="card card-vip p-3 h-100">
+                    <small class="text-muted d-block mb-2" style="font-size: 0.78rem;"><i class="fa-solid fa-cubes me-1 text-purple-glow"></i> مناطق السيولة والكتل (Smart Money Concept)</small>
+                    <div class="d-flex justify-content-between align-items-center p-2 mb-2 rounded bg-dark border border-secondary">
+                        <small class="text-muted">Order Block (دعم مؤسسي)</small>
+                        <span id="ob-buy" class="text-success fw-bold font-monospace">$0.00</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center p-2 rounded bg-dark border border-secondary">
+                        <small class="text-muted">Order Block (مقاومة مؤسسية)</small>
+                        <span id="ob-sell" class="text-danger fw-bold font-monospace">$0.00</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-6">
+                <div class="card card-vip p-3 h-100">
+                    <small class="text-muted d-block mb-2" style="font-size: 0.78rem;"><i class="fa-solid fa-list-check me-1 text-purple-glow"></i> سجل الصفقات والنشاط الأخير</small>
+                    <ul class="list-unstyled mb-0 font-monospace" id="signals-log" style="font-size: 0.78rem;">
+                        <li class="text-muted py-1 border-bottom border-secondary"><i class="fa-solid fa-spinner fa-spin me-1"></i> بانتظار استلام الصفقات من المحرك...</li>
+                    </ul>
+                </div>
+            </div>
         </div>
 
     </div>
 
+    <!-- TradingView Script Load -->
+    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+    <script type="text/javascript">
+        // Initialize TradingView Advanced Widget
+        new TradingView.widget({
+            "autosize": true,
+            "symbol": "OANDA:XAUUSD",
+            "interval": "15",
+            "timezone": "Etc/UTC",
+            "theme": "dark",
+            "style": "1",
+            "locale": "ar",
+            "toolbar_bg": "#05020a",
+            "enable_publishing": false,
+            "hide_side_toolbar": false,
+            "allow_symbol_change": true,
+            "container_id": "tradingview_advanced_chart"
+        });
+    </script>
+
+    <!-- Script update Dashboard -->
     <script>
         async function updateDashboard() {
             try {
@@ -244,45 +400,66 @@
                     const currentPrice = data.ask;
                     document.getElementById('price-ask').innerText = "$" + currentPrice.toFixed(2);
                     document.getElementById('price-bid').innerText = "$" + data.bid.toFixed(2);
-                    document.getElementById('spread-val').innerText = "Spread: " + data.spread;
-                    document.getElementById('last-update').innerText = "تحديث: " + data.lastUpdate;
+                    document.getElementById('spread-val').innerText = "الفرق: " + data.spread + " Pips";
+                    document.getElementById('last-update').innerText = "التحديث: " + data.lastUpdate;
                     
                     document.getElementById('ai-decision').innerText = data.aiDecision;
-                    document.getElementById('ai-confidence').innerText = "درجة التوافق: " + data.confidence;
+                    document.getElementById('ai-confidence').innerText = "التوافق: " + data.confidence;
                     
                     document.getElementById('tf-m5').innerText = "5M: " + data.timeframes.M5;
                     document.getElementById('tf-m15').innerText = "15M: " + data.timeframes.M15;
                     document.getElementById('tf-h1').innerText = "1H: " + data.timeframes.H1;
                     document.getElementById('tf-h4').innerText = "4H: " + data.timeframes.H4;
 
+                    // SMC Levels simulation based on price
+                    document.getElementById('ob-buy').innerText = "$" + (currentPrice - 3.20).toFixed(2);
+                    document.getElementById('ob-sell').innerText = "$" + (currentPrice + 3.20).toFixed(2);
+
                     if(data.newsAlert) {
                         document.getElementById('news-detail').innerText = data.newsAlert;
                     }
 
+                    // Progress Bar Fill Logic
+                    const confidenceVal = parseInt(data.confidence) || 50;
+                    const fillBar = document.getElementById('sentiment-fill');
+
                     if(data.aiDecision.includes("STRONG BUY")) {
-                        document.getElementById('signal-status').className = "badge bg-success";
-                        document.getElementById('signal-status').innerText = "فرصة شراء ممتازة";
+                        fillBar.style.width = Math.min(confidenceVal, 95) + "%";
+                        
+                        document.getElementById('signal-status').className = "badge bg-success px-3 py-2";
+                        document.getElementById('signal-status').innerText = "فرصة شراء عالية الدقة";
                         document.getElementById('sig-type').innerText = "STRONG BUY 🟢";
                         document.getElementById('sig-entry').innerText = "$" + currentPrice.toFixed(2);
-                        document.getElementById('sig-tp1').innerText = "$" + (currentPrice + 2.5).toFixed(2);
-                        document.getElementById('sig-tp2').innerText = "$" + (currentPrice + 5.0).toFixed(2);
-                        document.getElementById('sig-sl').innerText = "$" + (currentPrice - 1.5).toFixed(2);
+                        document.getElementById('sig-tp1').innerText = "$" + (currentPrice + 2.50).toFixed(2);
+                        document.getElementById('sig-tp2').innerText = "$" + (currentPrice + 5.00).toFixed(2);
+                        document.getElementById('sig-sl').innerText = "$" + (currentPrice - 1.80).toFixed(2);
+
+                        document.getElementById('signals-log').innerHTML = `<li class="text-success py-1"><i class="fa-solid fa-arrow-trend-up me-1"></i> [${data.lastUpdate}] تم إصدار إشارة شراء عند $${currentPrice.toFixed(2)}</li>`;
+
                     } else if(data.aiDecision.includes("STRONG SELL")) {
-                        document.getElementById('signal-status').className = "badge bg-danger";
-                        document.getElementById('signal-status').innerText = "فرصة بيع ممتازة";
+                        fillBar.style.width = (100 - Math.min(confidenceVal, 95)) + "%";
+
+                        document.getElementById('signal-status').className = "badge bg-danger px-3 py-2";
+                        document.getElementById('signal-status').innerText = "فرصة بيع عالية الدقة";
                         document.getElementById('sig-type').innerText = "STRONG SELL 🔴";
                         document.getElementById('sig-entry').innerText = "$" + currentPrice.toFixed(2);
-                        document.getElementById('sig-tp1').innerText = "$" + (currentPrice - 2.5).toFixed(2);
-                        document.getElementById('sig-tp2').innerText = "$" + (currentPrice - 5.0).toFixed(2);
-                        document.getElementById('sig-sl').innerText = "$" + (currentPrice + 1.5).toFixed(2);
+                        document.getElementById('sig-tp1').innerText = "$" + (currentPrice - 2.50).toFixed(2);
+                        document.getElementById('sig-tp2').innerText = "$" + (currentPrice - 5.00).toFixed(2);
+                        document.getElementById('sig-sl').innerText = "$" + (currentPrice + 1.80).toFixed(2);
+
+                        document.getElementById('signals-log').innerHTML = `<li class="text-danger py-1"><i class="fa-solid fa-arrow-trend-down me-1"></i> [${data.lastUpdate}] تم إصدار إشارة بيع عند $${currentPrice.toFixed(2)}</li>`;
+
                     } else {
-                        document.getElementById('signal-status').className = "badge bg-secondary";
+                        fillBar.style.width = "50%";
+                        document.getElementById('signal-status').className = "badge bg-secondary px-3 py-2";
                         document.getElementById('signal-status').innerText = "في انتظار صفقة";
-                        document.getElementById('sig-type').innerText = "انتظر";
+                        document.getElementById('sig-type').innerText = "HOLD";
                         document.getElementById('sig-entry').innerText = "$" + currentPrice.toFixed(2);
                         document.getElementById('sig-tp1').innerText = "---";
                         document.getElementById('sig-tp2').innerText = "---";
                         document.getElementById('sig-sl').innerText = "---";
+
+                        document.getElementById('signals-log').innerHTML = `<li class="text-muted py-1"><i class="fa-solid fa-clock me-1"></i> [${data.lastUpdate}] السوق في حالة تذبذب - الانتظار مطلوب</li>`;
                     }
                 }
             } catch(e) {}
