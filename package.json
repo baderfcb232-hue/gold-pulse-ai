@@ -1,17 +1,16 @@
 {
   "name": "nabd-gold-terminal",
-  "version": "2.5.0",
-  "description": "NABD Institutional Gold AI, SMC, News & Risk Engine Terminal",
+  "version": "3.2.0",
+  "description": "NABD Gold Pulse — broker data, MT5 bot signals, calendar and protected account monitoring",
+  "private": true,
+  "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
-  },
-  "dependencies": {
-    "express": "^4.19.2",
-    "axios": "^1.7.2",
-    "xml2js": "^0.6.2"
+    "start": "node server.js",
+    "test": "node --test tests/*.test.mjs",
+    "backtest": "node backtest.mjs"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=24.0.0 <25.0.0"
   }
 }
