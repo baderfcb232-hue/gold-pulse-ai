@@ -1,6 +1,6 @@
 # Verification — NABD Gold Pulse v3.2
 
-Validated for the original repository `baderfcb232-hue/gold-pulse-ai`, from original `main` commit `fb12ff2`, on 2026-10-09. Publication uses the existing `main` branch and Render service; verify version 3.2.0 at the exact existing URL after deployment.
+Validated for the original repository `baderfcb232-hue/gold-pulse-ai`. The v3.2 integration was merged into `main` as `9e0f6f89ad75d388d81bef7e8227f33a9dc46f59` and deployed to the original `https://gold-pulse-ai.onrender.com/` service on 2026-10-11. This follow-up adds monitoring presets and an installation guide to the MT5 download without changing trading source or server authentication.
 
 ## Completed checks
 
@@ -17,17 +17,24 @@ All market/account fixtures are synthetic test data. They are never loaded into 
 ## Verification limits
 
 - GitHub write access was confirmed (`permissions.push=true`) after the collaborator invitation was accepted on 2026-10-09.
-- The connected Render account does not have access to the original service. Existing build/env/auto-deploy settings still need final inspection under the correct account before publication.
+- The Render connector uses a different workspace and cannot access the original service. Publication was completed through the owner's authorized Dashboard session instead; no replacement service was created.
 - The MQL5 files have not been compiled or run in MT5: MetaEditor/MT5 is unavailable. Compile both EAs and validate telemetry on a demo account before enabling account controls.
-- Browser visual QA remains incomplete. Local preview access was previously blocked/unreachable; no browser-policy workaround was attempted. Syntax, served assets, and DOM references are checked separately.
+- Live desktop Browser QA on the original URL verified all six navigation sections, one visible panel per section, no horizontal overflow, CSV export, bridge URL copying, and the protected operator/account/download gates. The site's captured error/warning log was empty. Successful operator authentication, real candles/account data, and mobile viewport execution were not verified in production.
 - Render Free has ephemeral storage. The new UI reports that condition and remote controls remain disabled unless durable storage is explicitly confirmed. Monitoring can work without a paid resource.
 - No historical market dataset was supplied. No real profitability or live execution result is claimed.
 - Command delivery is not a distributed exactly-once guarantee. The bridge records a command claim before broker submission to prevent replay; interrupted submissions can require manual verification and produce `UNCERTAIN`.
 
-## Deployment verification still required
+## Confirmed original-service deployment
 
-1. Confirm access to the original Render service for inspecting its environment and deployment configuration.
-2. Review the existing Render build command, Node override, auto-deploy setting, and token configuration, then publish this update through the existing `main` branch/service.
-3. Verify `/healthz` reports 3.2.0 at the exact existing URL and inspect mobile/desktop navigation, chart, login/logout, and the no-data state.
-4. Compile the MQL5 bridge, verify exact broker symbol, timestamp conversion, contract values, candle history, and calendar freshness.
-5. Confirm private account routes stay protected and only enable optional management after durable storage and demo-account verification.
+- Service `srv-db3br0cs728c73c0jss0`, same name/URL, free tier, repository and `main` branch.
+- Build `npm ci --ignore-scripts`; start `node server.js`; Auto-Deploy `On Commit`; health check `/healthz`.
+- Deployment `dep-db5lq8favr4c7398jdsg` succeeded on 2026-10-11. Logs confirmed Node 24.21.0, zero npm vulnerabilities, `NABD v3.2 listening on 10000`, and service live.
+- Separate `MT5_INGEST_TOKEN` and `DASHBOARD_TOKEN` values were generated and saved in Render under the user's explicit approval. Values were never copied into chat, source, presets, or local files. The UI confirmed that server protection was configured.
+- No synthetic telemetry was posted to production. The site remains in the expected no-data state until the user's MT5 bridge sends broker data.
+
+## Verification still required on the user's platform
+
+1. Compile both MQL5 EAs in MetaEditor and load the monitoring presets (or enter the documented settings manually).
+2. Verify exact broker symbol and Magic pairing, timestamp conversion, contract values, candle history, and calendar freshness.
+3. Verify optional private account display after the user opts into sharing it and signs in as operator.
+4. Keep remote management disabled until durable storage and demo-account verification are completed.
