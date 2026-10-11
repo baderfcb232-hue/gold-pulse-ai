@@ -46,7 +46,11 @@ test('bridge → API → frozen EA history is deduplicated and source expiry blo
   const zipResponse=await fetch(base+'/api/mt5.zip',{headers:{Authorization:'Bearer '+operator}});
   assert.equal(zipResponse.status,200);assert.equal(zipResponse.headers.get('content-type'),'application/zip');
   const zip=Buffer.from(await zipResponse.arrayBuffer());assert.equal(zip.readUInt32LE(0),0x04034b50);
-  assert.equal(zip.readUInt16LE(zip.length-22+10),4);assert.ok(zip.includes(Buffer.from('NABDPublishSignal')));
+  assert.equal(zip.readUInt16LE(zip.length-22+10),7);assert.ok(zip.includes(Buffer.from('NABDPublishSignal')));
+  assert.ok(zip.includes(Buffer.from('NABD/INSTALL_AR.md')));
+  assert.ok(zip.includes(Buffer.from('InpEnableLiveTrading=false')));
+  assert.ok(zip.includes(Buffer.from('InpNABDToken=\n')));
+  assert.equal(zip.includes(Buffer.from(ingest)),false);assert.equal(zip.includes(Buffer.from(operator)),false);
   const post=(path,data,token)=>fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(data)});
   const raw=eaFixture();assert.equal((await post('/api/mt5',raw,ingest)).status,200);
   let state=await (await fetch(base+'/api/state')).json();
