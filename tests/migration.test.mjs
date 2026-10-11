@@ -41,10 +41,10 @@ test('the existing node server.js command boots the updated site and shuts down 
     let output = '';
     child.once('error', reject);
     child.once('exit', code => reject(new Error('Server exited before listening: ' + code)));
-    child.stdout.on('data', chunk => {output += chunk.toString(); const match = output.match(/NABD v3\.2 listening on (\d+)/); if (match) resolve(Number(match[1]));});
+    child.stdout.on('data', chunk => {output += chunk.toString(); const match = output.match(/NABD v3\.2(?:\.\d+)? listening on (\d+)/); if (match) resolve(Number(match[1]));});
   });
   const base = 'http://127.0.0.1:' + port;
-  assert.deepEqual(await (await fetch(base + '/healthz')).json(), {ok: true, version: '3.2.0', storage: 'ephemeral'});
+  assert.deepEqual(await (await fetch(base + '/healthz')).json(), {ok: true, version: '3.2.1', storage: 'ephemeral'});
   const state = await (await fetch(base + '/api/state')).json();
   assert.equal(state.connection, 'NO_DATA'); assert.equal(state.bid, null); assert.equal(state.controlsConfigured, false);
   assert.match(await (await fetch(base + '/')).text(), /GOLD PULSE \/ 3\.2/);
