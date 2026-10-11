@@ -1,0 +1,12 @@
+; NABD v3.2 monitoring preset. Fill the ingest token in MT5 after loading.
+; Blank symbol uses the chart symbol; use the same broker gold symbol on both charts.
+InpSymbol=
+InpMagicNumber=26092301
+InpDeviationPoints=30
+InpEnableNABDLink=true
+InpNABDUrl=https://gold-pulse-ai.onrender.com
+InpNABDToken=
+InpNABDRefreshSeconds=3
+InpNABDSendAccount=false
+InpNABDAllowRemoteControl=false
+InpNABDServerUtcOffsetMinutes=2147483647
