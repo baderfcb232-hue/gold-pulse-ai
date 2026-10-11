@@ -4,7 +4,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createApplication} from '../server.mjs';
-import {fixture,NOW,samplePlan,entryFixture} from './fixtures.mjs';
+import {fixture,NOW,samplePlan,entryFixture,eaFixture} from './fixtures.mjs';
 const INGEST='test-ingest-token-xxxxxxxxxxxxxxxxxxxxxxxx',ADMIN='test-admin-token-yyyyyyyyyyyyyyyyyyyyyyyy';
 async function setup(t,{dir,clock,config={signalSource:'DASHBOARD'}}={}){const dataDir=dir||mkdtempSync(join(tmpdir(),'nabd-test-'));const app=createApplication({dataDir,storagePersistent:true,ingestToken:INGEST,dashboardToken:ADMIN,clock:clock||(()=>NOW),config});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;t.after(async()=>{await app.close();if(!dir)rmSync(dataDir,{recursive:true,force:true});});return {app,base,dataDir};}
 const post=(base,path,data,token)=>fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(data)});
@@ -26,6 +26,34 @@ test('authenticated snapshots isolate account data from public state, SSE and si
 test('source mismatch and replayed quotes are rejected',async t=>{
   const {base}=await setup(t);await post(base,'/api/mt5',fixture(),INGEST);let raw=fixture();raw.account_ref='DIFFERENT_ACCOUNT';assert.equal((await post(base,'/api/mt5',raw,INGEST)).status,400);
   raw=fixture();raw.quote_at=NOW-1;assert.equal((await post(base,'/api/mt5',raw,INGEST)).status,400);
+});
+test('weekend telemetry is accepted while stale quotes block signals and commands',async t=>{
+  const {base,app}=await setup(t,{config:{signalSource:'EA'}});
+  const raw=eaFixture();raw.symbol='XAUUSD.m';raw.quote_at=NOW-2*86400;
+  raw.candles=fixture(raw.quote_at).candles;
+  assert.equal((await post(base,'/api/mt5',raw,INGEST)).status,200);
+  let state=await (await fetch(base+'/api/state')).json();
+  assert.equal(state.symbol,'XAUUSD.m');assert.equal(state.broker,'JustMarkets-Demo');
+  assert.equal(state.lastUpdate,raw.quote_at);assert.equal(state.quoteAge,2*86400);
+  assert.equal(state.connection,'STALE');assert.equal(state.bid,raw.bid);assert.equal(state.ask,raw.ask);
+  assert.equal(state.riskLevel,'UNKNOWN');
+  assert.equal(state.currentSignal,null);assert.equal(state.signalSourceReady,false);
+  assert.equal(app.signalRows().length,0);
+  assert.equal((await post(base,'/api/commands',{action:'CLOSE_ALL'},ADMIN)).status,409);
+  raw.quote_at=NOW;raw.candles=fixture().candles;
+  assert.equal((await post(base,'/api/mt5',raw,INGEST)).status,200);
+  state=await (await fetch(base+'/api/state')).json();
+  assert.equal(state.connection,'LIVE');assert.ok(state.currentSignal);
+  assert.equal((await post(base,'/api/mt5',{...raw,quote_at:0},INGEST)).status,400);
+  assert.equal((await post(base,'/api/mt5',{...raw,quote_at:NOW+60},INGEST)).status,400);
+});
+test('malformed JSON errors do not echo submitted credentials or private payloads',async t=>{
+  const {base}=await setup(t),marker='private-value-that-must-not-be-echoed';
+  for(const path of ['/api/mt5','/api/login']){
+    const response=await fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+INGEST},body:`{"token":"${marker}" invalid`});
+    assert.equal(response.status,400);const error=await response.text();
+    assert.equal(error.includes(marker),false);assert.equal(JSON.parse(error).error,'Invalid JSON body');
+  }
 });
 test('signals keep frozen levels and persist through a server restart',async t=>{
   const dir=mkdtempSync(join(tmpdir(),'nabd-persist-'));let now=NOW;

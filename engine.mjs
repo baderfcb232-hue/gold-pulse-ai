@@ -49,7 +49,9 @@ export function cleanSnapshot(raw, now = Date.now() / 1000) {
   if (!/^[a-zA-Z0-9._#-]{1,40}$/.test(symbol)) throw new Error('Invalid symbol');
   const bid = number(raw.bid, 'bid', {min: 0.000001});
   const ask = number(raw.ask, 'ask', {min: bid});
-  const quoteTime = number(raw.quote_at, 'quote_at', {min: now - 86400, max: now + 5});
+  // Closed markets can keep the last broker tick for days. Accept its real time;
+  // analyze() still blocks stale quotes from signals, tracking and remote control.
+  const quoteTime = number(raw.quote_at, 'quote_at', {min: 1, max: now + 5});
   const spec = raw.spec ?? {};
   const digits = number(spec.digits, 'digits', {min: 0, max: 8});
   if (!Number.isInteger(digits)) throw new Error('Invalid digits');

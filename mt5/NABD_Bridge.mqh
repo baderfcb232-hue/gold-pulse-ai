@@ -1,6 +1,8 @@
 // Dashboard adapter for the existing JustMarkets EA. No new entries are sent by the site.
 // Network access is opt-in. All account details remain behind the operator login.
 bool g_nb_warned=false;
+int g_nb_last_http=0;
+string g_nb_last_rejection="";
 ulong g_nb_last_send=0;
 datetime g_nb_calendar_time=0;
 string g_nb_calendar="{\"status\":\"unavailable\",\"events\":[]}";
@@ -269,6 +271,16 @@ void NABDOnTimer()
         "},\"positions\":"+NBPositions(offset)+",\"deals\":"+NBDeals(offset);
    payload+="}";
    string response;int code=NBRequest("POST","/api/mt5",payload,response);
-   if(code!=200){PrintFormat("NABD update rejected. HTTP=%d",code);return;}
+   if(code!=200)
+     {
+      string detail=StringSubstr(response,0,300);
+      StringReplace(detail,"\r"," ");StringReplace(detail,"\n"," ");
+      if(code!=g_nb_last_http || detail!=g_nb_last_rejection)
+         PrintFormat("NABD update rejected. HTTP=%d. Server: %s",code,detail);
+      g_nb_last_http=code;g_nb_last_rejection=detail;
+      return;
+     }
+   if(g_nb_last_http!=200)Print("NABD telemetry accepted by dashboard.");
+   g_nb_last_http=200;g_nb_last_rejection="";
    if(InpNABDAllowRemoteControl && InpNABDSendAccount)NBProcessCommand();
   }

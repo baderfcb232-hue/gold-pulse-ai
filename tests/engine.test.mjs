@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {cleanSnapshot,analyze,trackPlan,positionSize,ema,rsi,atr,candleZones} from '../engine.mjs';
-import {fixture,NOW,samplePlan,entryFixture} from './fixtures.mjs';
+import {cleanSnapshot,analyze,sourceAnalysis,trackPlan,positionSize,ema,rsi,atr,candleZones} from '../engine.mjs';
+import {fixture,NOW,samplePlan,entryFixture,eaFixture} from './fixtures.mjs';
 
 test('indicator values have sensible constant and monotone limits',()=>{
   assert.equal(ema(Array(240).fill(100),21),100);
@@ -22,6 +22,19 @@ test('no data or stale data never produces an entry or LOW RISK',()=>{
 });
 test('fresh transport cannot disguise old market quotes',()=>{
   const raw=fixture();raw.quote_at=NOW-60;const s=cleanSnapshot(raw,NOW);assert.equal(analyze(s,NOW).connection,'STALE');
+});
+test('multi-day broker quotes remain valid telemetry without becoming live signals',()=>{
+  for(const age of [2*86400,7*86400]){
+    const raw=eaFixture();raw.quote_at=NOW-age;raw.candles=fixture(NOW-age).candles;
+    const snapshot=cleanSnapshot(raw,NOW),out=sourceAnalysis(snapshot,NOW);
+    assert.equal(snapshot.quote_at,NOW-age);assert.equal(snapshot.received_at,NOW);
+    assert.equal(out.connection,'STALE');assert.equal(out.source_ready,false);
+    assert.equal(out.plan,null);assert.equal(out.decision,'WAIT');assert.equal(out.score,null);
+    assert.equal(trackPlan(samplePlan(),snapshot,NOW),null);
+  }
+  for(const quote of [0,-1,NaN,'1791511200']){
+    const raw=fixture();raw.quote_at=quote;assert.throws(()=>cleanSnapshot(raw,NOW),/Invalid quote_at/);
+  }
 });
 test('calendar outages and high impact events block signals',()=>{
   const raw=fixture();raw.calendar.status='unavailable';assert.match(analyze(cleanSnapshot(raw,NOW),NOW).reasons[0],/التقويم/);

@@ -1,6 +1,6 @@
 {
   "name": "nabd-gold-terminal",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "description": "NABD Gold Pulse — broker data, MT5 bot signals, calendar and protected account monitoring",
   "private": true,
   "type": "module",
