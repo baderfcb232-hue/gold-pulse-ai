@@ -1,4 +1,4 @@
-# Verification — NABD Gold Pulse v3.2.1
+# Verification — NABD Gold Pulse v3.2.2
 
 Validated for the original repository `baderfcb232-hue/gold-pulse-ai`. The v3.2 integration was merged into `main` as `9e0f6f89ad75d388d81bef7e8227f33a9dc46f59` and deployed to the original `https://gold-pulse-ai.onrender.com/` service on 2026-10-11. Patch 3.2.1 repairs multi-day quote rejection and adds bridge diagnostics without changing the main trading strategy or authentication credentials.
 
@@ -7,12 +7,20 @@ Validated for the original repository `baderfcb232-hue/gold-pulse-ai`. The v3.2 
 - A synthetic `XAUUSD.m` snapshot with a Friday quote received about 50 hours later reproduced `Invalid quote_at` before this patch. No production credentials, account identifiers or orders were used in the reproduction.
 - Valid historical quote times now pass ingestion while future, zero, negative, string and nonfinite times remain invalid. Fresh arrival/EA heartbeats cannot turn a multi-day-old quote into LIVE status, an EA recommendation, a target hit or an allowed command. An authenticated API regression also verifies recovery when the broker sends a current tick.
 - The bridge reports bounded server rejection details once per unchanged error and prints the first/recovered HTTP=200 acceptance. It does not claim that acceptance means a fresh market quote. Malformed JSON receives a constant error rather than echoing submitted secrets or payload fragments; MT5 validation failures are logged without the request body or headers.
-- Check the deployed `/healthz` version is `3.2.1` before treating the patch as published. New bridge source 3.01 still requires compilation on the user's MT5 platform.
+- Check the deployed `/healthz` version is `3.2.2` before treating the current patch as published. New bridge source 3.02 still requires compilation on the user's MT5 platform.
+
+## Bridge startup diagnostics (3.2.2 / bridge 3.02)
+
+- The first packet contains the real broker quote/specification and runtime EA state, with explicitly empty candle arrays and an unavailable calendar. History/calendar loading starts only after that packet is accepted. The latest broker tick is read again after potentially slow history/calendar calls.
+- The bridge displays its current stage and the HTTP or MQL network error on its own chart. A future broker timestamp is blocked locally with a clock/automatic-offset diagnostic; quote timestamps are never replaced with the current time.
+- Request timeout defaults to 10,000 ms (allowed input range 3,000–30,000 ms), replacing the previous hard-coded 1,200 ms. Network work remains on the separate bridge chart.
+- A local authenticated API integration check verifies that an initial quote without history, calendar, main EA or account data is visible while signals and remote commands remain unavailable. A subsequent complete packet resumes the original EA recommendation flow.
+- These changes require compiling and running bridge 3.02 on the user's MT5 platform. JavaScript/API tests do not prove that MQL5 compiled or that a live MT5 request was received.
 
 ## Completed checks
 
 - `npm ci --ignore-scripts`: passed; no external npm dependencies.
-- `npm test`: **36 passed, 0 failed**, on Node.js **24.19.0**. Coverage includes broker data validation, weekend quote acceptance without stale-data trading, recovery on a current tick, private JSON error redaction, indicators, frozen EA plans, quote/heartbeat expiry, news gating, BUY/SELL price sides, sizing and margins, private account data, authentication and logout, safe commands and expiry, SQLite persistence, and explicit backtest cost/calendar assumptions.
+- `npm test`: **37 passed, 0 failed**, on Node.js **24.19.0**. Coverage includes first-quote bootstrap without fabricated history/calendar or premature signals/control, broker data validation, weekend quote acceptance without stale-data trading, recovery on a current tick, private JSON error redaction, indicators, frozen EA plans, quote/heartbeat expiry, news gating, BUY/SELL price sides, sizing and margins, private account data, authentication and logout, safe commands and expiry, SQLite persistence, and explicit backtest cost/calendar assumptions.
 - JavaScript syntax checks passed for all server modules, `server.js`, and `public/app.js`. The HTML has 82 unique IDs and all 79 literal JavaScript ID references resolve. Staged diff whitespace checks passed.
 - Migration checks exercise the existing `node server.js` entry point, HTTP health/version and updated UI assets, graceful SIGTERM, authenticated original ingestion path, rejection of incomplete old payloads, sizing on the original risk endpoint without changing MT5 settings, stale-data refusal, control blocking on ephemeral storage, and retained command IDs/confirmations across restart.
 - Runtime is bounded to Node 24; `.node-version` uses Render's documented current version 24.21.0. Existing `node server.js` / `npm start` commands remain valid.
@@ -25,7 +33,7 @@ All market/account fixtures are synthetic test data. They are never loaded into 
 
 - GitHub write access was confirmed (`permissions.push=true`) after the collaborator invitation was accepted on 2026-10-09.
 - The Render connector uses a different workspace and cannot access the original service. Publication was completed through the owner's authorized Dashboard session instead; no replacement service was created.
-- MetaEditor/MT5 is unavailable in this environment. The user's screenshot shows the previous main EA and bridge running on separate charts and the bridge receiving HTTP=400. The changed bridge 3.01 has not been compiled or run here; compile it and validate telemetry on the user's demo account.
+- MetaEditor/MT5 is unavailable in this environment. The latest user screenshot shows the main EA and bridge 3.01 running on separate charts, with startup/no-trade logs but no telemetry acceptance. Production state returned NO_DATA with revision 0 before this patch. The changed bridge 3.02 has not been compiled or run here; compile it and validate telemetry on the user's platform.
 - Live desktop Browser QA on the original URL verified all six navigation sections, one visible panel per section, no horizontal overflow, CSV export, bridge URL copying, and the protected operator/account/download gates. The site's captured error/warning log was empty. Successful operator authentication, real candles/account data, and mobile viewport execution were not verified in production.
 - Render Free has ephemeral storage. The new UI reports that condition and remote controls remain disabled unless durable storage is explicitly confirmed. Monitoring can work without a paid resource.
 - No historical market dataset was supplied. No real profitability or live execution result is claimed.

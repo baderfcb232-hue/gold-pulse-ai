@@ -3,6 +3,10 @@
 bool g_nb_warned=false;
 int g_nb_last_http=0;
 string g_nb_last_rejection="";
+int g_nb_last_network_error=0;
+bool g_nb_bootstrap_done=false;
+bool g_nb_timer_seen=false;
+string g_nb_local_warning="";
 ulong g_nb_last_send=0;
 datetime g_nb_calendar_time=0;
 string g_nb_calendar="{\"status\":\"unavailable\",\"events\":[]}";
@@ -66,9 +70,11 @@ int NBRequest(const string method,const string path,const string payload,string 
    string headers="Authorization: Bearer "+InpNABDToken+"\r\nContent-Type: application/json\r\n";
    string result_headers;
    ResetLastError();
-   int code=WebRequest(method,NBUrl(path),headers,1200,data,result,result_headers);
+   int code=WebRequest(method,NBUrl(path),headers,InpNABDRequestTimeoutMs,data,result,result_headers);
+   g_nb_last_network_error=code==-1?GetLastError():0;
    response=CharArrayToString(result,0,WHOLE_ARRAY,CP_UTF8);
-   if(code==-1) PrintFormat("NABD link failed. Error=%d. Check allowed WebRequest URLs.",GetLastError());
+   if(code==-1 && g_nb_last_http!=-1)
+      PrintFormat("NABD link failed. Error=%d. Check allowed WebRequest URLs and the internet connection.",g_nb_last_network_error);
    return code;
   }
 string NBCandles(const ENUM_TIMEFRAMES tf,const long offset)
@@ -234,14 +240,42 @@ void NBProcessCommand()
   }
 void NABDOnTimer()
   {
-   if(!InpEnableNABDLink || MQLInfoInteger(MQL_TESTER))return;
+   if(!InpEnableNABDLink){NBStatus("Link disabled: set InpEnableNABDLink=true.");return;}
+   if(MQLInfoInteger(MQL_TESTER))return;
    if(StringLen(InpNABDToken)<32 || StringFind(InpNABDUrl,"https://")!=0)
      {if(!g_nb_warned){Print("NABD requires an HTTPS URL and a 32+ character ingest token.");g_nb_warned=true;}return;}
    ulong now=GetTickCount64();
    if(g_nb_last_send>0 && now-g_nb_last_send<(ulong)MathMax(3,InpNABDRefreshSeconds)*1000)return;
    g_nb_last_send=now;
-   MqlTick tick;if(!SymbolInfoTick(g_symbol,tick) || tick.bid<=0 || tick.ask<tick.bid)return;
-   long offset=NBOffset();NBUpdateCalendar(offset);
+   if(!g_nb_timer_seen)
+     {Print("NABD timer running. Sending the first quote before loading history and the calendar.");g_nb_timer_seen=true;}
+   MqlTick tick;
+   if(!SymbolInfoTick(g_symbol,tick) || tick.bid<=0 || tick.ask<tick.bid)
+     {NBStatus("Waiting for a valid broker quote. Check the symbol and broker connection.");return;}
+   long offset=NBOffset();
+   // Let the real price reach the dashboard before potentially slow MT5 history/calendar calls.
+   // Empty history and an unavailable calendar are explicit; they are never fabricated.
+   string candles="{\"M5\":[],\"M15\":[],\"H1\":[],\"H4\":[]}";
+   string calendar="{\"status\":\"unavailable\",\"events\":[]}";
+   if(g_nb_bootstrap_done)
+     {
+      NBStatus("Loading economic calendar from MT5...");NBUpdateCalendar(offset);
+      NBStatus("Loading M5, M15, H1 and H4 history from MT5...");
+      candles="{\"M5\":"+NBCandles(PERIOD_M5,offset)+",\"M15\":"+NBCandles(PERIOD_M15,offset)+
+        ",\"H1\":"+NBCandles(PERIOD_H1,offset)+",\"H4\":"+NBCandles(PERIOD_H4,offset)+"}";
+      calendar=g_nb_calendar;
+     }
+   // History/calendar may take time; send the latest broker tick available after they finish.
+   if(!SymbolInfoTick(g_symbol,tick) || tick.bid<=0 || tick.ask<tick.bid)
+     {NBStatus("Waiting for a valid broker quote.");return;}
+   if((long)tick.time-offset>(long)TimeGMT()+5)
+     {
+      string warning="Broker quote is ahead of UTC. Check the computer clock and set InpNABDServerUtcOffsetMinutes=2147483647 for automatic detection.";
+      NBStatus(warning);
+      if(g_nb_local_warning!=warning){Print("NABD: "+warning);g_nb_local_warning=warning;}
+      return;
+     }
+   g_nb_local_warning="";
    double buy_margin=0,sell_margin=0;
    bool bm=OrderCalcMargin(ORDER_TYPE_BUY,g_symbol,1.0,tick.ask,buy_margin),sm=OrderCalcMargin(ORDER_TYPE_SELL,g_symbol,1.0,tick.bid,sell_margin);
    double margin=bm && sm?MathMax(buy_margin,sell_margin):0;
@@ -257,8 +291,7 @@ void NABDOnTimer()
    string payload="{\"symbol\":"+NBQ(g_symbol)+",\"account_ref\":"+NBQ((string)AccountInfoInteger(ACCOUNT_LOGIN))+
      ",\"broker\":"+NBQ(AccountInfoString(ACCOUNT_SERVER))+",\"terminal_connected\":"+NBB((bool)TerminalInfoInteger(TERMINAL_CONNECTED))+
      ",\"quote_at\":"+(string)((long)tick.time-offset)+",\"bid\":"+NBD(tick.bid,g_digits)+",\"ask\":"+NBD(tick.ask,g_digits)+
-     ",\"spec\":"+spec+",\"candles\":{\"M5\":"+NBCandles(PERIOD_M5,offset)+",\"M15\":"+NBCandles(PERIOD_M15,offset)+
-     ",\"H1\":"+NBCandles(PERIOD_H1,offset)+",\"H4\":"+NBCandles(PERIOD_H4,offset)+"},\"calendar\":"+g_nb_calendar+
+     ",\"spec\":"+spec+",\"candles\":"+candles+",\"calendar\":"+calendar+
      ",\"execution\":{\"main_connected\":"+NBB(NBMainFresh())+",\"enabled\":"+NBB(TradingExecutionEnabled())+",\"remote_control\":"+NBB(InpNABDAllowRemoteControl && InpNABDSendAccount && NBMainFresh() && NBMainValue("R")>0.5)+
      ",\"demo\":"+NBB(AccountInfoInteger(ACCOUNT_TRADE_MODE)==ACCOUNT_TRADE_MODE_DEMO)+",\"paused\":"+NBB(NABDRemotePaused())+
      ",\"managed_magic\":"+NBQ((string)InpMagicNumber)+",\"small_profit_target\":"+NBD(NBMainValue("TP"),2)+
@@ -270,6 +303,7 @@ void NABDOnTimer()
         ",\"free_margin\":"+NBD(AccountInfoDouble(ACCOUNT_MARGIN_FREE),2)+",\"floating\":"+NBD(AccountInfoDouble(ACCOUNT_PROFIT),2)+
         "},\"positions\":"+NBPositions(offset)+",\"deals\":"+NBDeals(offset);
    payload+="}";
+   NBStatus("Sending update to the dashboard...");
    string response;int code=NBRequest("POST","/api/mt5",payload,response);
    if(code!=200)
      {
@@ -277,10 +311,19 @@ void NABDOnTimer()
       StringReplace(detail,"\r"," ");StringReplace(detail,"\n"," ");
       if(code!=g_nb_last_http || detail!=g_nb_last_rejection)
          PrintFormat("NABD update rejected. HTTP=%d. Server: %s",code,detail);
+      if(code==-1)
+         NBStatus("WebRequest error "+(string)g_nb_last_network_error+". Check allowed URLs and the internet connection.");
+      else if(code==401)
+         NBStatus("HTTP 401: use the server MT5_INGEST_TOKEN, not the operator login token.");
+      else
+         NBStatus("HTTP "+(string)code+": "+detail);
       g_nb_last_http=code;g_nb_last_rejection=detail;
       return;
      }
    if(g_nb_last_http!=200)Print("NABD telemetry accepted by dashboard.");
    g_nb_last_http=200;g_nb_last_rejection="";
+   bool first=!g_nb_bootstrap_done;g_nb_bootstrap_done=true;
+   NBStatus(first?"First quote accepted. History/calendar will load on the next update.":
+     NBMainFresh()?"Update accepted by dashboard. Main bot link present.":"Update accepted by dashboard. Waiting for the main bot link.");
    if(InpNABDAllowRemoteControl && InpNABDSendAccount)NBProcessCommand();
   }
