@@ -33,7 +33,7 @@ test('the existing node server.js command boots the updated site and shuts down 
   const child = spawn(process.execPath, ['server.js'], {cwd: fileURLToPath(new URL('..', import.meta.url)),
     env: {...process.env, PORT: '0', BIND_ADDRESS: '127.0.0.1', DATA_DIR: dir, RENDER: '',
       PUBLIC_BASE_URL: '', MT5_INGEST_TOKEN: '', DASHBOARD_TOKEN: '',
-      SIGNAL_SOURCE: 'EA', PERSISTENT_STORAGE_CONFIRMED: 'false'}, stdio: ['ignore', 'pipe', 'pipe']});
+      SIGNAL_SOURCE: 'EA', PERSISTENT_STORAGE_CONFIRMED: 'false', PUBLIC_FEEDS_ENABLED: 'false'}, stdio: ['ignore', 'pipe', 'pipe']});
   const exited = new Promise(resolve => child.once('exit', (code, signal) => resolve({code, signal})));
   t.after(async () => {if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM');
     await exited; rmSync(dir, {recursive: true, force: true});});
@@ -41,13 +41,13 @@ test('the existing node server.js command boots the updated site and shuts down 
     let output = '';
     child.once('error', reject);
     child.once('exit', code => reject(new Error('Server exited before listening: ' + code)));
-    child.stdout.on('data', chunk => {output += chunk.toString(); const match = output.match(/NABD v3\.2(?:\.\d+)? listening on (\d+)/); if (match) resolve(Number(match[1]));});
+    child.stdout.on('data', chunk => {output += chunk.toString(); const match = output.match(/NABD v3\.\d+\.\d+ listening on (\d+)/); if (match) resolve(Number(match[1]));});
   });
   const base = 'http://127.0.0.1:' + port;
-  assert.deepEqual(await (await fetch(base + '/healthz')).json(), {ok: true, version: '3.2.2', storage: 'ephemeral'});
+  assert.deepEqual(await (await fetch(base + '/healthz')).json(), {ok: true, version: '3.3.0', storage: 'ephemeral'});
   const state = await (await fetch(base + '/api/state')).json();
   assert.equal(state.connection, 'NO_DATA'); assert.equal(state.bid, null); assert.equal(state.controlsConfigured, false);
-  assert.match(await (await fetch(base + '/')).text(), /GOLD PULSE \/ 3\.2/);
+  assert.match(await (await fetch(base + '/')).text(), /LIVE MARKETS \/ 3\.3\.0/);
   assert.equal((await fetch(base + '/app.js')).status, 200);
   child.kill('SIGTERM'); assert.deepEqual(await exited, {code: 0, signal: null});
 });
