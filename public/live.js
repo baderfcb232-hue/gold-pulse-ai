@@ -48,8 +48,9 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     const state = !live && m?.quote ? 'STALE' : a?.status || 'NO_DATA';
     put('scalp-decision', p ? side(p.side) + ' · مرجعي' : states[state]);
     $('scalp-decision').className = p ? (p.side === 'BUY' ? 'buy' : 'sell') : '';
-    put('scalp-status', states[state]); $('scalp-status').className = 'pill ' + (p ? 'good' : state === 'WATCH' ? 'warn' : 'neutral');
-    put('scalp-reason', !live && m?.quote ? 'إصدار فرص جديدة متوقف. نحتفظ بالشارت والتحليل السابق حتى يعود مصدر حديث.' : a?.reason || 'يجري الاتصال بمصدر السوق.');
+    put('scalp-status', p ? 'متابعة إشارة محفوظة' : states[state]); $('scalp-status').className = 'pill ' + (p ? 'good' : state === 'WATCH' ? 'warn' : 'neutral');
+    put('scalp-reason', !live && m?.quote ? 'إصدار فرص جديدة متوقف. نحتفظ بالشارت والتحليل السابق حتى يعود مصدر حديث.'
+      : p ? `الإشارة صدرت ${time(p.issued_at)} ومستوياتها ثابتة. الشروط الحالية لفرصة جديدة: ${a?.reason || 'تجري المتابعة.'}` : a?.reason || 'يجري الاتصال بمصدر السوق.');
     put('scalp-score', live && a?.checks?.length ? `${a.score} / 100` : '—');
     $('scalp-score-fill').style.width = live && a?.checks?.length ? a.score + '%' : '0%';
     const checks = (a?.checks || []).map(ch => {const row = node('div', 'check'); row.append(node('span', ch.pass ? 'pass' : 'fail', ch.pass ? '✓' : '○'), node('span', '', ch.name)); return row;});
@@ -81,6 +82,8 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   }
   async function loadChart() {
     const requestedSymbol = symbol, requestedTf = tf, id = ++chartRequest;
+    put('live-chart-title', 'شارت ' + (market()?.name || symbol));
+    if (!rows.length) {put('live-chart-source', 'جلب شارت ' + symbol + ' من مصدره…'); drawChart();}
     try {const result = await api(`/api/market/candles?symbol=${symbol}&tf=${tf}`);
       if (id !== chartRequest || symbol !== requestedSymbol || tf !== requestedTf) return;
       rows = result.candles || []; mergeChartTail(); drawChart();
