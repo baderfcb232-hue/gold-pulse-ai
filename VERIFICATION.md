@@ -1,4 +1,14 @@
-# Verification — NABD Gold Pulse v3.2.2
+# Verification — NABD Gold Pulse v3.3.0
+
+## Independent reference scalping and news (3.3.0)
+
+- `npm test`: 49 passing tests on Node 24.19.0, including 12 new checks for price/candle validation, gap rejection, both scalp directions, expiry-before-fill tracking, frozen/deduplicated reference levels, separation from MT5, cache restart freshness, HTTP/socket shutdown, RSS/Atom safety, original-arrival deduplication, 304 caching, RSS TTL status and 429 backoff. No synthetic fixture is posted to production.
+- Real public-source smoke test retrieved current Gold API quotes, 299 closed BTC-USD M1 candles, a working Coinbase WebSocket stream, Arabic/business BBC headlines and ECB releases. One Federal Reserve fetch failed; the source is reported as unavailable and retried independently. This check proves connectivity, not profitability or 24-hour uptime.
+- UI distinguishes sampled gold reference candles, exchange BTC data and broker MT5 data. Neither public reference source substitutes for the broker account, its execution levels, or authenticated commands.
+- Gold has no unauthenticated historical minute endpoint. Its independent M1/M5 strategy warms up from observed quotes for about 110 minutes; no historical prices are manufactured. Indicators use closed observations and block gaps/staleness. Gold source update cadence is about 30 seconds.
+- BBC RSS declares a 15-minute TTL. News uses the longest of its nominal 30–60 second interval, HTTP caching and RSS TTL, with conditional requests where offered and backoff on errors. One-second SSE/UI updates are not a claim of one-second global news coverage.
+- A free Render process cannot promise unattended 24/7 collection or preserve local gold/history caches through restart. No paid resources or external keep-alive service were provisioned.
+- The existing startup command, separate operator/ingest credentials, EA signal-source contract and ephemeral-storage trade-control block remain covered by the regression suite.
 
 Validated for the original repository `baderfcb232-hue/gold-pulse-ai`. The v3.2 integration was merged into `main` as `9e0f6f89ad75d388d81bef7e8227f33a9dc46f59` and deployed to the original `https://gold-pulse-ai.onrender.com/` service on 2026-10-11. Patch 3.2.1 repairs multi-day quote rejection and adds bridge diagnostics without changing the main trading strategy or authentication credentials.
 

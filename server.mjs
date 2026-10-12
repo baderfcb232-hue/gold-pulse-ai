@@ -6,6 +6,8 @@ import {randomBytes, timingSafeEqual, createHash} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
 import {analyze, sourceAnalysis, cleanSnapshot, trackPlan, positionSize, text, defaults} from './engine.mjs';
 import {mt5Archive} from './archive.mjs';
+import {createMarketFeed} from './market.mjs';
+import {createNewsFeed} from './news.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = resolve(ROOT, 'public');
@@ -24,7 +26,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   ingestToken = process.env.MT5_INGEST_TOKEN || '', dashboardToken = process.env.DASHBOARD_TOKEN || '',
   publicBase = process.env.PUBLIC_BASE_URL || (process.env.RENDER === 'true' ? 'https://gold-pulse-ai.onrender.com' : ''),
   storagePersistent = process.env.PERSISTENT_STORAGE_CONFIRMED === 'true', clock = () => Date.now() / 1000,
-  config = {}} = {}) {
+  config = {}, feedOptions = {}} = {}) {
   if (ingestToken.length >= 32 && ingestToken === dashboardToken)
     throw new Error('MT5_INGEST_TOKEN and DASHBOARD_TOKEN must be different.');
   mkdirSync(dataDir, {recursive: true, mode: 0o700});
@@ -40,6 +42,14 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   try { const row = db.prepare('SELECT data FROM snapshot WHERE id=1').get(); if (row) snapshot = JSON.parse(row.data); } catch {}
   let lastSource = snapshot ? `${snapshot.account_ref}|${snapshot.broker}|${snapshot.symbol}|${snapshot.execution.managed_magic}` : null;
   const clients = new Set(), sessions = new Map(), attempts = new Map();
+  const emit = (event, data) => {
+    if (!clients.size) return;
+    const message = `event: ${event}\ndata: ${JSON.stringify(data())}\n\n`;
+    for (const res of clients) if (!res.write(message)) {clients.delete(res); res.end();}
+  };
+  const marketFeed = createMarketFeed({db, clock, ...feedOptions, calendar: () => snapshot?.calendar || null,
+    onChange: () => emit('market', marketFeed.publicState)});
+  const newsFeed = createNewsFeed({db, clock, ...feedOptions, onChange: () => emit('news', newsFeed.publicState)});
   let revision = 0;
   const cfg = {...defaults, signalSource: process.env.SIGNAL_SOURCE || 'EA', ...config};
   if (!['EA','DASHBOARD'].includes(cfg.signalSource)) throw new Error('SIGNAL_SOURCE must be EA or DASHBOARD');
@@ -86,7 +96,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     const a = sourceAnalysis(snapshot, clock(), cfg);
     const active = signalRows().find(s => s.status === 'TRACKING' && (a.source === 'MT5_EA' ? s.source === 'MT5_EA' : s.source !== 'MT5_EA'));
     const available = a.connection === 'LIVE' && a.source_ready;
-    return {version: '3.2.2', revision, symbol: snapshot?.symbol || 'XAUUSD', broker: snapshot?.broker || null,
+    return {version: '3.3.0', revision, symbol: snapshot?.symbol || 'XAUUSD', broker: snapshot?.broker || null,
       bid: snapshot?.bid ?? null, ask: snapshot?.ask ?? null,
       spread: snapshot ? (snapshot.ask - snapshot.bid) / snapshot.spec.point : null,
       spreadUnit: 'points', lastUpdate: snapshot?.quote_at ?? null,
@@ -110,8 +120,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       serverTime: clock(), controlsConfigured: dashboardToken.length >= 32 && ingestToken.length >= 32};
   }
   function broadcast() {
-    const message = 'event: state\ndata: ' + JSON.stringify(publicState()) + '\n\n';
-    for (const res of clients) if (!res.write(message)) { clients.delete(res); res.end(); }
+    emit('state', publicState);
   }
   function ingest(raw) {
     const next = cleanSnapshot(raw, clock());
@@ -131,20 +140,33 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       const saved = db.prepare('INSERT OR IGNORE INTO signals(id,issued_at,data) VALUES(?,?,?)').run(id, plan.issued_at, JSON.stringify({...plan, id}));
       if (saved.changes) audit('SIGNAL_ISSUED', {id, side: plan.side});
     }
-    broadcast();
+    marketFeed.recalculate(); broadcast();
   }
   const server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://localhost'), path = url.pathname;
       if (!['GET', 'POST'].includes(req.method)) return send(req, res, 405, {error: 'Method not allowed'});
       if (req.method === 'POST' && !ownOrigin(req)) return send(req, res, 403, {error: 'Origin rejected'});
-      if (path === '/healthz' && req.method === 'GET') return send(req, res, 200, {ok: true, version: '3.2.2', storage: storagePersistent ? 'persistent' : 'ephemeral'});
+      if (path === '/healthz' && req.method === 'GET') return send(req, res, 200, {ok: true, version: '3.3.0', storage: storagePersistent ? 'persistent' : 'ephemeral'});
       if (path === '/api/state' && req.method === 'GET') return send(req, res, 200, publicState());
+      if (path === '/api/market' && req.method === 'GET') return send(req, res, 200, marketFeed.publicState());
+      if (path === '/api/news' && req.method === 'GET') return send(req, res, 200, newsFeed.publicState());
+      if (path === '/api/market/candles' && req.method === 'GET') {
+        const data = marketFeed.candles(url.searchParams.get('symbol') || 'XAUUSD', url.searchParams.get('tf') || 'M1');
+        return send(req, res, data ? 200 : 400, data || {error: 'Invalid market or timeframe'});
+      }
+      if (path === '/api/market/signals' && req.method === 'GET') {
+        const symbol = url.searchParams.get('symbol');
+        if (symbol && !['XAUUSD','BTCUSD'].includes(symbol)) return send(req, res, 400, {error: 'Invalid market'});
+        return send(req, res, 200, {signals: marketFeed.history(symbol), kind: 'REFERENCE_SCALP_RECOMMENDATIONS'});
+      }
       if (path === '/engine.mjs' && req.method === 'GET') return send(req, res, 200, readFileSync(resolve(ROOT, 'engine.mjs')), 'text/javascript; charset=utf-8');
       if (path === '/api/events' && req.method === 'GET') {
         if (clients.size >= 200) return send(req, res, 503, {error: 'Too many connections'});
         res.writeHead(200, {...headers(req), 'Content-Type': 'text/event-stream; charset=utf-8', Connection: 'keep-alive', 'X-Accel-Buffering': 'no'});
         res.write('event: state\ndata: ' + JSON.stringify(publicState()) + '\n\n');
+        res.write('event: market\ndata: ' + JSON.stringify(marketFeed.publicState()) + '\n\n');
+        res.write('event: news\ndata: ' + JSON.stringify(newsFeed.publicState()) + '\n\n');
         clients.add(res); req.on('close', () => clients.delete(res)); return;
       }
       if (path === '/api/candles' && req.method === 'GET') {
@@ -254,7 +276,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         audit('COMMAND_RESULT', {id: c.id, status: b.status, message: text(b.message, 500)});
         return send(req, res, 200, {ok: true});
       }
-      const files = {'/':'index.html','/index.html':'index.html','/app.js':'app.js','/styles.css':'styles.css','/manifest.webmanifest':'manifest.webmanifest','/icon.svg':'icon.svg'};
+      const files = {'/':'index.html','/index.html':'index.html','/app.js':'app.js','/live.js':'live.js','/styles.css':'styles.css','/manifest.webmanifest':'manifest.webmanifest','/icon.svg':'icon.svg'};
       if (req.method === 'GET' && files[path]) {
         const type = path.endsWith('.js') ? 'text/javascript; charset=utf-8' : path.endsWith('.css') ? 'text/css; charset=utf-8'
           : path.endsWith('.webmanifest') ? 'application/manifest+json' : path.endsWith('.svg') ? 'image/svg+xml' : 'text/html; charset=utf-8';
@@ -283,13 +305,18 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     } catch (e) { console.error('State update failed:', e.message); }
   }, 5000); timer.unref();
   const close = async () => {clearInterval(timer); for (const c of clients) c.end();
+    await Promise.allSettled([marketFeed.close(), newsFeed.close()]);
     await new Promise(r => server.close(r)); db.close();};
-  return {server, ingest, publicState, signalRows, db, close};
+  return {server, ingest, publicState, signalRows, db, close, marketFeed, newsFeed,
+    startFeeds: () => {marketFeed.start(); newsFeed.start();}};
 }
 export function startServer() {
   const app = createApplication();
   const port = Number(process.env.PORT || 3000);
-  app.server.listen(port, process.env.BIND_ADDRESS || '0.0.0.0', () => console.log(`NABD v3.2.2 listening on ${app.server.address().port}`));
+  app.server.listen(port, process.env.BIND_ADDRESS || '0.0.0.0', () => {
+    console.log(`NABD v3.3.0 listening on ${app.server.address().port}`);
+    if (process.env.PUBLIC_FEEDS_ENABLED !== 'false') app.startFeeds();
+  });
   if (!(process.env.MT5_INGEST_TOKEN?.length >= 32 && process.env.DASHBOARD_TOKEN?.length >= 32))
     console.log('MT5 ingestion and operator controls require separately configured 32+ character tokens.');
   let closing = false;
