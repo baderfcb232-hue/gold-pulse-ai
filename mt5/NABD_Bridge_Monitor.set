@@ -7,6 +7,7 @@ InpEnableNABDLink=true
 InpNABDUrl=https://gold-pulse-ai.onrender.com
 InpNABDToken=
 InpNABDRefreshSeconds=3
+InpNABDRequestTimeoutMs=10000
 InpNABDSendAccount=false
 InpNABDAllowRemoteControl=false
 InpNABDServerUtcOffsetMinutes=2147483647
