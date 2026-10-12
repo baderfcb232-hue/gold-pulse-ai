@@ -35,6 +35,32 @@ test('invalid bot levels and future signal times are rejected; old plans age out
   raw.ea.signal.issued_at=NOW+60;assert.throws(()=>cleanSnapshot(raw,NOW),/signal time/);
   raw.ea.signal.issued_at=NOW-86400;assert.equal(cleanSnapshot(raw,NOW).ea.signal,null);
 });
+test('the bridge can publish its first real quote before history/calendar warm up without enabling signals or control',async t=>{
+  let now=NOW;const dir=mkdtempSync(join(tmpdir(),'nabd-bridge-bootstrap-'));
+  const ingest='bootstrap-ingest-test-xxxxxxxxxxxxxxxxxxxx';
+  const operator='bootstrap-operator-test-yyyyyyyyyyyyyyyyyy';
+  const app=createApplication({dataDir:dir,storagePersistent:true,clock:()=>now,ingestToken:ingest,dashboardToken:operator});
+  await new Promise(r=>app.server.listen(0,'127.0.0.1',r));
+  t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
+  const base='http://127.0.0.1:'+app.server.address().port;
+  const post=(path,data,token)=>fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(data)});
+  const raw=eaFixture();
+  raw.candles={M5:[],M15:[],H1:[],H4:[]};raw.calendar={status:'unavailable',events:[]};
+  raw.ea=null;raw.execution={...raw.execution,enabled:false,remote_control:false,main_connected:false};
+  delete raw.account;delete raw.positions;delete raw.deals;
+  assert.equal((await post('/api/mt5',raw,ingest)).status,200);
+  const state=await (await fetch(base+'/api/state')).json();
+  assert.equal(state.connection,'LIVE');assert.equal(state.bid,raw.bid);assert.equal(state.ask,raw.ask);
+  assert.equal(state.signalSourceReady,false);assert.equal(state.currentSignal,null);
+  assert.equal(state.accountDataShared,false);assert.equal(state.execution.enabled,false);
+  assert.equal(state.execution.remote_control,false);assert.equal(app.signalRows().length,0);
+  assert.deepEqual((await (await fetch(base+'/api/candles?tf=M5')).json()).candles,[]);
+  assert.equal((await post('/api/commands',{action:'CLOSE_ALL'},operator)).status,409);
+  now++;
+  assert.equal((await post('/api/mt5',eaFixture(now),ingest)).status,200);
+  const warmed=await (await fetch(base+'/api/state')).json();
+  assert.equal(warmed.signalSourceReady,true);assert.equal(warmed.currentSignal.entry,eaFixture(now).ea.signal.entry);
+});
 test('bridge → API → frozen EA history is deduplicated and source expiry blocks control',async t=>{
   let now=NOW;const dir=mkdtempSync(join(tmpdir(),'nabd-ea-link-'));
   const ingest='integration-test-ingest-xxxxxxxxxxxxxxxx',operator='integration-test-operator-yyyyyyyyyyyyy';
