@@ -1,4 +1,5 @@
 import {positionSize, ema} from '/engine.mjs';
+import {initLiveWorkspace} from '/live.js';
 const $ = id => document.getElementById(id);
 const e = (tag, cls, content) => {const x = document.createElement(tag); if (cls) x.className = cls; if (content != null) x.textContent = String(content); return x;};
 const put = (id, value) => {$(id).textContent = value ?? '—';};
@@ -8,7 +9,7 @@ const sides = {BUY:'شراء',SELL:'بيع',WAIT:'انتظار',NEUTRAL:'محا�
 const statuses = {TRACKING:'قيد المتابعة',TP2:'بلغت الهدف',SL:'وقف الخسارة',EXPIRED:'انتهت الصلاحية',QUEUED:'بانتظار MT5',CONFIRMED:'أكد MT5 التنفيذ',REJECTED:'رُفض الأمر',UNCERTAIN:'التأكيد غير مكتمل'};
 const actions = {PAUSE:'إيقاف دخول جديد',RESUME:'استئناف الدخول',CLOSE_POSITION:'إغلاق الصفقة',CLOSE_ALL:'إغلاق صفقات البوت',BREAK_EVEN:'نقل الستوب لسعر الدخول',PARTIAL_CLOSE:'إغلاق نصف الصفقة'};
 const views = {overview:'نظرة السوق',signals:'التوصيات',positions:'الصفقات',news:'الأخبار الاقتصادية',results:'النتائج',settings:'الإعدادات والربط'};
-const descriptions = {overview:'التوصية وحالة البوت وبيانات الذهب في مكان واحد.',signals:'خطط ثابتة بوقتها ومصدرها الأصلي.',positions:'حسابك وصفقات البوت وأوامر الإدارة.',news:'أحداث الدولار القادمة والمنشورة بتوقيت غزة.',results:'متابعة الخطط وعمليات MT5 الفعلية.',settings:'ربط المنصة وفحص البيانات وحساب المخاطرة.'};
+const descriptions = {overview:'أسعار مرجعية وفرص مضاربة وأخبار بتوقيت غزة.',signals:'فرص المضاربة وخطط البوت، كل خطة بوقتها ومصدرها.',positions:'حسابك وصفقات البوت وأوامر الإدارة.',news:'عناوين المصادر ومواعيد الأحداث الاقتصادية بتوقيت غزة.',results:'متابعة الخطط وعمليات MT5 الفعلية.',settings:'ربط المنصة وفحص البيانات وحساب المخاطرة.'};
 let state = null, signals = [], privateData = null, authenticated = false, view = 'overview';
 let chartTf = 'M5', chartRows = [], chartKey = '', chartLoading = false;
 let lastSignalId = null, signalsStamp = '', clockOffset = 0, pendingCommand = null, stream = null, streamHealthy = false;
@@ -197,7 +198,9 @@ $('risk-form').onsubmit=event=>{event.preventDefault();try{if(!state?.spec)throw
 try{$('signal-notifications').checked=localStorage.getItem('nabd-signal-notices')!=='off';}catch{}
 $('signal-notifications').onchange=()=>{try{localStorage.setItem('nabd-signal-notices',$('signal-notifications').checked?'on':'off');}catch{}};
 new ResizeObserver(drawChart).observe($('chart'));
+$('broker-details').addEventListener('toggle', drawChart);
 setInterval(()=>{renderConnection();put('server-clock',time(now())+' · غزة');if(state?.currentSignal&&effectiveConnection()!=='LIVE'){renderActiveSignal();put('decision','انتظار البيانات');}if(state){renderExecution();renderLink();}},1000);
 setInterval(()=>{if(!streamHealthy)fetchState();if(authenticated&&(view==='positions'||view==='results'))loadPrivate();if(view==='signals'||view==='results')loadSignals();},10000);
 await fetchState();loadSignals();loadPrivate();
 stream=new EventSource('/api/events');stream.addEventListener('state',event=>{streamHealthy=true;try{applyState(JSON.parse(event.data));}catch{streamHealthy=false;}});stream.onerror=()=>{streamHealthy=false;};
+initLiveWorkspace({stream,api,time,num,now,notify:toast});
