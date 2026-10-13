@@ -1,4 +1,11 @@
-# Verification — NABD Gold Pulse v3.3.0
+# Verification — NABD Gold Pulse v3.3.1
+
+## Bot heartbeat monitoring stability (3.3.1)
+
+- Reproduced false monitoring expiry at a heartbeat age just over five seconds despite current broker quotes and a present main-EA link.
+- The browser and analysis engine share a 15-second monitoring predicate, covering the bridge 10-second request timeout plus its 3-second update interval. Overview, link status and displayed plans refresh together each second.
+- Remote-command freshness remains five seconds on both server and browser controls. Missing/zero/future heartbeats, an explicit false main-connected flag, old quotes and heartbeats older than 15 seconds still block their corresponding operations. No production trade command or synthetic telemetry was sent.
+- `npm test`: 55 passed, 0 failed on Node 24.19.0. Regressions cover the old five-second boundary, unchanged EA levels, delayed authenticated snapshots, command rejection during monitoring grace, stop detection with continuing quotes, and recovery on a new EA heartbeat. Browser verification on the published service is performed after deployment.
 
 ## MT5 calendar serialization fix (link package 3.2.3 / bridge 3.03)
 

@@ -44,10 +44,10 @@ test('the existing node server.js command boots the updated site and shuts down 
     child.stdout.on('data', chunk => {output += chunk.toString(); const match = output.match(/NABD v3\.\d+\.\d+ listening on (\d+)/); if (match) resolve(Number(match[1]));});
   });
   const base = 'http://127.0.0.1:' + port;
-  assert.deepEqual(await (await fetch(base + '/healthz')).json(), {ok: true, version: '3.3.0', storage: 'ephemeral'});
+  assert.deepEqual(await (await fetch(base + '/healthz')).json(), {ok: true, version: '3.3.1', storage: 'ephemeral'});
   const state = await (await fetch(base + '/api/state')).json();
   assert.equal(state.connection, 'NO_DATA'); assert.equal(state.bid, null); assert.equal(state.controlsConfigured, false);
-  assert.match(await (await fetch(base + '/')).text(), /LIVE MARKETS \/ 3\.3\.0/);
+  assert.match(await (await fetch(base + '/')).text(), /LIVE MARKETS \/ 3\.3\.1/);
   assert.equal((await fetch(base + '/app.js')).status, 200);
   child.kill('SIGTERM'); assert.deepEqual(await exited, {code: 0, signal: null});
 });

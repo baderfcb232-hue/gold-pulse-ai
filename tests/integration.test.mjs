@@ -18,7 +18,7 @@ test('EA plans preserve the exact bot levels and do not invent a first target or
   }
 });
 test('a fresh bridge cannot hide a stopped main bot, pause or emergency stop',()=>{
-  const raw=eaFixture();raw.ea.heartbeat_at=NOW-6;
+  const raw=eaFixture();raw.ea.heartbeat_at=NOW-16;
   assert.equal(sourceAnalysis(cleanSnapshot(raw,NOW),NOW).source_ready,false);
   raw.ea.heartbeat_at=NOW;raw.execution.paused=true;
   assert.equal(sourceAnalysis(cleanSnapshot(raw,NOW),NOW).risk,'BLOCKED');
@@ -87,6 +87,9 @@ test('bridge → API → frozen EA history is deduplicated and source expiry blo
   assert.equal(app.signalRows()[0].entry,raw.ea.signal.entry);
   now+=6;raw.quote_at=now;await post('/api/mt5',raw,ingest);
   state=await (await fetch(base+'/api/state')).json();assert.equal(state.connection,'LIVE');
-  assert.equal(state.signalSourceReady,false);assert.equal(state.currentSignal,null);
+  assert.equal(state.signalSourceReady,true);assert.equal(state.currentSignal.entry,raw.ea.signal.entry);
   assert.equal((await post('/api/commands',{action:'CLOSE_ALL'},operator)).status,409);
+  now+=9;raw.quote_at=now;await post('/api/mt5',raw,ingest);
+  state=await (await fetch(base+'/api/state')).json();
+  assert.equal(state.connection,'LIVE');assert.equal(state.signalSourceReady,false);assert.equal(state.currentSignal,null);
 });

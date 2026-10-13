@@ -4,7 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {resolve, dirname} from 'node:path';
 import {randomBytes, timingSafeEqual, createHash} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
-import {analyze, sourceAnalysis, cleanSnapshot, trackPlan, positionSize, text, defaults} from './engine.mjs';
+import {analyze, sourceAnalysis, cleanSnapshot, trackPlan, positionSize, text, defaults, botHeartbeatFresh, BOT_CONTROL_TTL} from './engine.mjs';
 import {mt5Archive} from './archive.mjs';
 import {createMarketFeed} from './market.mjs';
 import {createNewsFeed} from './news.mjs';
@@ -96,7 +96,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     const a = sourceAnalysis(snapshot, clock(), cfg);
     const active = signalRows().find(s => s.status === 'TRACKING' && (a.source === 'MT5_EA' ? s.source === 'MT5_EA' : s.source !== 'MT5_EA'));
     const available = a.connection === 'LIVE' && a.source_ready;
-    return {version: '3.3.0', revision, symbol: snapshot?.symbol || 'XAUUSD', broker: snapshot?.broker || null,
+    return {version: '3.3.1', revision, symbol: snapshot?.symbol || 'XAUUSD', broker: snapshot?.broker || null,
       bid: snapshot?.bid ?? null, ask: snapshot?.ask ?? null,
       spread: snapshot ? (snapshot.ask - snapshot.bid) / snapshot.spec.point : null,
       spreadUnit: 'points', lastUpdate: snapshot?.quote_at ?? null,
@@ -147,7 +147,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       const url = new URL(req.url, 'http://localhost'), path = url.pathname;
       if (!['GET', 'POST'].includes(req.method)) return send(req, res, 405, {error: 'Method not allowed'});
       if (req.method === 'POST' && !ownOrigin(req)) return send(req, res, 403, {error: 'Origin rejected'});
-      if (path === '/healthz' && req.method === 'GET') return send(req, res, 200, {ok: true, version: '3.3.0', storage: storagePersistent ? 'persistent' : 'ephemeral'});
+      if (path === '/healthz' && req.method === 'GET') return send(req, res, 200, {ok: true, version: '3.3.1', storage: storagePersistent ? 'persistent' : 'ephemeral'});
       if (path === '/api/state' && req.method === 'GET') return send(req, res, 200, publicState());
       if (path === '/api/market' && req.method === 'GET') return send(req, res, 200, marketFeed.publicState());
       if (path === '/api/news' && req.method === 'GET') return send(req, res, 200, newsFeed.publicState());
@@ -238,7 +238,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         if (!storagePersistent) return send(req, res, 409, {error: 'إدارة الصفقات من الموقع تحتاج حفظًا دائمًا لسجل الأوامر. المراقبة متاحة.'});
         const a = analyze(snapshot, clock(), cfg);
         if (a.connection !== 'LIVE') return send(req, res, 409, {error: 'الربط غير حي؛ لا يمكن إرسال أمر.'});
-        if ((cfg.signalSource === 'EA' || snapshot.ea) && !sourceAnalysis(snapshot, clock(), {...cfg, signalSource:'EA'}).source_ready)
+        if ((cfg.signalSource === 'EA' || snapshot.ea) && !botHeartbeatFresh(snapshot.ea?.heartbeat_at,
+          snapshot.execution.main_connected, clock(), BOT_CONTROL_TTL))
           return send(req, res, 409, {error: 'حالة البوت المحلي قديمة أو غير متاحة؛ أوامر الإدارة معلّقة.'});
         const b = await body(req), action = b.action;
         if (!snapshot.execution.remote_control) return send(req, res, 409, {error: 'التحكم من الموقع غير مفعّل في إعدادات البوت.'});
@@ -314,7 +315,7 @@ export function startServer() {
   const app = createApplication();
   const port = Number(process.env.PORT || 3000);
   app.server.listen(port, process.env.BIND_ADDRESS || '0.0.0.0', () => {
-    console.log(`NABD v3.3.0 listening on ${app.server.address().port}`);
+    console.log(`NABD v3.3.1 listening on ${app.server.address().port}`);
     if (process.env.PUBLIC_FEEDS_ENABLED !== 'false') app.startFeeds();
   });
   if (!(process.env.MT5_INGEST_TOKEN?.length >= 32 && process.env.DASHBOARD_TOKEN?.length >= 32))
