@@ -2,6 +2,15 @@
 export const STRATEGY = 'EMA-PULLBACK-1';
 export const EA_STRATEGY = 'JUSTMARKETS-EA';
 export const TF_SECONDS = {M5: 300, M15: 900, H1: 3600, H4: 14400};
+// Allow one 10-second WebRequest plus the 3-second bridge interval in monitoring.
+// Remote commands retain the original, stricter heartbeat requirement.
+export const BOT_MONITOR_TTL = 15;
+export const BOT_CONTROL_TTL = 5;
+export function botHeartbeatFresh(heartbeatAt, mainConnected, now = Date.now() / 1000, ttl = BOT_MONITOR_TTL) {
+  const age = now - heartbeatAt;
+  return mainConnected === true && Number.isFinite(heartbeatAt) && heartbeatAt > 0
+    && Number.isFinite(now) && Number.isFinite(ttl) && ttl >= 0 && age >= -5 && age <= ttl;
+}
 export const defaults = Object.freeze({maxSpreadPoints: 80, quoteTtl: 20,
   calendarTtl: 900, newsBefore: 1800, newsAfter: 1800,
   signalTtl: 900, reward1: 1.5, reward2: 2.5});
@@ -268,8 +277,8 @@ export function sourceAnalysis(snapshot, now = Date.now() / 1000, settings = {})
   const result = {...market, source: 'MT5_EA', strategy: EA_STRATEGY,
     source_ready: false, decision: 'WAIT', plan: null, score: null, checks: [], risk: 'UNKNOWN'};
   if (market.connection !== 'LIVE') return result;
-  const ea = snapshot.ea, heartbeatAge = ea?.heartbeat_at == null ? Infinity : now - ea.heartbeat_at;
-  if (!snapshot.execution.main_connected || heartbeatAge > 5 || heartbeatAge < -5)
+  const ea = snapshot.ea;
+  if (!botHeartbeatFresh(ea?.heartbeat_at, snapshot.execution.main_connected, now))
     return {...result, reasons: ['الأسعار وصلت؛ ننتظر حالة البوت التجاري من الجسر على المنصة نفسها.']};
   const ready = {...result, source_ready: true};
   if (ea.emergency_stop || snapshot.execution.paused)
