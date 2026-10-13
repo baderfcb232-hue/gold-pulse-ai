@@ -1,5 +1,12 @@
 # Verification — NABD Gold Pulse v3.3.0
 
+## MT5 calendar serialization fix (link package 3.2.3 / bridge 3.03)
+
+- A real bridge 3.02 screenshot showed first-quote acceptance followed by `HTTP=400` and `Invalid JSON body`. Both complete-calendar paths converted `datetime now` directly to string, inserting a formatted date without JSON quoting instead of Unix seconds.
+- Both paths now cast through `long` before string conversion. The bridge version is 3.03; website runtime remains 3.3.0. Trading strategy, credentials, monitoring presets and execution opt-ins are unchanged.
+- Two regression tests exercise the actual calendar JSON expressions with documented MQL5 datetime conversion semantics, including unavailable, empty, populated and incomplete calendars. The unpatched expressions reproduced JSON parse failure and local API HTTP 400; patched expressions parse with numeric UTC timestamps and full updates reach the local API with HTTP 200 and candles intact. The full suite passes 51 tests on Node 24.19.0.
+- This narrow JavaScript adapter is not an MQL5 compiler. MetaEditor compilation and real continued telemetry from bridge 3.03 still require the user's terminal. No synthetic telemetry is sent to production.
+
 ## Independent reference scalping and news (3.3.0)
 
 - `npm test`: 49 passing tests on Node 24.19.0, including 12 new checks for price/candle validation, gap rejection, both scalp directions, expiry-before-fill tracking, frozen/deduplicated reference levels, separation from MT5, cache restart freshness, HTTP/socket shutdown, RSS/Atom safety, original-arrival deduplication, 304 caching, RSS TTL status and 429 backoff. No synthetic fixture is posted to production.
