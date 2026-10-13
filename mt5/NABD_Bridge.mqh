@@ -113,7 +113,8 @@ void NBUpdateCalendar(const long offset)
    MqlCalendarValue values[];
    datetime server=TimeTradeServer();
    int n=CalendarValueHistory(values,server-6*3600,server+24*3600,NULL,"USD");
-   if(n<0){g_nb_calendar="{\"status\":\"unavailable\",\"updated_at\":"+(string)now+",\"events\":[]}";return;}
+   // Casting datetime directly to string formats a date, which is not a JSON number.
+   if(n<0){g_nb_calendar="{\"status\":\"unavailable\",\"updated_at\":"+(string)((long)now)+",\"events\":[]}";return;}
    string json="[";int count=0;bool complete=true;
    for(int i=0;i<n && count<200;i++)
      {
@@ -131,7 +132,7 @@ void NBUpdateCalendar(const long offset)
             ",\"unit\":"+NBQ(NBUnit(event))+"}";
      }
    if(n>200)complete=false;
-   g_nb_calendar="{\"status\":"+NBQ(complete?"ok":"unavailable")+",\"updated_at\":"+(string)now+",\"events\":"+json+"]}";
+   g_nb_calendar="{\"status\":"+NBQ(complete?"ok":"unavailable")+",\"updated_at\":"+(string)((long)now)+",\"events\":"+json+"]}";
   }
 string NBPositions(const long offset)
   {
