@@ -1,4 +1,17 @@
-# Verification — NABD Gold Pulse v3.3.1
+# Verification — NABD Gold Pulse v3.3.3
+
+## Combined gold-history and connection release (3.3.3)
+
+- The previously prepared gold-history correction was verified against all 11 file hashes and published-base commit `86c9a459248143148e8fd8c0d0c4eff2bfaa4be5`, then merged with silent-stream recovery. Both changes ship together as 3.3.3.
+- Gold analysis can prepare from the existing bridge's closed M5/M15/H1/H4 broker history without rebuilding sampled Gold API minutes. Broker/reference source identities isolate frozen plans and their results; stale quotes, missing candles/calendar, news events and excessive spreads continue to block signals.
+- `npm test`: 71 passed, 0 failed on Node 24.19.0. Tests include both trade directions, immediate broker-history readiness, empty-storage recovery, source isolation, control permissions, public/private data boundaries and silent-stream recovery. JavaScript syntax checks and diff validation passed. Production publication and real MT5 connectivity are verified separately after deployment.
+
+## Silent-stream recovery and bridge diagnostics (3.3.3)
+
+- A state event formerly set a health boolean until `EventSource.onerror`; a stream stalled without an error prevented subsequent HTTP state refreshes. The client now requests a snapshot after 15 seconds without a valid state event, checks every five seconds, uses a 10-second request timeout, deduplicates simultaneous refreshes, and refreshes when the tab becomes visible.
+- An older HTTP response cannot overwrite newer SSE state. A late HTTP failure cannot erase recovery by a newer state event. Invalid events trigger fallback; successful HTTP fallback remains active until valid state events resume.
+- Public diagnostics now distinguish bridge receipt time, main-EA heartbeat and broker quote time. Only receipt time and terminal connectivity are added to public telemetry; account and position data remain authenticated. Stale prices no longer display a reason claiming that current prices have arrived.
+- Deterministic transport regressions and local API checks exercise silent stalls, failed requests, recovery, concurrent requests and response ordering. Production receives no synthetic MT5 data or trade command.
 
 ## Bot heartbeat monitoring stability (3.3.1)
 
