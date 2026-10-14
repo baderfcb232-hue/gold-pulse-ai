@@ -1,5 +1,5 @@
 export function formatSignal(p) {
-  const price = v => Number.isFinite(Number(v)) ? String(v) : '—';
+  const price = v => v != null && Number.isFinite(Number(v)) ? String(v) : '—';
   return ['نبض | توصية جديدة', `${p.symbol} — ${p.side === 'BUY' ? 'شراء' : 'بيع'}`,
     `الدخول: ${price(p.entry)}`, `وقف الخسارة: ${price(p.sl)}`,
     `الهدف الأول: ${price(p.tp1)}`, `الهدف الثاني: ${price(p.tp2)}`,
@@ -38,7 +38,8 @@ export function createTelegramPublisher({db, signals, clock = () => Date.now() /
         } catch {lastError = 'Telegram delivery could not be confirmed.';}
         db.prepare('UPDATE telegram_delivery SET state=?,updated_at=? WHERE id=?').run(state, clock(), p.id);
       }
-    } finally {busy = false;}
+    } catch {lastError = 'Signal publishing is temporarily unavailable.';}
+    finally {busy = false;}
   }
   const timer = setInterval(() => {if (!busy && !stopped) pending = publish();}, 3000);
   timer.unref();
