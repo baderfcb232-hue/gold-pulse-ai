@@ -9,6 +9,8 @@ import {mt5Archive} from './archive.mjs';
 import {createMarketFeed} from './market.mjs';
 import {createNewsFeed} from './news.mjs';
 
+import {createTelegramPublisher} from './telegram.mjs';
+
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = resolve(ROOT, 'public');
 const limit = 1_500_000;
@@ -55,6 +57,11 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     brokerSnapshot: () => snapshot,
     onChange: () => emit('market', marketFeed.publicState)});
   const newsFeed = createNewsFeed({db, clock, ...feedOptions, onChange: () => emit('news', newsFeed.publicState)});
+  const telegram = createTelegramPublisher({db, clock, signals: () => {
+    const state = publicState();
+    const markets = marketFeed.publicState().markets;
+    return [state.currentSignal, ...Object.values(markets).map(m => m.currentSignal)].filter(Boolean);
+  }});
   let revision = 0;
   const cfg = {...defaults, signalSource: process.env.SIGNAL_SOURCE || 'EA', ...config};
   if (!['EA','DASHBOARD'].includes(cfg.signalSource)) throw new Error('SIGNAL_SOURCE must be EA or DASHBOARD');
@@ -161,6 +168,10 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           markets: Object.fromEntries(Object.entries(sources).map(([symbol, source]) => [symbol, {
             connection: source.connection, source: source.source, analysisStatus: source.analysis.status,
             quoteAgeSeconds: source.quoteAge, lastReceivedAt: source.received_at}]))});
+      }
+      if (path === '/api/telegram/status' && req.method === 'GET') {
+        if (!operator(req)) return send(req, res, 401, {error: 'Operator login required'});
+        return send(req, res, 200, telegram.status());
       }
       if (path === '/api/state' && req.method === 'GET') return send(req, res, 200, publicState());
       if (path === '/api/market' && req.method === 'GET') return send(req, res, 200, marketFeed.publicState());
@@ -320,7 +331,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     } catch (e) { console.error('State update failed:', e.message); }
   }, 5000); timer.unref();
   const close = async () => {clearInterval(timer); for (const c of clients) c.end();
-    await Promise.allSettled([marketFeed.close(), newsFeed.close()]);
+    await Promise.allSettled([telegram.close(), marketFeed.close(), newsFeed.close()]);
     await new Promise(r => server.close(r)); db.close();};
   return {server, ingest, publicState, signalRows, db, close, marketFeed, newsFeed,
     startFeeds: () => {marketFeed.start(); newsFeed.start();}};
@@ -341,3 +352,4 @@ export function startServer() {
   return app;
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) startServer();
+
