@@ -10,6 +10,8 @@ import {createMarketFeed} from './market.mjs';
 import {createNewsFeed} from './news.mjs';
 
 import {createTelegramPublisher} from './telegram.mjs';
+import {researchPolicy, researchMarketState} from './research-policy.mjs';
+import {researchCatalog} from './research-catalog.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = resolve(ROOT, 'public');
@@ -55,9 +57,9 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   };
   const marketFeed = createMarketFeed({db, clock, ...feedOptions, calendar: () => snapshot?.calendar || null,
     brokerSnapshot: () => snapshot,
-    onChange: () => emit('market', marketFeed.publicState)});
+    onChange: () => emit('market', () => researchMarketState(marketFeed.publicState()))});
   const newsFeed = createNewsFeed({db, clock, ...feedOptions, onChange: () => emit('news', newsFeed.publicState)});
-  const telegram = createTelegramPublisher({db, clock, signals: () => {
+  const telegram = createTelegramPublisher({db, clock, enabled: researchPolicy.publicationAllowed, signals: () => {
     const state = publicState();
     const markets = marketFeed.publicState().markets;
     return [state.currentSignal, ...Object.values(markets).map(m => m.currentSignal)].filter(Boolean);
@@ -114,11 +116,11 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       spreadUnit: 'points', lastUpdate: snapshot?.quote_at ?? null,
       bridgeReceivedAt: snapshot?.received_at ?? null, terminalConnected: snapshot?.terminal_connected ?? null,
       connection: a.connection, quoteAge: a.quote_age,
-      aiDecision: a.decision, confidence: a.score, confidenceMeaning: 'CONDITION_SCORE',
-      riskLevel: a.risk, reasons: a.reasons, checks: a.checks,
+      researchPolicy, aiDecision: 'WAIT', confidence: null, confidenceMeaning: 'CONDITION_SCORE',
+      riskLevel: a.risk, reasons: [researchPolicy.reason, ...a.reasons], checks: a.checks,
       timeframes: a.frames, zones: a.zones, strategy: a.strategy,
       signalSource: a.source, signalSourceReady: a.source_ready,
-      currentSignal: available ? active ?? null : null,
+      currentSignal: null,
       suspendedSignal: !available ? active?.id ?? null : null,
       bot: snapshot?.ea ? {heartbeat_at: snapshot.ea.heartbeat_at, checked_at: snapshot.ea.checked_at,
         emergency_stop: snapshot.ea.emergency_stop, settings: snapshot.ea.settings} : null,
@@ -173,8 +175,10 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         if (!operator(req)) return send(req, res, 401, {error: 'Operator login required'});
         return send(req, res, 200, telegram.status());
       }
+      if (path === '/api/research' && req.method === 'GET')
+        return send(req, res, 200, {researchPolicy, catalog: researchCatalog, telegram: {enabled: false, mode: 'PAUSED_RESEARCH'}});
       if (path === '/api/state' && req.method === 'GET') return send(req, res, 200, publicState());
-      if (path === '/api/market' && req.method === 'GET') return send(req, res, 200, marketFeed.publicState());
+      if (path === '/api/market' && req.method === 'GET') return send(req, res, 200, researchMarketState(marketFeed.publicState()));
       if (path === '/api/news' && req.method === 'GET') return send(req, res, 200, newsFeed.publicState());
       if (path === '/api/market/candles' && req.method === 'GET') {
         const data = marketFeed.candles(url.searchParams.get('symbol') || 'XAUUSD', url.searchParams.get('tf') || 'M1');
@@ -183,14 +187,14 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       if (path === '/api/market/signals' && req.method === 'GET') {
         const symbol = url.searchParams.get('symbol');
         if (symbol && !['XAUUSD','BTCUSD'].includes(symbol)) return send(req, res, 400, {error: 'Invalid market'});
-        return send(req, res, 200, {signals: marketFeed.history(symbol), kind: 'REFERENCE_SCALP_RECOMMENDATIONS'});
+        return send(req, res, 200, {signals: marketFeed.history(symbol), kind: 'EXPERIMENTAL_SHADOW_OBSERVATIONS', researchPolicy});
       }
-      if (path === '/engine.mjs' && req.method === 'GET') return send(req, res, 200, readFileSync(resolve(ROOT, 'engine.mjs')), 'text/javascript; charset=utf-8');
+      if (['/engine.mjs', '/research-engine.mjs'].includes(path) && req.method === 'GET') return send(req, res, 200, readFileSync(resolve(ROOT, path.slice(1))), 'text/javascript; charset=utf-8');
       if (path === '/api/events' && req.method === 'GET') {
         if (clients.size >= 200) return send(req, res, 503, {error: 'Too many connections'});
         res.writeHead(200, {...headers(req), 'Content-Type': 'text/event-stream; charset=utf-8', Connection: 'keep-alive', 'X-Accel-Buffering': 'no'});
         res.write('event: state\ndata: ' + JSON.stringify(publicState()) + '\n\n');
-        res.write('event: market\ndata: ' + JSON.stringify(marketFeed.publicState()) + '\n\n');
+        res.write('event: market\ndata: ' + JSON.stringify(researchMarketState(marketFeed.publicState())) + '\n\n');
         res.write('event: news\ndata: ' + JSON.stringify(newsFeed.publicState()) + '\n\n');
         clients.add(res); req.on('close', () => clients.delete(res)); return;
       }
@@ -200,7 +204,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         return send(req, res, 200, {tf, symbol: snapshot?.symbol || null, source: snapshot?.broker || null,
           candles: snapshot?.candles[tf].slice(-320) || []});
       }
-      if (path === '/api/signals' && req.method === 'GET') return send(req, res, 200, {signals: signalRows(), kind: 'VIRTUAL_RECOMMENDATIONS'});
+      if (path === '/api/signals' && req.method === 'GET') return send(req, res, 200, {signals: signalRows(), kind: 'EXPERIMENTAL_SHADOW_OBSERVATIONS', researchPolicy});
       if (path === '/api/signals.csv' && req.method === 'GET') {
         const cols = ['id','source','issued_at','symbol','side','entry','sl','tp1','tp2','status','tp1_hit','exit','r','tracking'];
         const csv = '\uFEFF' + [cols.join(','), ...signalRows().map(s => cols.map(k => escapeCsv(s[k])).join(','))].join('\r\n');
@@ -302,7 +306,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         audit('COMMAND_RESULT', {id: c.id, status: b.status, message: text(b.message, 500)});
         return send(req, res, 200, {ok: true});
       }
-      const files = {'/':'index.html','/index.html':'index.html','/app.js':'app.js','/live.js':'live.js','/state-connection.js':'state-connection.js','/styles.css':'styles.css','/manifest.webmanifest':'manifest.webmanifest','/icon.svg':'icon.svg'};
+      const files = {'/research.html':'research.html','/research.js':'research.js','/research.css':'research.css','/':'index.html','/index.html':'index.html','/app.js':'app.js','/live.js':'live.js','/state-connection.js':'state-connection.js','/styles.css':'styles.css','/manifest.webmanifest':'manifest.webmanifest','/icon.svg':'icon.svg'};
       if (req.method === 'GET' && files[path]) {
         const type = path.endsWith('.js') ? 'text/javascript; charset=utf-8' : path.endsWith('.css') ? 'text/css; charset=utf-8'
           : path.endsWith('.webmanifest') ? 'application/manifest+json' : path.endsWith('.svg') ? 'image/svg+xml' : 'text/html; charset=utf-8';

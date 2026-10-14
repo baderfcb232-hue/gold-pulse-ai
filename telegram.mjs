@@ -8,7 +8,7 @@ export function formatSignal(p) {
     'توصية تحليلية وليست ضمان ربح.', 'https://gold-pulse-ai.onrender.com/'].join('\n');
 }
 
-export function createTelegramPublisher({db, signals, clock = () => Date.now() / 1000,
+export function createTelegramPublisher({db, signals, enabled = false, clock = () => Date.now() / 1000,
   token = process.env.TELEGRAM_BOT_TOKEN || '', chatId = process.env.TELEGRAM_CHAT_ID || '', fetcher = fetch}) {
   db.exec(`CREATE TABLE IF NOT EXISTS telegram_delivery
     (id TEXT PRIMARY KEY, state TEXT NOT NULL, updated_at REAL NOT NULL);`);
@@ -16,7 +16,7 @@ export function createTelegramPublisher({db, signals, clock = () => Date.now() /
   let busy = false, stopped = false, pending = Promise.resolve(), lastError = null;
   const configured = Boolean(token && chatId);
   async function publish() {
-    if (!configured || busy || stopped) return;
+    if (!enabled || !configured || busy || stopped) return;
     busy = true;
     try {
       for (const p of signals()) {
@@ -43,7 +43,7 @@ export function createTelegramPublisher({db, signals, clock = () => Date.now() /
   }
   const timer = setInterval(() => {if (!busy && !stopped) pending = publish();}, 3000);
   timer.unref();
-  return {status: () => ({configured, channel: '@NabdSignalsChannel', lastError,
+  return {status: () => ({configured, enabled, mode: enabled ? 'PUBLISHING' : 'PAUSED_RESEARCH', channel: '@NabdSignalsChannel', lastError,
     deliveries: db.prepare('SELECT state,COUNT(*) AS count FROM telegram_delivery GROUP BY state').all()}),
     async close() {stopped = true; clearInterval(timer); await pending;}, publish};
 }
