@@ -27,6 +27,16 @@ test('source mismatch and replayed quotes are rejected',async t=>{
   const {base}=await setup(t);await post(base,'/api/mt5',fixture(),INGEST);let raw=fixture();raw.account_ref='DIFFERENT_ACCOUNT';assert.equal((await post(base,'/api/mt5',raw,INGEST)).status,400);
   raw=fixture();raw.quote_at=NOW-1;assert.equal((await post(base,'/api/mt5',raw,INGEST)).status,400);
 });
+test('public diagnostics separate bridge receipt, main heartbeat and old broker quotes',async t=>{
+  const {base}=await setup(t,{config:{signalSource:'EA'}});
+  const raw=eaFixture();raw.quote_at=NOW-3600;raw.ea.heartbeat_at=NOW-60;
+  assert.equal((await post(base,'/api/mt5',raw,INGEST)).status,200);
+  const state=await (await fetch(base+'/api/state')).json();
+  assert.equal(state.bridgeReceivedAt,NOW);assert.equal(state.lastUpdate,NOW-3600);
+  assert.equal(state.bot.heartbeat_at,NOW-60);assert.equal(state.terminalConnected,true);
+  assert.equal(state.connection,'STALE');assert.equal(state.signalSourceReady,false);
+  assert.equal(state.currentSignal,null);assert.ok(!('account' in state));
+});
 test('weekend telemetry is accepted while stale quotes block signals and commands',async t=>{
   const {base,app}=await setup(t,{config:{signalSource:'EA'}});
   const raw=eaFixture();raw.symbol='XAUUSD.m';raw.quote_at=NOW-2*86400;
@@ -82,7 +92,7 @@ test('login issues an HttpOnly cookie; logout revokes it; cross-origin mutations
   response=await fetch(base+'/api/login',{method:'POST',headers:{Origin:'https://unrelated.example','Content-Type':'application/json'},body:JSON.stringify({token:ADMIN})});assert.equal(response.status,403);
 });
 test('web assets load and path traversal cannot expose the database or source secrets',async t=>{
-  const {base}=await setup(t);for(const path of ['/','/app.js','/styles.css','/engine.mjs','/icon.svg','/manifest.webmanifest'])assert.equal((await fetch(base+path)).status,200);
+  const {base}=await setup(t);for(const path of ['/','/app.js','/state-connection.js','/styles.css','/engine.mjs','/icon.svg','/manifest.webmanifest'])assert.equal((await fetch(base+path)).status,200);
   assert.equal((await fetch(base+'/.data/nabd.sqlite')).status,404);assert.equal((await fetch(base+'/server.mjs')).status,404);
   const res=await fetch(base+'/');assert.match(res.headers.get('content-security-policy'),/script-src 'self'/);assert.match(await res.text(),/viewport/);
 });
