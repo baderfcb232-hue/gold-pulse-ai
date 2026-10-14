@@ -11,9 +11,13 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   const side = v => ({BUY: 'شراء', SELL: 'بيع', NEUTRAL: 'محايد', UNKNOWN: 'غير مكتمل'}[v] || 'انتظار');
   const status = {TRACKING: 'قيد المتابعة', TP2: 'بلغ الهدف المرجعي', SL: 'بلغ الوقف المرجعي', EXPIRED: 'انتهت الصلاحية'};
   const category = {GOLD: 'ذهب / دولار', BTC: 'عملات رقمية', ECON: 'اقتصاد', WORLD: 'عام'};
+  const tfSeconds = {M1: 60, M5: 300, M15: 900, H1: 3600, H4: 14400};
+  const tfLabels = {M1: 'دقيقة', M5: '5 دقائق', M15: '15 دقيقة', H1: 'ساعة', H4: '4 ساعات'};
+  const tfButtons = {M1: '1د', M5: '5د', M15: '15د', H1: '1س', H4: '4س'};
   let data = null, news = null, symbol = 'XAUUSD', tf = 'M1', rows = [], chartKey = '', chartRequest = 0;
   let lastServerSeen = 0, fetched = false, historyFetched = false, historyRows = [], historyStamp = '', newsStamp = '';
   let initialized = false;
+  let chartSourceKey = '';
   const seenSignals = new Set();
   const market = () => data?.markets?.[symbol];
   const fresh = m => Boolean(m?.quote && m.connection === 'LIVE' && now() - m.quote.time <= m.quoteTtl && Date.now() - lastServerSeen < 12000);
@@ -21,17 +25,29 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   function applyMarket(next) {
     if (data && next.serverTime < data.serverTime) return;
     data = next; lastServerSeen = Date.now();
+    configureChart();
     const m = market(), current = activePlan();
     if (current && initialized && !seenSignals.has(current.id) && $('signal-notifications').checked)
       notify(`فرصة مضاربة ${side(current.side)} · ${m.name} · ${fmt(current.entry)}`);
     for (const item of Object.values(data.markets)) if (item.currentSignal) seenSignals.add(item.currentSignal.id);
     initialized = true;
     render();
-    const key = `${symbol}:${tf}:${Math.floor((m?.last_bar || 0) / ({M1:60,M5:300,M15:900}[tf]))}:${m?.history_revision}`;
+    const key = `${chartSourceKey}:${tf}:${Math.floor((m?.last_bar || 0) / tfSeconds[tf])}:${m?.history_revision}`;
     mergeChartTail();
     if (key !== chartKey) {chartKey = key; loadChart();} else drawChart();
     const stamp = Object.values(data.markets).map(m => m.recentSignals.map(p => p.id + p.status).join(':')).join('|');
     if (stamp !== historyStamp) {historyStamp = stamp; loadHistory();}
+  }
+  function configureChart() {
+    const m = market(), key = `${symbol}:${m?.source_id || 'REFERENCE'}`;
+    if (key === chartSourceKey) return;
+    chartSourceKey = key; rows = []; chartKey = ''; chartRequest++;
+    const available = m?.chart_tfs || ['M1', 'M5', 'M15'];
+    tf = m?.default_tf || 'M1';
+    $('live-chart-tfs').replaceChildren(...available.map(value => {
+      const b = node('button', value === tf ? 'active' : '', tfButtons[value]);
+      b.dataset.tf = value; b.setAttribute('aria-pressed', String(value === tf)); return b;
+    }));
   }
   function render() {
     const m = market(), live = fresh(m), a = m?.analysis, p = activePlan();
@@ -41,12 +57,18 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     put('live-update-age', m?.quote ? `عمر السعر ${Math.max(0, Math.floor(now() - m.quote.time))} ثانية` : 'بانتظار أول سعر');
     put('live-asset-title', (m?.name || (symbol === 'XAUUSD' ? 'الذهب' : 'بيتكوين')) + ' / دولار');
     put('live-price', fmt(m?.quote?.price));
-    put('live-change', m?.change_from_last_close == null ? 'USD' : `${m.change_from_last_close >= 0 ? '+' : ''}${num(m.change_from_last_close, 3)}% عن إغلاق الدقيقة`);
+    put('live-change', m?.change_from_last_close == null ? 'USD' : `${m.change_from_last_close >= 0 ? '+' : ''}${num(m.change_from_last_close, 3)}% عن آخر إغلاق`);
     put('live-source', m?.source || 'جلب المصدر'); put('live-quote-time', m?.quote ? time(m.quote.time) + ' · غزة' : '—');
-    put('live-source-note', m ? `${m.symbol === 'XAUUSD' ? 'الذهب المرجعي يُجلب كل نحو 30 ثانية؛ الشموع من عينات السعر المتاحة.' : (m.transport === 'WebSocket' ? 'بث Coinbase المباشر؛' : 'جلب Coinbase الاحتياطي كل ثانية؛') + ' سعر BTC-USD على المنصة.'} مستقل عن سعر تنفيذ بروكرك.` : 'ننتظر بيانات المصدر؛ لن نعرض أسعارًا تجريبية.');
-    const states = {NO_DATA: 'انتظار المصدر', WARMING: 'تجميع الشموع', SCANNING: 'البحث عن فرصة', WATCH: 'فرصة مشروطة', READY: 'تحققت شروط السعر', GAP: 'فجوة بيانات', NEWS_BLOCK: 'توقف حول خبر', STALE: 'تحديث متأخر'};
+    const broker = m?.candle_kind === 'BROKER_OHLC';
+    $('live-frames').style.gridTemplateColumns = broker ? 'repeat(2,minmax(0,1fr))' : 'repeat(3,minmax(0,1fr))';
+    put('live-price-kind', broker ? 'سعر البروكر' : 'سعر مرجعي');
+    put('live-strategy-frames', broker ? 'M5 / M15 / H1 / H4 · EMA / RSI / ATR' : 'M1 + M5 · EMA / RSI / ATR');
+    put('live-chart-kind', broker ? 'شموع مغلقة من البروكر · الخطط متابعة افتراضية' : 'آخر شمعة قيد التكوين · خطوط الخطة مرجعية');
+    put('live-source-note', broker ? `متوسط سعر الشراء والبيع لـ ${m.broker_symbol}. التحليل يستخدم شموع البروكر المغلقة؛ تاريخها يصل من الجسر دون انتظار تجميع جديد.`
+      : m ? `${m.symbol === 'XAUUSD' ? 'الذهب المرجعي يُجلب كل نحو 30 ثانية؛ الشموع من عينات السعر المتاحة.' : (m.transport === 'WebSocket' ? 'بث Coinbase المباشر؛' : 'جلب Coinbase الاحتياطي كل ثانية؛') + ' سعر BTC-USD على المنصة.'} مستقل عن سعر تنفيذ بروكرك.` : 'ننتظر بيانات المصدر؛ لن نعرض أسعارًا تجريبية.');
+    const states = {NO_DATA: 'انتظار المصدر', WARMING: 'تحميل الشموع', SCANNING: 'البحث عن فرصة', WATCH: 'فرصة مشروطة', READY: 'تحققت شروط السعر', GAP: 'فجوة بيانات', NEWS_BLOCK: 'فلتر الأخبار', BLOCKED: 'شروط الدخول تمنع الإشارة', STALE: 'تحديث متأخر'};
     const state = !live && m?.quote ? 'STALE' : a?.status || 'NO_DATA';
-    put('scalp-decision', p ? side(p.side) + ' · مرجعي' : states[state]);
+    put('scalp-decision', p ? side(p.side) + (broker ? ' · MT5' : ' · مرجعي') : states[state]);
     $('scalp-decision').className = p ? (p.side === 'BUY' ? 'buy' : 'sell') : '';
     put('scalp-status', p ? 'متابعة إشارة محفوظة' : states[state]); $('scalp-status').className = 'pill ' + (p ? 'good' : state === 'WATCH' ? 'warn' : 'neutral');
     put('scalp-reason', !live && m?.quote ? 'إصدار فرص جديدة متوقف. نحتفظ بالشارت والتحليل السابق حتى يعود مصدر حديث.'
@@ -54,11 +76,13 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     put('scalp-score', live && a?.checks?.length ? `${a.score} / 100` : '—');
     $('scalp-score-fill').style.width = live && a?.checks?.length ? a.score + '%' : '0%';
     const checks = (a?.checks || []).map(ch => {const row = node('div', 'check'); row.append(node('span', ch.pass ? 'pass' : 'fail', ch.pass ? '✓' : '○'), node('span', '', ch.name)); return row;});
-    if (m && state === 'WARMING') checks.push(empty(`${m.minute_count} دقيقة مرصودة · نحتاج نحو 110 دقائق متصلة لتأكيد اتجاه M5.`));
+    if (m && state === 'WARMING') checks.push(empty(broker
+      ? `ننتظر تحميل ${a.required_bars} شمعة مغلقة لكل إطار من البروكر؛ لا يلزم تجميعها من الصفر.`
+      : `${m.minute_count} دقيقة مرصودة · نحتاج نحو 110 دقائق متصلة لتأكيد اتجاه M5.`));
     if (a && !a.calendar_available) checks.push(empty('التقويم الاقتصادي غير متصل؛ عناوين RSS لا تغطي كل مواعيد البيانات.'));
     $('scalp-checks').replaceChildren(...(checks.length ? checks : [empty('تظهر شروط المضاربة بعد اكتمال الشموع.')]));
-    $('live-frames').replaceChildren(...['M1', 'M5', 'M15'].map(f => {const row = node('div', 'frame'), frame = a?.frames?.[f];
-      row.append(node('strong', '', {M1: 'دقيقة', M5: '5 دقائق', M15: '15 دقيقة'}[f]), node('span', 'frame-side ' + (live && frame?.direction === 'BUY' ? 'buy' : live && frame?.direction === 'SELL' ? 'sell' : ''), side(frame?.direction)));
+    $('live-frames').replaceChildren(...(broker ? ['M5', 'M15', 'H1', 'H4'] : ['M1', 'M5', 'M15']).map(f => {const row = node('div', 'frame'), frame = a?.frames?.[f];
+      row.append(node('strong', '', tfLabels[f]), node('span', 'frame-side ' + (live && frame?.direction === 'BUY' ? 'buy' : live && frame?.direction === 'SELL' ? 'sell' : ''), side(frame?.direction)));
       row.title = `${frame?.count || 0} شمعة مغلقة · ${live ? 'سياق حالي' : 'آخر سياق متاح'}`; return row;}));
     renderPlan(m, p || (live && a?.setup?.expires_at > now() ? a.setup : null), Boolean(p));
     $('scalp-recent').replaceChildren(...(m?.recentSignals?.length ? m.recentSignals.slice(0, 3).map(p => compactPlan(p)) : [empty('لم تصدر فرصة مؤكدة بعد. شروط المراقبة تظهر فوق عند توافق الاتجاه.')]));
@@ -68,15 +92,16 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
       node('span', 'subtle', `${time(p.issued_at)} · ${status[p.status] || 'مراقبة'}`)); return row;
   }
   function renderPlan(m, p, confirmed) {
-    put('scalp-plan-status', confirmed ? 'إشارة مرجعية' : p ? 'بانتظار التأكيد' : 'مراقبة');
-    if (!p) {const box = node('div', 'empty-signal'); box.append(node('span', 'empty-symbol', '⌖'), node('h3', '', m?.analysis?.status === 'WARMING' ? 'يجري بناء سجل ' + m.name : 'نبحث عن فرصة'),
+    put('scalp-plan-status', confirmed ? 'خطة متابعة' : p ? 'بانتظار التأكيد' : 'مراقبة');
+    if (!p) {const box = node('div', 'empty-signal'); box.append(node('span', 'empty-symbol', '⌖'), node('h3', '', m?.analysis?.status === 'WARMING' ? m.candle_kind === 'BROKER_OHLC' ? 'بانتظار تحميل شموع البروكر' : 'يجري بناء سجل ' + m.name : 'نبحث عن فرصة'),
       node('p', '', m?.suspendedSignal ? 'متابعة الخطة معلّقة حتى يعود سعر حديث؛ مستوياتها محفوظة في سجل الفرص.' : 'تظهر مستويات الدخول والوقف والأهداف عندما يتوافق الاتجاه وتكتمل البيانات.')); $('scalp-plan').replaceChildren(box); return;}
     const box = node('div'), heading = node('div', 'signal-heading'); heading.append(node('strong', p.side === 'BUY' ? 'buy' : 'sell', side(p.side)), pill(confirmed ? 'شروط السعر تحققت' : 'مستويات مشروطة', confirmed ? 'good' : 'warn'));
     box.append(heading, node('p', 'subtle', confirmed ? 'خطة محفوظة عند إصدار الإشارة؛ لا تتغير مع تحرك السعر.' : 'راقب إغلاق دقيقة وتوافق RSI وقرب السعر؛ مستويات المراقبة تتغير مع تكوّن الشموع.'));
     const values = node('div', 'signal-values');
-    for (const [label, value] of [[confirmed ? 'دخول مرجعي ثابت' : 'مستوى المراقبة', p.entry], ['وقف الخسارة', p.sl], ['الهدف الأول · 1R', p.tp1], ['الهدف الثاني · 1.5R', p.tp2]]) {
+    const reward = value => num(Math.abs(value - p.entry) / p.risk_distance, 2);
+    for (const [label, value] of [[confirmed ? 'دخول ثابت' : 'مستوى المراقبة', p.entry], ['وقف الخسارة', p.sl], [`الهدف الأول · ${reward(p.tp1)}R`, p.tp1], [`الهدف الثاني · ${reward(p.tp2)}R`, p.tp2]]) {
       const cell = node('div', 'value-cell'); cell.append(node('small', '', label), node('strong', 'number', fmt(value))); values.append(cell);}
-    box.append(values, node('p', 'source-caption', `${m.source} · ${m.symbol} · ${p.sampled ? 'شموع من عينات المصدر' : 'شموع المصدر'}`),
+    box.append(values, node('p', 'source-caption', `${p.source || m.source} · ${p.broker_symbol || m.symbol} · ${p.sampled ? 'شموع من عينات المصدر' : 'شموع المصدر'}`),
       node('p', 'subtle', confirmed ? `صدرت ${time(p.issued_at)} · متبقي ${Math.max(0, Math.ceil(p.expires_at - now()))} ثانية` : 'مراقبة فقط؛ لا تُعامل كإشارة دخول مؤكدة.'));
     $('scalp-plan').replaceChildren(box);
   }
@@ -88,7 +113,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
       if (id !== chartRequest || symbol !== requestedSymbol || tf !== requestedTf) return;
       rows = result.candles || []; mergeChartTail(); drawChart();
       put('live-chart-title', 'شارت ' + (market()?.name || symbol));
-      put('live-chart-source', `${result.source} · ${result.symbol} · ${result.candle_kind === 'SAMPLED_REFERENCE' ? 'عينات أسعار؛ ليست كامل تداولات البروكر' : 'تاريخ المنصة + متابعة السعر'} · ${tf}`);
+      put('live-chart-source', `${result.source} · ${result.broker_symbol || result.symbol} · ${result.candle_kind === 'BROKER_OHLC' ? 'شموع البروكر المغلقة' : result.candle_kind === 'SAMPLED_REFERENCE' ? 'عينات أسعار؛ ليست كامل تداولات البروكر' : 'تاريخ المنصة + متابعة السعر'} · ${tf}`);
     } catch {if (id === chartRequest) put('live-chart-source', 'تعذر تحديث الشارت؛ آخر بيانات متاحة محفوظة.');}
   }
   function mergeChartTail() {
@@ -109,7 +134,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     const py = price => top + (max - price) / (max - min) * height, dx = width / visible.length;
     ctx.font = '11px ui-monospace,monospace'; ctx.textAlign = 'left';
     for (let i = 0; i <= 4; i++) {const y = top + height * i / 4; ctx.strokeStyle = '#342b415f'; ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(W - right, y); ctx.stroke(); ctx.fillStyle = '#a89bbd'; ctx.fillText(fmt(max - (max - min) * i / 4), W - right + 7, y + 4);}
-    visible.forEach((c, i) => {const x = left + dx * (i + .5); ctx.strokeStyle = ctx.fillStyle = c.close >= c.open ? '#75dcb1' : '#fa929e'; ctx.globalAlpha = i === visible.length - 1 && c.time + ({M1:60,M5:300,M15:900}[tf]) > now() ? .65 : 1;
+    visible.forEach((c, i) => {const x = left + dx * (i + .5); ctx.strokeStyle = ctx.fillStyle = c.close >= c.open ? '#75dcb1' : '#fa929e'; ctx.globalAlpha = i === visible.length - 1 && c.time + tfSeconds[tf] > now() ? .65 : 1;
       ctx.beginPath(); ctx.moveTo(x, py(c.high)); ctx.lineTo(x, py(c.low)); ctx.stroke(); ctx.fillRect(x - Math.min(8, Math.max(1, dx * .25)), Math.min(py(c.open), py(c.close)), Math.min(16, Math.max(2, dx * .5)), Math.max(1, Math.abs(py(c.open) - py(c.close))));}); ctx.globalAlpha = 1;
     const closes = rows.map(c => c.close), start = rows.length - visible.length; ctx.strokeStyle = '#b399ff'; ctx.beginPath(); let begun = false;
     for (let i = 0; i < visible.length; i++) {const value = ema(closes.slice(0, start + i + 1), 21); if (value != null) {const x = left + dx * (i + .5), y = py(value); if (!begun) {ctx.moveTo(x, y); begun = true;} else ctx.lineTo(x, y);}} ctx.stroke();
@@ -125,7 +150,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   }
   function renderHistory() {
     const selected = $('scalp-history-filter').value, list = historyRows.filter(p => selected === 'ALL' || p.symbol === selected);
-    $('scalp-history-list').replaceChildren(...(list.length ? list.map(p => {const row = node('article', 'signal-row'), title = node('div'); title.append(node('small', 'signal-source', p.source + ' · مرجعي'), node('h3', p.side === 'BUY' ? 'buy' : 'sell', `${side(p.side)} · ${p.symbol}`), node('small', 'subtle', time(p.issued_at, true)));
+    $('scalp-history-list').replaceChildren(...(list.length ? list.map(p => {const row = node('article', 'signal-row'), title = node('div'); title.append(node('small', 'signal-source', p.source + ' · متابعة افتراضية'), node('h3', p.side === 'BUY' ? 'buy' : 'sell', `${side(p.side)} · ${p.broker_symbol || p.symbol}`), node('small', 'subtle', time(p.issued_at, true)));
       const levels = node('div', 'level-inline'); for (const [label, value] of [['دخول', p.entry], ['وقف', p.sl], ['هدف أول', p.tp1], ['هدف ثان', p.tp2]]) {const cell = node('div'); cell.append(node('small', '', label), node('strong', '', fmt(value))); levels.append(cell);}
       row.append(title, levels, pill(status[p.status] || p.status, p.status === 'SL' ? 'bad' : p.status === 'TP2' ? 'good' : 'neutral')); return row;}) : [empty('لا توجد إشارات مؤكدة في هذا السجل بعد. فرص المراقبة تظهر على الرئيسية.') ]));
   }
@@ -155,8 +180,12 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     if (fetched) return; fetched = true;
     await Promise.allSettled([api('/api/market').then(applyMarket), api('/api/news').then(d => {news = d; renderNews();})]); fetched = false;
   }
-  $('market-symbols').querySelectorAll('button').forEach(b => b.onclick = () => {symbol = b.dataset.symbol; rows = []; chartKey = ''; chartRequest++; $('market-symbols').querySelectorAll('button').forEach(x => {x.classList.toggle('active', x === b); x.setAttribute('aria-pressed', String(x === b));}); render(); loadChart();});
-  $('live-chart-tfs').querySelectorAll('button').forEach(b => b.onclick = () => {tf = b.dataset.tf; rows = []; chartKey = ''; chartRequest++; $('live-chart-tfs').querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b)); loadChart();});
+  $('market-symbols').querySelectorAll('button').forEach(b => b.onclick = () => {symbol = b.dataset.symbol; configureChart(); $('market-symbols').querySelectorAll('button').forEach(x => {x.classList.toggle('active', x === b); x.setAttribute('aria-pressed', String(x === b));}); render(); loadChart();});
+  $('live-chart-tfs').onclick = event => {
+    const b = event.target.closest('button[data-tf]'); if (!b || !$('live-chart-tfs').contains(b)) return;
+    tf = b.dataset.tf; rows = []; chartKey = ''; chartRequest++;
+    $('live-chart-tfs').querySelectorAll('button').forEach(x => {x.classList.toggle('active', x === b); x.setAttribute('aria-pressed', String(x === b));}); loadChart();
+  };
   $('scalp-history-filter').onchange = renderHistory; $('headline-filter').onchange = () => {newsStamp = ''; renderNews();};
   stream.addEventListener('market', event => {try {applyMarket(JSON.parse(event.data));} catch {}});
   stream.addEventListener('news', event => {try {news = JSON.parse(event.data); newsStamp = ''; renderNews();} catch {}});
