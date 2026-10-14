@@ -59,7 +59,7 @@ test('the bridge can publish its first real quote before history/calendar warm u
   now++;
   assert.equal((await post('/api/mt5',eaFixture(now),ingest)).status,200);
   const warmed=await (await fetch(base+'/api/state')).json();
-  assert.equal(warmed.signalSourceReady,true);assert.equal(warmed.currentSignal.entry,eaFixture(now).ea.signal.entry);
+  assert.equal(warmed.signalSourceReady,true);assert.equal(warmed.currentSignal,null);assert.equal(app.signalRows()[0].entry,eaFixture(now).ea.signal.entry);
 });
 test('bridge → API → frozen EA history is deduplicated and source expiry blocks control',async t=>{
   let now=NOW;const dir=mkdtempSync(join(tmpdir(),'nabd-ea-link-'));
@@ -81,13 +81,13 @@ test('bridge → API → frozen EA history is deduplicated and source expiry blo
   const raw=eaFixture();assert.equal((await post('/api/mt5',raw,ingest)).status,200);
   let state=await (await fetch(base+'/api/state')).json();
   assert.equal(state.signalSource,'MT5_EA');assert.equal(state.bot.settings.ema_fast,50);
-  assert.equal(state.currentSignal.entry,raw.ea.signal.entry);assert.equal(state.currentSignal.tp1,null);
+  assert.equal(state.currentSignal,null);assert.equal(app.signalRows()[0].entry,raw.ea.signal.entry);assert.equal(app.signalRows()[0].tp1,null);
   now++;raw.quote_at=now;raw.bid+=.05;raw.ask+=.05;
   assert.equal((await post('/api/mt5',raw,ingest)).status,200);assert.equal(app.signalRows().length,1);
   assert.equal(app.signalRows()[0].entry,raw.ea.signal.entry);
   now+=6;raw.quote_at=now;await post('/api/mt5',raw,ingest);
   state=await (await fetch(base+'/api/state')).json();assert.equal(state.connection,'LIVE');
-  assert.equal(state.signalSourceReady,true);assert.equal(state.currentSignal.entry,raw.ea.signal.entry);
+  assert.equal(state.signalSourceReady,true);assert.equal(state.currentSignal,null);assert.equal(app.signalRows()[0].entry,raw.ea.signal.entry);
   assert.equal((await post('/api/commands',{action:'CLOSE_ALL'},operator)).status,409);
   now+=9;raw.quote_at=now;await post('/api/mt5',raw,ingest);
   state=await (await fetch(base+'/api/state')).json();

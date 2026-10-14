@@ -54,7 +54,7 @@ test('the API tolerates delayed telemetry for display while rejecting stale trad
   assert.equal((await post('/api/mt5', raw, ingest)).status, 200);
   let state = await (await fetch(base + '/api/state')).json();
   assert.equal(state.connection, 'LIVE'); assert.equal(state.signalSourceReady, true);
-  assert.equal(state.currentSignal.entry, raw.ea.signal.entry);
+  assert.equal(state.currentSignal, null);assert.equal(app.signalRows()[0].entry, raw.ea.signal.entry);
   assert.equal((await post('/api/commands', {action: 'PAUSE'}, operator)).status, 409);
   assert.equal(app.db.prepare('SELECT COUNT(*) AS n FROM commands').get().n, 0);
   now = NOW + 16; raw.quote_at = now;

@@ -53,10 +53,10 @@ test('existing bridge payload immediately prepares gold without M1 or public-fee
   assert.equal(response.status, 200);
   const gold = (await (await fetch(base + '/api/market')).json()).markets.XAUUSD;
   assert.equal(gold.source, 'MT5 · JustMarkets-Demo');
-  assert.equal(gold.analysis.status, 'READY'); assert.ok(gold.currentSignal);
+  assert.equal(gold.analysis.status, 'RESEARCH_ONLY'); assert.equal(gold.currentSignal, null);
   assert.equal(gold.analysis.frames.M5.count, 320); assert.equal(gold.quote.bid, raw.bid);
   assert.equal(gold.quote.ask, raw.ask);
-  assert.equal(gold.currentSignal.entry, analyze(cleanSnapshot(raw, NOW), NOW).plan.entry);
+  assert.equal(app.marketFeed.history('XAUUSD')[0].entry, analyze(cleanSnapshot(raw, NOW), NOW).plan.entry);
   const chart = await (await fetch(base + '/api/market/candles?symbol=XAUUSD&tf=M5')).json();
   assert.deepEqual(chart.candles, raw.candles.M5);
   assert.equal(chart.source_id, gold.source_id);
