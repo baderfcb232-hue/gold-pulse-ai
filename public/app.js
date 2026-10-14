@@ -1,5 +1,6 @@
 import {positionSize, ema, botHeartbeatFresh, BOT_CONTROL_TTL} from '/engine.mjs';
 import {initLiveWorkspace} from '/live.js';
+import {createStateConnection} from '/state-connection.js';
 const $ = id => document.getElementById(id);
 const e = (tag, cls, content) => {const x = document.createElement(tag); if (cls) x.className = cls; if (content != null) x.textContent = String(content); return x;};
 const put = (id, value) => {$(id).textContent = value ?? '—';};
@@ -12,7 +13,8 @@ const views = {overview:'نظرة السوق',signals:'التوصيات',positio
 const descriptions = {overview:'أسعار مرجعية وفرص مضاربة وأخبار بتوقيت غزة.',signals:'فرص المضاربة وخطط البوت، كل خطة بوقتها ومصدرها.',positions:'حسابك وصفقات البوت وأوامر الإدارة.',news:'عناوين المصادر ومواعيد الأحداث الاقتصادية بتوقيت غزة.',results:'متابعة الخطط وعمليات MT5 الفعلية.',settings:'ربط المنصة وفحص البيانات وحساب المخاطرة.'};
 let state = null, signals = [], privateData = null, authenticated = false, view = 'overview';
 let chartTf = 'M5', chartRows = [], chartKey = '', chartLoading = false;
-let lastSignalId = null, signalsStamp = '', clockOffset = 0, pendingCommand = null, stream = null, streamHealthy = false;
+let lastSignalId = null, signalsStamp = '', clockOffset = 0, pendingCommand = null, stream = null;
+let stateErrorShown = false;
 let privateEpoch = 0, privateReadAllowed = true;
 const price = v => v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('en-US',{minimumFractionDigits:state?.spec?.digits ?? 2,maximumFractionDigits:state?.spec?.digits ?? 2});
 const num = (v, digits = 2) => v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('en-US',{maximumFractionDigits:digits});
@@ -71,7 +73,7 @@ function renderOverview(){
   $('risk').className='pill '+(risk==='BLOCKED'?'bad':risk==='CAUTION'?'warn':risk==='ASSESSED'?'good':'neutral');
   const decision=live?(mainReady?(sides[s.aiDecision]||'انتظار'):'انتظار البوت'):'انتظار البيانات';put('decision',decision);
   $('decision').className=live&&mainReady&&s.aiDecision==='BUY'?'buy':live&&mainReady&&s.aiDecision==='SELL'?'sell':'';
-  const reasons=mainReady?s.reasons:['الأسعار وصلت؛ ننتظر حالة البوت التجاري من الجسر على المنصة نفسها.'];
+  const reasons=!live?[c==='ERROR'?'تعذر الوصول للخادم؛ البيانات المعروضة قديمة.':s.lastUpdate?'سعر MT5 متأخر أو اتصال البروكر منقطع؛ إصدار الإشارات الجديدة معلّق.':'لم يصل سعر من MT5 بعد؛ شغّل الجسر وتحقق من إعدادات الربط.']:mainReady?s.reasons:['الأسعار وصلت؛ ننتظر حالة البوت التجاري من الجسر على المنصة نفسها.'];
   put('decision-reason',(reasons||[]).join(' · ')||'بانتظار تحقق شروط الدخول.');
   put('score',live&&s.confidence!=null?`${num(s.confidence,0)} / 100`:'—');$('score-fill').style.width=live&&s.confidence!=null?Math.min(100,Math.max(0,s.confidence))+'%':'0%';
   put('banner-title',live?(!mainReady?'انتظار البوت':risk==='BLOCKED'?'الدخول متوقف مؤقتًا':s.aiDecision==='WAIT'?'متابعة السوق':ea?'خطة صادرة من البوت':'تحققت شروط إشارة جديدة'):(labels[c]||'انتظار الربط'));
@@ -144,7 +146,7 @@ function renderPrivate(){
 function renderExecution(){const x=state?.execution;put('execution-badge',!mainFresh()?'حالة البوت غير متاحة':x?.enabled?(x.demo?'حساب تجريبي':'حساب حقيقي'):'التنفيذ المحلي غير مفعّل');$('execution-badge').className='pill '+(x?.enabled?'warn':'neutral');put('execution-description',x?`${x.paused?'دخول الصفقات موقوف':'إدارة البوت من MT5'} · هدف الربح الصغير ${num(x.small_profit_target)} ${state?.spec?.currency||''} · مخاطرة الإعداد المحلي ${num(x.risk_percent)}% · ${x.remote_control?'التحكم من الموقع متاح':'التحكم من الموقع غير مفعّل'}`:'إعدادات التنفيذ تظهر عند وصول ربط البوت.');for(const id of ['pause-bot','resume-bot','close-all'])$(id).disabled=!authenticated||effectiveConnection()!=='LIVE'||!controlFresh()||!x?.remote_control||(id==='close-all'&&!x?.enabled);document.querySelectorAll('.position .actions button').forEach(b=>b.disabled=!authenticated||effectiveConnection()!=='LIVE'||!controlFresh()||!x?.remote_control||!x?.enabled);}
 function renderDeals(){if(!authenticated)return;const rows=privateData?.deals||[];if(!rows.length){replace('deals-list',empty('لم تصل عمليات MT5 فعلية بعد.'));return;}const wrap=e('div','table-wrap'),table=e('table'),head=e('thead'),hr=e('tr');for(const t of ['الوقت','رقم العملية','النوع','الحركة','اللوت','الصافي'])hr.append(e('th','',t));head.append(hr);const tbody=e('tbody');for(const d of rows){const tr=e('tr'),net=d.profit+d.commission+d.swap+d.fee;for(const v of [time(d.time,true),d.ticket,sides[d.side],d.entry_type==='IN'?'دخول':d.entry_type==='OUT'?'خروج':d.entry_type,num(d.volume,3),num(net)])tr.append(e('td','',v));tbody.append(tr);}table.append(head,tbody);wrap.append(table);replace('deals-list',wrap);}
 function confirmCommand(action,ticket='0'){if(!authenticated){$('login-dialog').showModal();return;}pendingCommand={action,ticket,...(action==='PARTIAL_CLOSE'?{fraction:.5}:{})};put('command-title',actions[action]);put('command-detail',action==='PAUSE'?'سيوقف البوت فتح صفقات جديدة، مع استمرار إدارة الصفقات القائمة.':action==='RESUME'?'سيُرفع إيقاف الدخول. التنفيذ يبقى خاضعًا لإعدادات البوت والفلاتر في MT5.':action==='CLOSE_ALL'?'سيحاول البوت إغلاق صفقاته المرتبطة بهذا الرمز والرقم السحري، بالسعر المتاح.':action==='BREAK_EVEN'?`سيُطلب نقل ستوب الصفقة #${ticket} لسعر الدخول إذا سمحت شروط البروكر. تكاليف الصفقة قد تجعل النتيجة غير صفرية.`:`سيُرسل طلب ${actions[action]} #${ticket} بالسعر المتاح، وينتظر تأكيد MT5.`);$('command-dialog').showModal();}
-function renderDiagnostics(){const s=state||{},entries=[['حالة المصدر',labels[effectiveConnection()]||'—'],['البروكر',s.broker||'لم يصل'],['الرمز',s.symbol||'XAUUSD'],['آخر سعر',time(s.lastUpdate,true)],['نوع السبريد','نقاط البروكر'],['قيمة التيك للوت',num(s.spec?.tick_value_loss)+' '+(s.spec?.currency||'')],['أصغر لوت',num(s.spec?.volume_min,3)],['التحكم الآمن',s.controlsConfigured?'مضبوط بالخادم':'يحتاج ضبط الرموز بالخادم'],['حفظ السجل',s.storage?.mode==='persistent'?'حفظ دائم مضبوط':'مؤقت'],['محرك التحليل',s.strategy||'غير متاح']];replace('diagnostics',...entries.map(([label,val])=>{const row=e('div');row.append(e('dt','',label),e('dd','',val));return row;}));}
+function renderDiagnostics(){const s=state||{},at=s.bridgeReceivedAt,bridgeRecent=at>0&&now()-at<=20,entries=[['حالة المصدر',labels[effectiveConnection()]||'—'],['وصول الجسر',!at?'لم يصل تحديث':bridgeRecent?'إرسال حديث':'الإرسال متوقف أو متأخر'],['آخر وصول من الجسر',time(at,true)],['آخر نبض للبوت',time(s.bot?.heartbeat_at,true)],['اتصال المنصة بالبروكر',!at?'غير معروف':!bridgeRecent?'آخر حالة محفوظة؛ ننتظر تحديثًا':s.terminalConnected?'متصل':'منقطع'],['البروكر',s.broker||'لم يصل'],['الرمز',s.symbol||'XAUUSD'],['آخر سعر',time(s.lastUpdate,true)],['نوع السبريد','نقاط البروكر'],['قيمة التيك للوت',num(s.spec?.tick_value_loss)+' '+(s.spec?.currency||'')],['أصغر لوت',num(s.spec?.volume_min,3)],['التحكم الآمن',s.controlsConfigured?'مضبوط بالخادم':'يحتاج ضبط الرموز بالخادم'],['حفظ السجل',s.storage?.mode==='persistent'?'حفظ دائم مضبوط':'مؤقت'],['محرك التحليل',s.strategy||'غير متاح']];replace('diagnostics',...entries.map(([label,val])=>{const row=e('div');row.append(e('dt','',label),e('dd','',val));return row;}));}
 function renderStorage(){
   const persistent=state?.storage?.mode==='persistent';
   document.querySelectorAll('[data-storage-note]').forEach(node=>node.textContent=persistent?
@@ -187,7 +189,12 @@ function drawChart(){
   ctx.fillStyle='#9385a7';ctx.textAlign='center';for(const index of [0,Math.floor(rows.length/2),rows.length-1])ctx.fillText(time(rows[index].time),Math.min(W-right-20,Math.max(28,left+dx*(index+.5))),H-7);
   canvas.onpointermove=event=>{const i=Math.min(rows.length-1,Math.max(0,Math.floor((event.offsetX-left)/dx))),c=rows[i];put('chart-tooltip',`${time(c.time,true)}\nO ${price(c.open)}  H ${price(c.high)}\nL ${price(c.low)}  C ${price(c.close)}`);$('chart-tooltip').hidden=false;};canvas.onpointerleave=()=>$('chart-tooltip').hidden=true;
 }
-async function fetchState(){try{applyState(await api('/api/state'));}catch(err){state={...state,connection:'ERROR',currentSignal:null,reasons:['تعذر الوصول للخادم؛ البيانات المعروضة قديمة.']};renderOverview();toast('تعذر الاتصال بالخادم؛ عرض الإشارات معلّق.',true);}}
+const stateConnection=createStateConnection({
+  readState:()=>api('/api/state',{signal:AbortSignal.timeout(10000)}),
+  applyState:raw=>{applyState(raw);stateErrorShown=false;},
+  onError:()=>{state={...state,connection:'ERROR',currentSignal:null,reasons:['تعذر الوصول للخادم؛ البيانات المعروضة قديمة.']};renderOverview();renderExecution();renderLink();renderDiagnostics();if(!stateErrorShown){toast('تعذر الاتصال بالخادم؛ عرض الإشارات معلّق.',true);stateErrorShown=true;}}
+});
+function fetchState(){return stateConnection.refresh();}
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>switchView(b.dataset.view));document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>switchView(b.dataset.goto));$('diagnostics-open').onclick=()=>switchView('settings');$('refresh-now').onclick=fetchState;
 document.querySelectorAll('.login-trigger').forEach(b=>b.onclick=async()=>{if(authenticated){privateEpoch++;privateReadAllowed=false;authenticated=false;privateData=null;put('login-open','دخول المشغّل');renderPrivate();renderExecution();try{await api('/api/logout',{method:'POST',body:'{}'});}catch(err){toast(err.message,true);}}else{$('login-error').textContent='';$('login-dialog').showModal();}});
 document.querySelectorAll('.dialog-close').forEach(b=>b.onclick=()=>b.closest('dialog').close());
@@ -202,8 +209,10 @@ try{$('signal-notifications').checked=localStorage.getItem('nabd-signal-notices'
 $('signal-notifications').onchange=()=>{try{localStorage.setItem('nabd-signal-notices',$('signal-notifications').checked?'on':'off');}catch{}};
 new ResizeObserver(drawChart).observe($('chart'));
 $('broker-details').addEventListener('toggle', drawChart);
-setInterval(()=>{put('server-clock',time(now())+' · غزة');if(state){renderOverview();renderExecution();renderLink();}},1000);
-setInterval(()=>{if(!streamHealthy)fetchState();if(authenticated&&(view==='positions'||view==='results'))loadPrivate();if(view==='signals'||view==='results')loadSignals();},10000);
+setInterval(()=>{put('server-clock',time(now())+' · غزة');if(state){renderOverview();renderExecution();renderLink();if(view==='settings')renderDiagnostics();}},1000);
+setInterval(()=>{if(stateConnection.needsPoll())fetchState();},5000);
+setInterval(()=>{if(authenticated&&(view==='positions'||view==='results'))loadPrivate();if(view==='signals'||view==='results')loadSignals();},10000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)fetchState();});
 await fetchState();loadSignals();loadPrivate();
-stream=new EventSource('/api/events');stream.addEventListener('state',event=>{streamHealthy=true;try{applyState(JSON.parse(event.data));}catch{streamHealthy=false;}});stream.onerror=()=>{streamHealthy=false;};
+stream=new EventSource('/api/events');stream.addEventListener('state',event=>{try{stateConnection.receive(JSON.parse(event.data));}catch{stateConnection.disconnected();}});stream.onerror=()=>stateConnection.disconnected();
 initLiveWorkspace({stream,api,time,num,now,notify:toast});
