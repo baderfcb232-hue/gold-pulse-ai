@@ -1,7 +1,7 @@
 import {ema, rsi, atr} from './engine.mjs';
 
 export const SCALP_STRATEGY = 'REFERENCE-SCALP-1';
-export const MARKET_TF = {M1: 60, M5: 300, M15: 900};
+export const MARKET_TF = {M1: 60, M5: 300, M15: 900, H1: 3600, H4: 14400};
 
 // Aggregate observations only. Missing intervals are never filled with made-up prices.
 export function aggregateCandles(rows, seconds, now, {closedOnly = true} = {}) {

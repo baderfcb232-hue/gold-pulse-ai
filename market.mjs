@@ -1,5 +1,6 @@
 import {scalpAnalysis, aggregateCandles, MARKET_TF, trackReferencePlan} from './scalp.mjs';
 import {readFeed, cacheSeconds, retrySeconds} from './feed-http.mjs';
+import {brokerGoldMarket} from './broker-market.mjs';
 
 export const MARKET_CONFIG = Object.freeze({
   XAUUSD: {symbol: 'XAUUSD', name: 'الذهب', source: 'Gold API', sourceUrl: 'https://gold-api.com/docs',
@@ -34,7 +35,7 @@ export function parseCoinbaseCandles(raw, now) {
 }
 
 export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher = fetch,
-  WebSocketImpl = globalThis.WebSocket, calendar = () => null, onChange = () => {}}) {
+  WebSocketImpl = globalThis.WebSocket, calendar = () => null, brokerSnapshot = () => null, onChange = () => {}}) {
   db.exec(`CREATE TABLE IF NOT EXISTS market_cache (symbol TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS market_signals (id TEXT PRIMARY KEY, issued_at REAL NOT NULL, data TEXT NOT NULL);`);
   const markets = {};
@@ -50,18 +51,22 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
   let historyFailures = 0, goldFailures = 0, btcFailures = 0;
   const history = symbol => db.prepare('SELECT data FROM market_signals ORDER BY issued_at DESC LIMIT 400').all()
     .map(x => JSON.parse(x.data)).filter(p => !symbol || p.symbol === symbol).slice(0, 100);
+  const marketFor = symbol => symbol === 'XAUUSD'
+    ? brokerGoldMarket(brokerSnapshot(), clock()) || markets[symbol] : markets[symbol];
+  const sameSource = (plan, market) => (plan.source_id || 'REFERENCE') === (market.source_id || 'REFERENCE');
   const persist = symbol => {const m = markets[symbol]; db.prepare('INSERT INTO market_cache VALUES(?,?) ON CONFLICT(symbol) DO UPDATE SET data=excluded.data')
     .run(symbol, JSON.stringify({quote: m.quote, received_at: m.received_at, candles: m.candles.slice(-1500)}));};
   function savePlan(plan) {db.prepare('UPDATE market_signals SET data=? WHERE id=?').run(JSON.stringify(plan), plan.id);}
   function updatePlans(symbol) {
-    const m = markets[symbol], now = clock();
-    for (const p of history(symbol).filter(p => p.status === 'TRACKING')) {
-      const change = trackReferencePlan(p, now - m.received_at <= m.quoteTtl ? m.quote : null, now, m.quoteTtl);
+    const m = marketFor(symbol), now = clock();
+    for (const p of history(symbol).filter(p => p.status === 'TRACKING' && sameSource(p, m))) {
+      const fresh = now - m.received_at <= m.quoteTtl && (!m.broker_mode || m.connection === 'LIVE');
+      const change = trackReferencePlan(p, fresh ? m.quote : null, now, m.quoteTtl);
       if (change) savePlan({...p, ...change});
     }
-    const a = scalpAnalysis(m, now, calendar()); m.analysis = a;
-    if (a.plan && !history(symbol).some(p => p.status === 'TRACKING')) {
-      const p = a.plan, id = `${p.strategy}:${symbol}:${p.bar_time}:${p.side}`;
+    const a = m.broker_mode ? m.analysis : scalpAnalysis(m, now, calendar()); m.analysis = a;
+    if (a.plan && !history(symbol).some(p => p.status === 'TRACKING' && sameSource(p, m))) {
+      const p = a.plan, id = `${p.strategy}:${symbol}:${p.source_id ? p.source_id + ':' : ''}${p.bar_time}:${p.side}`;
       db.prepare('INSERT OR IGNORE INTO market_signals VALUES(?,?,?)').run(id, p.issued_at, JSON.stringify({...p, id}));
       db.prepare('DELETE FROM market_signals WHERE id NOT IN (SELECT id FROM market_signals ORDER BY issued_at DESC LIMIT 400)').run();
     }
@@ -96,28 +101,33 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
     m.revision++; revision++; persist('BTCUSD'); updatePlans('BTCUSD');
   }
   function publicMarket(symbol) {
-    const m = markets[symbol], now = clock();
+    const m = marketFor(symbol), now = clock();
     let a = m.analysis || scalpAnalysis(m, now, calendar());
     const age = m.quote ? Math.max(0, now - m.quote.time) : null;
-    const fresh = m.quote && age <= m.quoteTtl && now - m.received_at <= m.quoteTtl;
+    const fresh = m.quote && age <= m.quoteTtl && now - m.received_at <= m.quoteTtl
+      && (!m.broker_mode || m.connection === 'LIVE');
     if (!fresh && m.quote) a = {...a, decision: 'WAIT', status: 'STALE', plan: null, setup: null,
       reason: 'السعر متأخر أو المصدر مغلق؛ الشارت محفوظ وإصدار فرص جديدة متوقف.'};
-    const plans = history(symbol);
+    const plans = history(symbol).filter(p => sameSource(p, m));
     const active = plans.find(p => p.status === 'TRACKING' && p.expires_at > now) || null;
     if (a.plan && !active && plans.some(p => p.bar_time === a.plan.bar_time && p.side === a.plan.side))
       a = {...a, decision: 'WAIT', status: 'SCANNING', setup: null, reason: 'انتهت متابعة هذا التكوين؛ ننتظر تأكيدًا من شمعة جديدة.'};
-    const available = fresh && a.status !== 'NEWS_BLOCK';
+    const available = fresh && !['NEWS_BLOCK', 'WARMING', 'GAP', 'BLOCKED'].includes(a.status);
     if (!available) a = {...a, setup: null};
-    const recentRows = m.candles.filter(c => c.time + 60 <= now), last = recentRows.at(-1)?.close;
+    const defaultTf = m.default_tf || 'M1', step = MARKET_TF[defaultTf];
+    const recentRows = m.candles.filter(c => c.time + step <= now), last = recentRows.at(-1)?.close;
     return {symbol, name: m.name, source: m.source, sourceUrl: m.sourceUrl, quote: m.quote,
+      source_id: m.source_id || 'REFERENCE', broker_symbol: m.broker_symbol || null,
+      default_tf: defaultTf, chart_tfs: m.chart_tfs || ['M1', 'M5', 'M15'],
       revision: m.revision, received_at: m.received_at || null, checked_at: m.checked_at,
-      connection: !m.quote ? 'NO_DATA' : fresh ? 'LIVE' : 'STALE', quoteAge: age,
+      connection: m.broker_mode ? m.connection : !m.quote ? 'NO_DATA' : fresh ? 'LIVE' : 'STALE', quoteAge: age,
       quoteTtl: m.quoteTtl, cadence_seconds: m.cadence_seconds, candle_kind: m.candle_kind,
       history_revision: m.history_revision || 0,
-      chart_tail: {M1: m.candles.slice(-2), M5: aggregateCandles(m.candles, 300, now, {closedOnly: false}).slice(-2),
+      chart_tail: m.broker_mode ? Object.fromEntries(m.chart_tfs.map(tf => [tf, m.bars[tf].slice(-2)]))
+        : {M1: m.candles.slice(-2), M5: aggregateCandles(m.candles, 300, now, {closedOnly: false}).slice(-2),
         M15: aggregateCandles(m.candles, 900, now, {closedOnly: false}).slice(-2)},
       market_hours: m.market_hours, transport: m.transport, feed_error: m.feed_error,
-      minute_count: recentRows.length, last_bar: recentRows.at(-1)?.time || null,
+      minute_count: recentRows.length * step / 60, last_bar: recentRows.at(-1)?.time || null,
       change_from_last_close: last && m.quote ? (m.quote.price / last - 1) * 100 : null,
       analysis: {...a, plan: undefined}, currentSignal: available ? active : null,
       suspendedSignal: !available && active ? active.id : null,
@@ -126,7 +136,11 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
   const publicState = () => ({revision, serverTime: clock(), refresh_seconds: 1,
     markets: Object.fromEntries(Object.keys(markets).map(s => [s, publicMarket(s)]))});
   const candles = (symbol, tf) => {
-    const m = markets[symbol]; if (!m || !MARKET_TF[tf]) return null;
+    const m = marketFor(symbol); if (!m || !MARKET_TF[tf]) return null;
+    if (m.broker_mode) return m.bars[tf] ? {symbol, tf, source: m.source, source_id: m.source_id,
+      broker_symbol: m.broker_symbol, reference_only: true, candle_kind: m.candle_kind,
+      candles: m.bars[tf].slice(-320)} : null;
+    if (!['M1', 'M5', 'M15'].includes(tf)) return null;
     return {symbol, tf, source: m.source, reference_only: true, candle_kind: m.candle_kind,
       candles: tf === 'M1' ? m.candles.slice(-320) : aggregateCandles(m.candles, MARKET_TF[tf], clock(), {closedOnly: false}).slice(-320)};
   };
@@ -195,7 +209,7 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
   function tick() {
     if (stopped) return;
     const now = clock();
-    if (now >= nextGold) job('gold', gold);
+    if (!brokerGoldMarket(brokerSnapshot(), now) && now >= nextGold) job('gold', gold);
     if (!socket || now - socketMessage > 15) {markets.BTCUSD.transport = 'REST'; if (now >= nextBtc) job('btc', btc);}
     if (now >= nextHistory) job('history', bootstrap);
     if (socket && now - Math.max(socketHeartbeat, socketOpened) > 20) socket.close();
