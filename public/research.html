@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#100c1b"><title>مختبر الاستراتيجيات | نبض</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml"><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/research.css">
+  <script type="module" src="/research.js"></script>
+</head>
+<body class="research-page">
+  <a href="#research-main" class="skip">انتقل للمحتوى</a>
+  <header class="header"><a class="brand" href="/"><span class="brand-mark">N</span><span><strong>NABD <span class="brand-ar">نبض</span></strong><small>STRATEGY RESEARCH</small></span></a><a class="button ghost" href="/">متابعة السوق ←</a><span class="pill warn" id="publication-status">جلب حالة الإرسال…</span></header>
+  <main class="research-main" id="research-main">
+    <div class="research-hero"><span class="eyebrow">قواعد معلنة · تكاليف ظاهرة · نتائج قابلة للمراجعة</span><h1>نختبر الفكرة قبل التوصية</h1><p>مصادر أصلية لأساليب متداولين وباحثين، ونموذجان يوميان قابلان للاختبار على تاريخ بروكرك. لم تثبت دقة95%، ولا توجد صفقة مضمونة100%.</p><a class="button primary" href="#test-lab">اختبر تاريخ السوق</a><a class="button ghost" href="#research-sources">راجع المصادر</a></div>
+    <div class="research-notice" role="status"><strong>وضع البحث فقط</strong><p id="policy-reason">إصدار التوصيات الجديدة وإرسالها إلى Telegram متوقفان أثناء التحقق.</p><p class="subtle">هذا الإيقاف يخص الموقع والقناة. إعداد التداول داخل EA في MT5 مستقل ويُراجع من المنصة.</p></div>
+    <section aria-labelledby="models-title"><div class="research-section-heading"><h2 id="models-title">من القواعد المنشورة إلى اختبار محدد</h2><span class="pill outline">D1 فقط · لا تحسين تلقائي للمعلمات</span></div><div class="research-models" id="models"></div><p class="subtle">هذه تطبيقات تجريبية معدّلة؛ ليست نسخًا لخوارزميات المتداولين الخاصة. كلاهما يتبع الاتجاه، فلا يُحوّل اتفاقهما إلى نسبة ثقة أعلى.</p></section>
+    <section class="card research-section" id="test-lab" aria-labelledby="test-title"><div class="card-heading"><div><span class="eyebrow">BACKTEST / DAILY OHLC</span><h2 id="test-title">اختبار تاريخ بروكرك</h2></div><span class="pill outline">محاكاة محلية</span></div><p class="subtle">صدّر800–5000 شمعةD1 مغلقة من بروكرك إلىCSV، من الأقدم للأحدث. الأسعار تُقرأ محليًا في المتصفح. بيانات Coinbase لا تمثل تلقائيًا عقدBTCUSD لدى وسيطك.</p>
+      <form id="research-form" class="research-form">
+        <label class="wide-field">ملف الشموع CSV أوJSON<input id="dataset-file" type="file" accept=".csv,.json,.tsv" required><small>CSV: DATE, TIME, OPEN, HIGH, LOW, CLOSE · وقت افتتاح اليوم بالتوقيت نفسه لكل السجل.</small></label>
+        <label>رمز السوق<input name="symbol" maxlength="160" placeholder="مثل XAUUSD.m" required></label><label>مصدر البيانات<input name="source" maxlength="160" placeholder="اسم البروكر والحساب التجريبي" required></label>
+        <label>السبريد الكامل · bps<input name="spreadBps" type="number" min="0" max="1000" step="any" required></label><label>الانزلاق لكل جهة · bps<input name="slippageBps" type="number" min="0" max="1000" step="any" required></label>
+        <label>العمولة لكل جهة · bps<input name="commissionBps" type="number" min="0" max="1000" step="any" required></label><label>تكلفة التمويل اليومية · bps<input name="carryBpsPerDay" type="number" min="0" max="1000" step="any" required></label>
+        <p class="subtle wide-field">1 نقطة أساس =0.01% من السعر. مثلًا سبريد2 على سعر4000 يساوي5 bps. النموذج يستخدم تكاليف ثابتة تقديرية؛ أدخل بدل السواب تكلفة محافظة موجبة. لا يستنتج تكاليف وسيطك تلقائيًا.</p>
+        <label class="research-confirm wide-field"><input id="cost-ack" type="checkbox" required><span>راجعت الوحدات والتكاليف. أي صفر أدخله افتراض معلن، والنتيجة محاكاة وليست أداء حساب حقيقي.</span></label>
+        <div class="actions wide-field"><button class="button primary" type="submit">شغّل النموذجين</button><button class="button ghost" type="button" id="download-template">تنزيل قالب CSV</button></div>
+      </form><p id="research-error" class="error-text" role="alert"></p><p class="subtle" id="run-status" role="status">لم يُشغّل اختبار على بيانات بروكرك بعد؛ لا توجد نسبة نجاح مثبتة.</p>
+      <details class="research-method"><summary>كيف تُحسب النتيجة؟</summary><p>المعلمات ثابتة. أول60% من الشموع لفترة استكشافية بعد التهيئة، ثم فترتان20% و20% للمراجعة الزمنية. يبدأ كل جزء دون مركز مفتوح ويُغلق أي مركز عند نهايته مع احتساب التكاليف. هذه فترات مراجعة، ولا تصبح بيانات جديدة غير مرئية بمجرد تقسيمها.</p><p>القرار بعد إغلاق الشمعة والتنفيذ عند افتتاح التالية. الوقف ثابت2×ATR20 من سعر الدخول؛ الفجوة تُحسب بسعر الافتتاح الأسوأ. لا تعزيز ولا مضاعفات. R وحدة المسافة الأولية للوقف؛ ليست نسبة من رصيد الحساب.</p><p>تُخصم نصف قيمة السبريد بكل جهة، والانزلاق والعمولة بكل جهة، والتمويل عن أيام التقويم مع يوم واحد على الأقل. لا يحاكي الاختبار المارجن أو السيولة أو تفاصيل تسعير العقد. أقصى هبوط يُقاس عند إغلاق الصفقات فقط.</p></details>
+    </section>
+    <section id="report" class="research-section" aria-live="polite" hidden><div class="research-section-heading"><h2>نتائج المحاكاة</h2><button id="download-report" class="button ghost">تنزيل التقرير والسجل JSON</button></div><p id="report-meta" class="subtle"></p><div id="research-results"></div><div id="report-limits" class="research-notice"></div></section>
+    <section class="card research-section"><h2>ما الذي شمله البحث؟</h2><div class="research-table-wrap"><table><thead><tr><th>الأسلوب</th><th>حالته في نبض</th><th>حدود التطبيق</th></tr></thead><tbody id="families"></tbody></table></div></section>
+    <section class="research-section" id="research-sources"><div class="research-section-heading"><h2>المصادر والمتداولون</h2><span class="subtle" id="review-date">—</span></div><p class="subtle">لا يوجد ترتيب موثوق واحد لـ«أشطر متداول». اخترنا قواعد قابلة للفحص بدل نسب نجاح تسويقية. ربح المحفظة، ونسبة الصفقات الرابحة، واحتمال ربح الصفقة القادمة مقاييس مختلفة.</p><div class="research-sources" id="sources"></div><p id="catalog-error" class="error-text" role="alert"></p></section>
+    <footer class="footer"><a href="/">NABD · نبض السوق</a><span>نتائج البحث لا تُفعّل الإرسال أو التداول تلقائيًا</span></footer>
+  </main>
+</body></html>

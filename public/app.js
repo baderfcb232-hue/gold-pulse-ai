@@ -10,7 +10,7 @@ const sides = {BUY:'شراء',SELL:'بيع',WAIT:'انتظار',NEUTRAL:'محا�
 const statuses = {TRACKING:'قيد المتابعة',TP2:'بلغت الهدف',SL:'وقف الخسارة',EXPIRED:'انتهت الصلاحية',QUEUED:'بانتظار MT5',CONFIRMED:'أكد MT5 التنفيذ',REJECTED:'رُفض الأمر',UNCERTAIN:'التأكيد غير مكتمل'};
 const actions = {PAUSE:'إيقاف دخول جديد',RESUME:'استئناف الدخول',CLOSE_POSITION:'إغلاق الصفقة',CLOSE_ALL:'إغلاق صفقات البوت',BREAK_EVEN:'نقل الستوب لسعر الدخول',PARTIAL_CLOSE:'إغلاق نصف الصفقة'};
 const views = {overview:'نظرة السوق',signals:'التوصيات',positions:'الصفقات',news:'الأخبار الاقتصادية',results:'النتائج',settings:'الإعدادات والربط'};
-const descriptions = {overview:'أسعار مرجعية وفرص مضاربة وأخبار بتوقيت غزة.',signals:'فرص المضاربة وخطط البوت، كل خطة بوقتها ومصدرها.',positions:'حسابك وصفقات البوت وأوامر الإدارة.',news:'عناوين المصادر ومواعيد الأحداث الاقتصادية بتوقيت غزة.',results:'متابعة الخطط وعمليات MT5 الفعلية.',settings:'ربط المنصة وفحص البيانات وحساب المخاطرة.'};
+const descriptions = {overview:'أسعار وسياق السوق وأخبار؛ التوصيات متوقفة للمراجعة.',signals:'فرص المضاربة وخطط البوت، كل خطة بوقتها ومصدرها.',positions:'حسابك وصفقات البوت وأوامر الإدارة.',news:'عناوين المصادر ومواعيد الأحداث الاقتصادية بتوقيت غزة.',results:'متابعة الخطط وعمليات MT5 الفعلية.',settings:'ربط المنصة وفحص البيانات وحساب المخاطرة.'};
 let state = null, signals = [], privateData = null, authenticated = false, view = 'overview';
 let chartTf = 'M5', chartRows = [], chartKey = '', chartLoading = false;
 let lastSignalId = null, signalsStamp = '', clockOffset = 0, pendingCommand = null, stream = null;
@@ -91,6 +91,7 @@ function countdown(at){const seconds=Math.max(0,Math.floor(at-now())),h=Math.flo
 function updateSessions(){const list=[['طوكيو','Asia/Tokyo'],['لندن','Europe/London'],['نيويورك','America/New_York']];replace('sessions',...list.map(([name,tz])=>{const date=new Date(now()*1000),parts=new Intl.DateTimeFormat('en-US',{timeZone:tz,weekday:'short',hour:'numeric',hourCycle:'h23'}).formatToParts(date),d=parts.find(p=>p.type==='weekday').value,h=+parts.find(p=>p.type==='hour').value;return e('span',!['Sat','Sun'].includes(d)&&h>=8&&h<17?'session-open':'',name);}));}
 function valueCell(label,val,cls=''){const box=e('div','value-cell '+cls);box.append(e('small','',label),e('strong','number',price(val)));return box;}
 function renderActiveSignal(){
+  if(state?.researchPolicy?.publicationAllowed === false){replace('active-signal',empty(state.researchPolicy.reason));return;}
   const p=effectiveConnection()==='LIVE'&&(state?.signalSource!=='MT5_EA'||mainFresh())?state?.currentSignal:null;
   if(!p){const box=e('div','empty-signal');box.append(e('span','empty-symbol','⌖'),e('h3','',effectiveConnection()==='LIVE'?'لا توجد إشارة نشطة':'بانتظار البيانات'),e('p','',state?.suspendedSignal?'متابعة الإشارة معلّقة بسبب تأخر الأسعار؛ خطتها محفوظة في السجل.':'تظهر خطة الدخول عندما تكتمل شروط الاستراتيجية.'));replace('active-signal',box);return;}
   const box=e('div'),head=e('div','signal-heading');head.append(e('strong',p.side==='BUY'?'buy':'sell',sides[p.side]),badge(p.tp1_hit?'بلغت الهدف الأول':'قيد المتابعة',p.tp1_hit?'good':'outline'));box.append(head,e('p','subtle',p.reason));
