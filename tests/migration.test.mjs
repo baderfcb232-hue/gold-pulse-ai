@@ -45,7 +45,7 @@ test('the existing node server.js command boots the updated site and shuts down 
   });
   const base = 'http://127.0.0.1:' + port;
   const health = await (await fetch(base + '/healthz')).json();
-  assert.equal(health.ok, true); assert.equal(health.version, '3.3.4'); assert.equal(health.storage, 'ephemeral');
+  assert.equal(health.ok, true); assert.equal(health.version, '3.4.0'); assert.equal(health.storage, 'ephemeral');
   assert.equal(health.mt5.connection, 'NO_DATA'); assert.equal(health.markets.XAUUSD.connection, 'NO_DATA');
   const state = await (await fetch(base + '/api/state')).json();
   assert.equal(state.connection, 'NO_DATA'); assert.equal(state.bid, null); assert.equal(state.controlsConfigured, false);
