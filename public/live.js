@@ -108,7 +108,9 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
       hide_legend: false, hide_volume: false, allow_symbol_change: false, save_image: false,
       studies: ['MASimple@tv-basicstudies', 'RSI@tv-basicstudies', 'MACD@tv-basicstudies'],
       support_host: 'https://www.tradingview.com', width: '100%', height: '100%'};
-    const frame = $('live-chart');
+    // TradingView reads its config only on document load. A new frame also
+    // applies symbol/timeframe changes when only the URL fragment differs.
+    const previousFrame = $('live-chart'), frame = previousFrame.cloneNode(false);
     frame.title = `شارت TradingView المرجعي · ${tvSymbol}`;
     frame.onload = () => {$('live-chart-empty').hidden = true;};
     frame.onerror = () => {$('live-chart-empty').hidden = false;};
@@ -117,6 +119,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     // never replaces broker quotes, indicators or recommendation inputs.
     frame.src = 'https://www.tradingview-widget.com/embed-widget/advanced-chart/?locale=ar#' +
       encodeURIComponent(JSON.stringify(config));
+    previousFrame.replaceWith(frame);
     put('live-chart-title', 'شارت ' + (symbol === 'BTCUSD' ? 'بيتكوين' : 'الذهب'));
     put('live-chart-source', `TradingView · ${tvSymbol} · سعر مرجعي · ${tfLabels[tf]}`);
     put('live-chart-kind', 'أسعار الشارت للمقارنة وقد تختلف عن سعر تنفيذ الوسيط.');
