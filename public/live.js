@@ -12,7 +12,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   const tfLabels = {M1: 'دقيقة', M5: '5 دقائق', M15: '15 دقيقة', H1: 'ساعة', H4: '4 ساعات'};
   const tfButtons = {M1: '1د', M5: '5د', M15: '15د', H1: '1س', H4: '4س'};
   let data = null, news = null, symbol = 'XAUUSD', tf = 'M15', chartKey = '';
-  let lastServerSeen = 0, fetched = false, historyFetched = false, historyRows = [], historyStamp = '', newsStamp = '';
+  let lastServerSeen = 0, lastNewsSeen = 0, fetched = false, historyFetched = false, historyRows = [], historyStamp = '', newsStamp = '';
   let initialized = false;
   let chartSourceKey = '';
   const seenSignals = new Set();
@@ -159,9 +159,14 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     const checked = Math.max(0, ...news.sources.map(x => x.checked_at || 0));
     put('live-news-age', checked ? `آخر فحص قبل ${Math.max(0, Math.floor(now() - checked))} ثانية · تحديث الواجهة كل ثانية` : 'بانتظار المصادر.');
   }
+  function applyNews(next) {
+    if (!next || !Number.isFinite(next.serverTime) || !Array.isArray(next.items) || !Array.isArray(next.sources)) return;
+    if (news && next.serverTime < news.serverTime) return;
+    news = next; lastNewsSeen = Date.now(); newsStamp = ''; renderNews();
+  }
   async function fetchLive() {
     if (fetched) return; fetched = true;
-    await Promise.allSettled([api('/api/market').then(applyMarket), api('/api/news').then(d => {news = d; renderNews();})]); fetched = false;
+    await Promise.allSettled([api('/api/market').then(applyMarket), api('/api/news').then(applyNews)]); fetched = false;
   }
   $('market-symbols').querySelectorAll('button').forEach(b => b.onclick = () => {symbol = b.dataset.symbol; configureChart(); $('market-symbols').querySelectorAll('button').forEach(x => {x.classList.toggle('active', x === b); x.setAttribute('aria-pressed', String(x === b));}); render(); loadChart();});
   $('live-chart-tfs').onclick = event => {
@@ -171,9 +176,9 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   };
   $('scalp-history-filter').onchange = renderHistory; $('headline-filter').onchange = () => {newsStamp = ''; renderNews();};
   stream.addEventListener('market', event => {try {applyMarket(JSON.parse(event.data));} catch {}});
-  stream.addEventListener('news', event => {try {news = JSON.parse(event.data); newsStamp = ''; renderNews();} catch {}});
+  stream.addEventListener('news', event => {try {applyNews(JSON.parse(event.data));} catch {}});
   document.addEventListener('visibilitychange', () => {if (!document.hidden) {fetchLive(); loadHistory();}});
   setInterval(() => {render(); renderNews();}, 1000);
-  setInterval(() => {if (Date.now() - lastServerSeen > 4500) fetchLive();}, 5000);
+  setInterval(() => {if (Date.now() - lastServerSeen > 4500 || !news || Date.now() - lastNewsSeen > 75000) fetchLive();}, 5000);
   configureChart(); loadChart(); fetchLive(); loadHistory();
 }
