@@ -16,6 +16,7 @@ let chartTf = 'M5', chartRows = [], chartKey = '', chartLoading = false;
 let lastSignalId = null, signalsStamp = '', clockOffset = 0, pendingCommand = null, stream = null;
 let stateErrorShown = false;
 let privateEpoch = 0, privateReadAllowed = true;
+let memberIdentity = null, memberCsrf = '';
 const price = v => v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('en-US',{minimumFractionDigits:state?.spec?.digits ?? 2,maximumFractionDigits:state?.spec?.digits ?? 2});
 const num = (v, digits = 2) => v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('en-US',{maximumFractionDigits:digits});
 const time = (t, detailed = false) => t ? new Intl.DateTimeFormat('ar-PS',{timeZone:'Asia/Gaza',hour:'2-digit',minute:'2-digit',...(detailed ? {month:'short',day:'numeric'} : {})}).format(new Date(t*1000)) : '—';
@@ -101,7 +102,7 @@ function renderActiveSignal(){
   box.append(values,e('p','source-caption',p.source==='MT5_EA'?'المستويات من البوت؛ التنفيذ يُراجع في الصفقات.':'المستويات من محرك الموقع؛ متابعة افتراضية.'));
   const cap=e('div','signal-caption');for(const [label,value]of [['صدرت',time(p.issued_at,true)],['الصلاحية',time(p.expires_at)],['نوع المتابعة','افتراضية؛ تنفيذ MT5 يظهر في الصفقات']]){const row=e('div');row.append(e('span','',label),e('span','',value));cap.append(row);}box.append(cap);const button=e('button','button ghost wide','احسب لوت هذه الإشارة');button.onclick=()=>{switchView('settings');$('risk-form').elements.entry.value=p.entry;$('risk-form').elements.sl.value=p.sl;};box.append(button);replace('active-signal',box);
 }
-async function loadSignals(){try{const data=await api('/api/signals');signals=data.signals||[];renderSignals();renderResults();}catch(err){replace('signals-list',empty('سجل التوصيات غير متاح؛ يلزم تركيب تحديث الخادم.'));}}
+async function loadSignals(){try{const data=await api('/api/signals');signals=data.signals||[];renderSignals();renderResults();}catch(err){signals=[];renderResults();replace('signals-list',empty(err.status===401?'سجّل الدخول بحساب مؤكد ومخوّل لمشاهدة سجل التوصيات.':'تعذر جلب سجل التوصيات الآن.'),Object.assign(e('a','button primary','تسجيل الدخول'),{href:'/auth'}));}}
 function renderSignals(){
   const filter=$('signal-filter').value,source=$('signal-source-filter').value;
   const rows=signals.filter(s=>(filter==='ALL'||s.status===filter)&&(source==='ALL'||(s.source==='MT5_EA'?'MT5_EA':'DASHBOARD')===source));
@@ -206,7 +207,8 @@ $('copy-bridge-url').onclick=async()=>{try{await navigator.clipboard.writeText($
 $('chart-tfs').querySelectorAll('button').forEach(b=>b.onclick=()=>{chartTf=b.dataset.tf;$('chart-tfs').querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));chartKey='';loadChart();});
 $('risk-form').onsubmit=event=>{event.preventDefault();try{if(effectiveConnection()!=='LIVE')throw new Error('بيانات البروكر غير حديثة؛ انتظر عودة الربط قبل حساب اللوت.');if(!state?.spec)throw new Error('مواصفات العقد لم تصل من البروكر؛ لا يمكن حساب اللوت بدقة.');const inputs=Object.fromEntries(new FormData(event.currentTarget).entries());for(const k of Object.keys(inputs))inputs[k]=Number(inputs[k]);const out=positionSize({...inputs,spec:state.spec,freeMargin:privateData?.account?.free_margin??Infinity});const box=e('div','calc-grid');box.append(metric('اللوت',num(out.volume,3)),metric('الخسارة المقدّرة',num(out.loss),state.spec.currency),metric('الهامش المقدّر',num(out.margin),state.spec.currency));replace('risk-result',box,e('p','subtle',out.reason+' الانزلاق وتغير التكاليف قد يؤثران على النتيجة.'));}catch(err){replace('risk-result',e('p','error-text',err.message));}};
 try{$('signal-notifications').checked=localStorage.getItem('nabd-signal-notices')!=='off';}catch{}
-$('signal-notifications').onchange=()=>{try{localStorage.setItem('nabd-signal-notices',$('signal-notifications').checked?'on':'off');}catch{}};
+$('signal-notifications').onchange=()=>{const notifications=$('signal-notifications').checked;try{localStorage.setItem('nabd-signal-notices',notifications?'on':'off');}catch{}if(memberIdentity)api('/api/auth/profile',{method:'POST',headers:{'X-NABD-CSRF':memberCsrf},body:JSON.stringify({name:memberIdentity.name,notifications})}).catch(err=>toast(err.message,true));};
+api('/api/auth/me').then(d=>{memberIdentity=d.user;memberCsrf=d.csrf||'';if(d.user){$('signal-notifications').checked=d.user.notifications;try{localStorage.setItem('nabd-signal-notices',d.user.notifications?'on':'off');}catch{}}}).catch(()=>{});
 new ResizeObserver(drawChart).observe($('chart'));
 $('broker-details').addEventListener('toggle', drawChart);
 setInterval(()=>{put('server-clock',time(now())+' · غزة');if(state){renderOverview();renderExecution();renderLink();if(view==='settings')renderDiagnostics();}},1000);

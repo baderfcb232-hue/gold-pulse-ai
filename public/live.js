@@ -62,7 +62,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     put('scalp-decision', p ? side(p.side) + (broker ? ' · MT5' : ' · مرجعي') : states[state]);
     $('scalp-decision').className = p ? (p.side === 'BUY' ? 'buy' : 'sell') : '';
     put('scalp-status', p ? 'متابعة إشارة محفوظة' : states[state]); $('scalp-status').className = 'pill ' + (p ? 'good' : state === 'WATCH' ? 'warn' : 'neutral');
-    put('scalp-reason', !live && m?.quote ? 'إصدار فرص جديدة متوقف. نحتفظ بالشارت والتحليل السابق حتى يعود مصدر حديث.'
+    put('scalp-reason', data.membersOnly ? 'سجّل الدخول بحساب مؤكد ومخوّل لمشاهدة التوصيات.' : !live && m?.quote ? 'إصدار فرص جديدة متوقف. نحتفظ بالشارت والتحليل السابق حتى يعود مصدر حديث.'
       : p ? `الإشارة صدرت ${time(p.issued_at)} ومستوياتها ثابتة. الشروط الحالية لفرصة جديدة: ${a?.reason || 'تجري المتابعة.'}` : a?.reason || 'يجري الاتصال بمصدر السوق.');
     const score = live && a?.checks?.length && Number.isFinite(a.score) && a.score >= 0 && a.score <= 100 ? a.score : null;
     put('scalp-score', score === null ? '— / 100' : `${score} / 100`);
@@ -85,6 +85,12 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
       node('span', 'subtle', `${time(p.issued_at)} · ${status[p.status] || 'مراقبة'}`)); return row;
   }
   function renderPlan(m, p, confirmed) {
+    if (data?.membersOnly) {
+      put('scalp-plan-status', 'للمشتركين');
+      const box = node('div', 'empty-signal'), link = node('a', 'button primary', 'تسجيل الدخول'); link.href = '/auth';
+      box.append(node('h3', '', 'التوصيات لحسابات نبض'), node('p', '', 'سجّل الدخول ببريد مؤكد لمشاهدة الخطط وسجل المتابعة.'), link);
+      $('scalp-plan').replaceChildren(box); return;
+    }
     put('scalp-plan-status', confirmed ? 'خطة متابعة' : p ? 'بانتظار التأكيد' : 'مراقبة');
     if (!p) {const box = node('div', 'empty-signal'); box.append(node('span', 'empty-symbol', '⌖'), node('h3', '', m?.analysis?.status === 'WARMING' ? m.candle_kind === 'BROKER_OHLC' ? 'بانتظار تحميل شموع البروكر' : 'يجري بناء سجل ' + m.name : 'نبحث عن فرصة'),
       node('p', '', m?.suspendedSignal ? 'متابعة الخطة معلّقة حتى يعود سعر حديث؛ مستوياتها محفوظة في سجل الفرص.' : 'تظهر مستويات الدخول والوقف والأهداف عندما يتوافق الاتجاه وتكتمل البيانات.')); $('scalp-plan').replaceChildren(box); return;}
