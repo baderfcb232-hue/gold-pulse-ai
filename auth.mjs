@@ -29,8 +29,9 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
   const smtp = env.AUTH_SMTP_HOST && env.AUTH_SMTP_USER && env.AUTH_SMTP_PASSWORD ? {
     host: env.AUTH_SMTP_HOST, port: Number(env.AUTH_SMTP_PORT || 465), secure: env.AUTH_SMTP_SECURE !== 'false',
     auth: {user: env.AUTH_SMTP_USER, pass: env.AUTH_SMTP_PASSWORD}} : null;
-  const mailConfigured = Boolean(injectedMailer || (env.AUTH_MAIL_FROM && (env.AUTH_MAIL_API_KEY || smtp)));
-  const mailer = injectedMailer || createAuthMailer({apiKey: env.AUTH_MAIL_API_KEY, from: env.AUTH_MAIL_FROM, publicBase: base, smtp});
+  const provider = env.AUTH_MAIL_PROVIDER || 'resend';
+  const mailConfigured = Boolean(injectedMailer || (env.AUTH_MAIL_FROM && (smtp || (env.AUTH_MAIL_API_KEY && ['resend', 'brevo'].includes(provider)))));
+  const mailer = injectedMailer || createAuthMailer({apiKey: env.AUTH_MAIL_API_KEY, from: env.AUTH_MAIL_FROM, publicBase: base, provider, smtp});
   let store = injectedStore, online = false, healthy = true, closed = false, timer, backupBusy = false;
   let backup = injectedBackup || {key: null, storage: null}, lastBackup = null, backupState = 'NOT_CONFIGURED';
   const needs = [];
