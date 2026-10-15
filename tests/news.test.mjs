@@ -1,10 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
-import {parseNewsFeed, createNewsFeed} from '../news.mjs';
+import {parseNewsFeed, createNewsFeed, newsCategory} from '../news.mjs';
 const NOW = 1791806400;
 const source = {id: 'test-only', name: 'TEST SOURCE', url: 'https://news.example/rss', interval: 30};
 const rss = (title = 'Gold &amp; dollar') => `<rss><channel><item><title><![CDATA[${title}]]></title><link>https://news.example/story</link><pubDate>${new Date((NOW - 60) * 1000).toUTCString()}</pubDate></item></channel></rss>`;
+
+test('English news topics match whole words rather than software, awards or toilet', () => {
+  for (const title of ['Software jobs grow', 'An award for local businesses', 'Toilet paper prices', 'Forward planning'])
+    assert.equal(newsCategory(title), 'ECON', title);
+  for (const title of ['Gold prices rise', 'Oil-rich economies', 'War and interest rates', 'Inflation and silver'])
+    assert.equal(newsCategory(title), 'GOLD', title);
+  for (const title of ['Bitcoin prices', 'Cryptocurrency markets', 'Ethereum news'])
+    assert.equal(newsCategory(title), 'BTC', title);
+  assert.equal(newsCategory('ارتفاع أسعار الذهب'), 'GOLD');
+});
 
 test('RSS/Atom parsing preserves source times and safely decodes titles without executable markup', () => {
   const [item] = parseNewsFeed(rss('Gold &amp; dollar <img src=x onerror=alert(1)>'), source, NOW);
