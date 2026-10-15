@@ -117,7 +117,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   const headers = req => ({
     'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'DENY',
-    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-src 'none'; base-uri 'none'; form-action 'self'; object-src 'none'",
+    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-src https://www.tradingview-widget.com; base-uri 'none'; form-action 'self'; object-src 'none'",
     'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
   });
   const send = (req, res, status, data, type = 'application/json; charset=utf-8', extra = {}) => {
