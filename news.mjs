@@ -18,8 +18,8 @@ function decode(value) {
 }
 const field = (xml, tag) => xml.match(new RegExp('<' + tag + '(?:\\s[^>]*)?>([\\s\\S]*?)<\\/' + tag + '>', 'i'))?.[1] || '';
 export function newsCategory(title) {
-  return /bitcoin|crypto|ethereum|ب[يِ]تكوين|عملات رقمية/i.test(title) ? 'BTC'
-    : /gold|bullion|silver|ذهب|فضة|نفط|oil|war|حرب|interest rate|inflation|تضخم|فائدة|federal reserve|الفيدرالي/i.test(title) ? 'GOLD' : 'ECON';
+  return /\b(?:bitcoin|crypto(?:currency|currencies)?|ethereum)\b|ب[يِ]تكوين|عملات رقمية/i.test(title) ? 'BTC'
+    : /\b(?:gold|bullion|silver|oil|wars?|warfare|interest rates?|inflation|federal reserve)\b|ذهب|فضة|نفط|حرب|تضخم|فائدة|الفيدرالي/i.test(title) ? 'GOLD' : 'ECON';
 }
 export function parseNewsFeed(xml, source, now) {
   if (typeof xml !== 'string' || Buffer.byteLength(xml) > 1_000_000 || /<!DOCTYPE|<!ENTITY/i.test(xml))
