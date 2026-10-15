@@ -99,6 +99,31 @@ function indicators(bars) {
   return {e15, e150, atr};
 }
 
+export function analyzeDailyContext(data, now = Date.now() / 1000) {
+  if (!data || data.timeframe !== 'D1' || !Array.isArray(data.bars) || data.bars.length < 152 || data.bars.length > 5000)
+    fail('Insufficient closed daily history');
+  let previous = null;
+  for (const b of data.bars) {
+    if (!Number.isSafeInteger(b.time) || b.time <= 0 || b.time + 86400 > now ||
+      !['open', 'high', 'low', 'close'].every(k => finite(b[k]) && b[k] > 0) ||
+      b.low > Math.min(b.open, b.close) || b.high < Math.max(b.open, b.close)) fail('Invalid daily history');
+    const gap = previous ? (b.time - previous.time) / 86400 : 1;
+    if (!Number.isInteger(gap) || gap < 1 || gap > 7) fail('Invalid daily gap');
+    previous = b;
+  }
+  const bars = data.bars, i = bars.length - 1, {e15, e150, atr} = indicators(bars);
+  const context = {version: MODEL_VERSION, source: data.source, symbol: data.symbol, timeframe: 'D1',
+    lastClosedAt: bars[i].time + 86400, status: 'CONTEXT_ONLY', publicationAllowed: false,
+    emaTrend: e15[i] > e150[i] ? 'UP' : e15[i] < e150[i] ? 'DOWN' : 'FLAT',
+    emaCross: e15[i] > e150[i] && e15[i - 1] <= e150[i - 1] ? 'UP'
+      : e15[i] < e150[i] && e15[i - 1] >= e150[i - 1] ? 'DOWN' : null,
+    donchianBreak: bars[i].close > extreme(bars, i, 55, 'high', true) ? 'UP'
+      : bars[i].close < extreme(bars, i, 55, 'low', false) ? 'DOWN' : null,
+    atr20: atr[i], claimedSuccessRate: null};
+  if (now - context.lastClosedAt > 3 * 86400) context.status = 'STALE';
+  return context;
+}
+
 function extreme(bars, i, period, field, high) {
   let value = high ? -Infinity : Infinity;
   for (let j = i - period; j < i; j++) value = high ? Math.max(value, bars[j][field]) : Math.min(value, bars[j][field]);

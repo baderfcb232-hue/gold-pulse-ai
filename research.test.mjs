@@ -96,19 +96,26 @@ test('publisher is paused even with valid configuration; it neither polls signal
 
 test('deployed routes and initial SSE expose research policy and no executable market plan', async t => {
   const dir = mkdtempSync(join(tmpdir(), 'nabd-research-'));
-  const app = createApplication({dataDir: dir});
+  const operator = 'internal-research-operator-xxxxxxxxxxxxxxxxxx';
+  const app = createApplication({dataDir: dir, dashboardToken: operator});
   await new Promise(r => app.server.listen(0, '127.0.0.1', r));
   t.after(async () => {await app.close(); rmSync(dir, {recursive: true, force: true});});
   const base = 'http://127.0.0.1:' + app.server.address().port;
-  const catalog = await (await fetch(base + '/api/research')).json();
+  assert.equal((await fetch(base + '/api/research')).status, 401);
+  assert.equal((await fetch(base + '/api/internal/research')).status, 401);
+  const catalog = await (await fetch(base + '/api/internal/research', {headers: {Authorization: 'Bearer ' + operator}})).json();
   assert.equal(catalog.researchPolicy.publicationAllowed, false); assert.ok(catalog.catalog.sources.length >= 8);
-  assert.equal(catalog.telegram.enabled, false);
+  assert.equal(catalog.worker.publicationAllowed, false);
   for (const path of ['/api/state', '/api/market']) {
-    const state = await (await fetch(base + path)).json(); assert.equal(state.researchPolicy.mode, 'RESEARCH_ONLY');
+    const state = await (await fetch(base + path)).json(); assert.equal('researchPolicy' in state, false);
     for (const market of Object.values(state.markets || {})) {assert.equal(market.currentSignal, null); assert.equal(market.analysis.setup, null);}
   }
-  for (const path of ['/research.html', '/research.js', '/research.css', '/research-engine.mjs']) assert.equal((await fetch(base + path)).status, 200);
+  const oldPage = await fetch(base + '/research.html', {redirect: 'manual'});
+  assert.equal(oldPage.status, 303); assert.equal(oldPage.headers.get('location'), '/');
+  for (const path of ['/research.js', '/research.css', '/research-engine.mjs']) assert.equal((await fetch(base + path)).status, 404);
+  const html = await (await fetch(base + '/')).text();
+  assert.ok(!html.includes('مختبر الاستراتيجيات')); assert.ok(!html.includes('/research'));
   const response = await fetch(base + '/api/events'), reader = response.body.getReader();
   const {value} = await reader.read(); const event = new TextDecoder().decode(value); await reader.cancel();
-  assert.match(event, /RESEARCH_ONLY/); assert.match(event, /"currentSignal":null/);
+  assert.doesNotMatch(event, /researchPolicy|CONTEXT_ONLY|INTERNAL_ONLY|RESEARCH_ONLY/); assert.match(event, /"currentSignal":null/);
 });

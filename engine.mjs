@@ -84,6 +84,22 @@ export function cleanSnapshot(raw, now = Date.now() / 1000) {
         tick_volume: number(c.tick_volume ?? 0, 'tick volume', {min: 0})};
     });
   }
+  // Optional bridge 3.04 daily history. Old bridges remain compatible.
+  let daily_candles = [];
+  if (raw.daily_candles != null) {
+    if (!Array.isArray(raw.daily_candles) || raw.daily_candles.length > 1200) throw new Error('Invalid daily history');
+    let previous = 0;
+    daily_candles = raw.daily_candles.map(c => {
+      const time = number(c.time, 'daily time', {min: 1, max: now});
+      if (!Number.isSafeInteger(time) || time <= previous || time + 86400 > now + 2) throw new Error('Unclosed or unordered daily candle');
+      previous = time;
+      const open = number(c.open, 'daily open', {min: .000001});
+      const close = number(c.close, 'daily close', {min: .000001});
+      const low = number(c.low, 'daily low', {min: .000001, max: Math.min(open, close)});
+      const high = number(c.high, 'daily high', {min: Math.max(open, close, low)});
+      return {time, open, high, low, close};
+    });
+  }
   const calendar = raw.calendar ?? {};
   const events = Array.isArray(calendar.events) ? calendar.events.slice(0, 200).map(e => ({
     id: text(e.id, 80), name: text(e.name, 250), currency: text(e.currency, 5),
@@ -107,7 +123,7 @@ export function cleanSnapshot(raw, now = Date.now() / 1000) {
       margin_per_lot: specValue('margin_per_lot'),
       currency: text(spec.currency, 10)},
     ea: cleanEA(raw.ea, now, symbol),
-    candles, calendar: {status: calendar.status === 'ok' ? 'ok' : 'unavailable',
+    candles, daily_candles, calendar: {status: calendar.status === 'ok' ? 'ok' : 'unavailable',
       updated_at: updated, events: events.sort((a, b) => a.time - b.time)},
     execution: {enabled: raw.execution?.enabled === true, main_connected: raw.execution?.main_connected === true,
       remote_control: raw.execution?.remote_control === true,
