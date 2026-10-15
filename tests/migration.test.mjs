@@ -49,7 +49,7 @@ test('the existing node server.js command boots the updated site and shuts down 
   assert.equal(health.mt5.connection, 'NO_DATA'); assert.equal(health.markets.XAUUSD.connection, 'NO_DATA');
   const state = await (await fetch(base + '/api/state')).json();
   assert.equal(state.connection, 'NO_DATA'); assert.equal(state.bid, null); assert.equal(state.controlsConfigured, false);
-  assert.match(await (await fetch(base + '/')).text(), /LIVE MARKETS \/ 3\.3\.3/);
+  assert.match(await (await fetch(base + '/')).text(), /<title>NABD \| نبض الذهب<\/title>/);
   assert.equal((await fetch(base + '/app.js')).status, 200);
   child.kill('SIGTERM'); assert.deepEqual(await exited, {code: 0, signal: null});
 });
