@@ -118,7 +118,10 @@ test('server publishes only a matching fresh broker plan once; costs and diagnos
   });
   app.ingest(raw);
   const state = app.publicState(); assert.ok(state.currentSignal); assert.equal(state.confidence, null);
-  const markets = await (await fetch(base + '/api/market')).json();
+  const markets = await (await fetch(base + '/api/market', auth)).json();
+  const guestMarkets = await (await fetch(base + '/api/market')).json();
+  assert.equal(guestMarkets.markets.XAUUSD.currentSignal, null);
+  assert.equal(guestMarkets.membersOnly, true);
   assert.equal(markets.markets.XAUUSD.currentSignal.id, state.currentSignal.id);
   assert.equal(markets.markets.BTCUSD.currentSignal, null);
   assert.equal(state.currentSignal.claimedSuccessRate, null);

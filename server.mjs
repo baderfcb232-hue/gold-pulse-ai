@@ -15,6 +15,7 @@ import {researchCatalog} from './research-catalog.mjs';
 import {createResearchWorker} from './research-worker.mjs';
 import {brokerCostStatus} from './broker-costs.mjs';
 import {reviewPublication, publicationReasons} from './publication.mjs';
+import {createAccounts} from './auth.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = resolve(ROOT, 'public');
@@ -33,7 +34,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   ingestToken = process.env.MT5_INGEST_TOKEN || '', dashboardToken = process.env.DASHBOARD_TOKEN || '',
   publicBase = process.env.PUBLIC_BASE_URL || (process.env.RENDER === 'true' ? 'https://gold-pulse-ai.onrender.com' : ''),
   storagePersistent = process.env.PERSISTENT_STORAGE_CONFIRMED === 'true', clock = () => Date.now() / 1000,
-  config = {}, feedOptions = {}, researchOptions = {}, telegramOptions = {}} = {}) {
+  config = {}, feedOptions = {}, researchOptions = {}, telegramOptions = {}, accountOptions = {}} = {}) {
   if (ingestToken.length >= 32 && ingestToken === dashboardToken)
     throw new Error('MT5_INGEST_TOKEN and DASHBOARD_TOKEN must be different.');
   mkdirSync(dataDir, {recursive: true, mode: 0o700});
@@ -64,13 +65,25 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     candidates: () => [sourceAnalysis(snapshot, clock(), cfg).plan,
       ...Object.values(marketFeed.publicState().markets).map(m => m.currentSignal)], ...researchOptions});
   const clients = new Set(), sessions = new Map(), attempts = new Map();
-  const emit = (event, data) => {
+  const membersOnly = config.membersOnlySignals !== false;
+  const canReadSignals = async req => !membersOnly || operator(req) || await accounts.canReadSignals(req);
+  const protectSignals = (event, value, allowed) => {
+    if (allowed || !membersOnly || event === 'news') return value;
+    if (event === 'state') return {...value, currentSignal: null, suspendedSignal: null, membersOnly: true};
+    return {...value, membersOnly: true, markets: Object.fromEntries(Object.entries(value.markets).map(([symbol, m]) =>
+      [symbol, {...m, currentSignal: null, suspendedSignal: null, recentSignals: []}]))};
+  };
+  const emit = async (event, data) => {
     if (!clients.size) return;
-    const message = `event: ${event}\ndata: ${JSON.stringify(data())}\n\n`;
+    const value = data();
     for (const res of clients) {
       if (res.destroyed || res.writableEnded) {clients.delete(res); continue;}
       if (res.writableLength > 512_000) {clients.delete(res); res.end(); continue;}
-      if (!res.writableNeedDrain) res.write(message);
+      try {
+        const allowed = event === 'news' || await canReadSignals(res.nabdRequest);
+        if (!res.destroyed && !res.writableEnded && !res.writableNeedDrain)
+          res.write(`event: ${event}\ndata: ${JSON.stringify(protectSignals(event, value, allowed))}\n\n`);
+      } catch {if (!res.destroyed) res.end(); clients.delete(res);}
     }
   };
   const marketFeed = createMarketFeed({db, clock, ...feedOptions, calendar: () => snapshot?.calendar || null,
@@ -107,6 +120,9 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   };
   const bearer = req => (req.headers.authorization ?? '').replace(/^Bearer /, '');
   const operator = req => cookieSession(req) || exactSecret(bearer(req), dashboardToken);
+  const accounts = createAccounts({publicBase, clock, operationalStatus: () => ({mt5: publicState().connection,
+    storage: storagePersistent ? 'persistent' : 'ephemeral', publication: publicationReview().reason,
+    telegram: telegram.status().verification.state}), ...accountOptions});
   const bridge = req => exactSecret(bearer(req), ingestToken);
   function ownOrigin(req) {
     const origin = req.headers.origin;
@@ -124,23 +140,23 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     res.writeHead(status, {...headers(req), 'Content-Type': type, ...extra});
     res.end(type.startsWith('application/json') ? JSON.stringify(data) : data);
   };
-  async function body(req) {
+  async function body(req, maximum = limit) {
     const length = Number(req.headers['content-length'] || 0);
-    if (length > limit) throw new Error('Request too large');
-    if (!(req.headers['content-type'] ?? '').startsWith('application/json')) throw new Error('JSON content type required');
+    if (length > maximum) throw Object.assign(new Error('Request too large'), {status: 413});
+    if (!(req.headers['content-type'] ?? '').startsWith('application/json')) throw Object.assign(new Error('JSON content type required'), {status: 400});
     const chunks = []; let total = 0;
     for await (const chunk of req) {
-      total += chunk.length; if (total > limit) throw new Error('Request too large'); chunks.push(chunk);
+      total += chunk.length; if (total > maximum) throw Object.assign(new Error('Request too large'), {status: 413}); chunks.push(chunk);
     }
     try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
-    catch { throw new Error('Invalid JSON body'); }
+    catch { throw Object.assign(new Error('Invalid JSON body'), {status: 400}); }
   }
   function publicState() {
     const a = sourceAnalysis(snapshot, clock(), cfg);
     const publication = publicationReview(a);
     const active = signalRows().find(s => s.status === 'TRACKING' && (a.source === 'MT5_EA' ? s.source === 'MT5_EA' : s.source !== 'MT5_EA'));
     const available = a.connection === 'LIVE' && a.source_ready;
-    return {version: '3.3.4', revision, symbol: snapshot?.symbol || 'XAUUSD', broker: snapshot?.broker || null,
+    return {version: '3.4.0', revision, symbol: snapshot?.symbol || 'XAUUSD', broker: snapshot?.broker || null,
       bid: snapshot?.bid ?? null, ask: snapshot?.ask ?? null,
       spread: snapshot ? (snapshot.ask - snapshot.bid) / snapshot.spec.point : null,
       spreadUnit: 'points', lastUpdate: snapshot?.quote_at ?? null,
@@ -193,10 +209,12 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       const url = new URL(req.url, 'http://localhost'), path = url.pathname;
       if (!['GET', 'POST'].includes(req.method)) return send(req, res, 405, {error: 'Method not allowed'});
       if (req.method === 'POST' && !ownOrigin(req)) return send(req, res, 403, {error: 'Origin rejected'});
+      const accountResponse = await accounts.handle(req, path, url, request => body(request, path === '/api/admin/restore' ? 24 * 1024 * 1024 : 16000));
+      if (accountResponse) return send(req, res, accountResponse.status, accountResponse.data, 'application/json; charset=utf-8', accountResponse.headers);
       if (path === '/healthz' && req.method === 'GET') {
         const state = publicState(), sources = marketFeed.publicState().markets, messaging = telegram.status();
         const publication = publicationReview();
-        return send(req, res, 200, {ok: true, version: '3.3.4', storage: storagePersistent ? 'persistent' : 'ephemeral',
+        return send(req, res, 200, {ok: true, version: '3.4.0', storage: storagePersistent ? 'persistent' : 'ephemeral', accounts: accounts.status(),
           publication: {enabled: cfg.publicationEnabled, ready: publication.ready && messaging.verification.canPost,
             reason: !cfg.publicationEnabled ? 'PAUSED' : !messaging.configured ? 'TELEGRAM_NOT_CONFIGURED'
               : !messaging.verification.canPost ? 'TELEGRAM_NOT_VERIFIED' : publication.reason,
@@ -223,14 +241,15 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       }
       if (path === '/research.html' && req.method === 'GET')
         return send(req, res, 303, '', 'text/plain; charset=utf-8', {Location: '/'});
-      if (path === '/api/state' && req.method === 'GET') return send(req, res, 200, publicState());
-      if (path === '/api/market' && req.method === 'GET') return send(req, res, 200, marketState());
+      if (path === '/api/state' && req.method === 'GET') return send(req, res, 200, protectSignals('state', publicState(), await canReadSignals(req)));
+      if (path === '/api/market' && req.method === 'GET') return send(req, res, 200, protectSignals('market', marketState(), await canReadSignals(req)));
       if (path === '/api/news' && req.method === 'GET') return send(req, res, 200, newsFeed.publicState());
       if (path === '/api/market/candles' && req.method === 'GET') {
         const data = marketFeed.candles(url.searchParams.get('symbol') || 'XAUUSD', url.searchParams.get('tf') || 'M1');
         return send(req, res, data ? 200 : 400, data || {error: 'Invalid market or timeframe'});
       }
       if (path === '/api/market/signals' && req.method === 'GET') {
+        if (!await canReadSignals(req)) return send(req, res, 401, {error: 'سجّل الدخول بحساب مؤكد ومخوّل لمشاهدة التوصيات.'});
         const symbol = url.searchParams.get('symbol');
         if (symbol && !['XAUUSD','BTCUSD'].includes(symbol)) return send(req, res, 400, {error: 'Invalid market'});
         return send(req, res, 200, {signals: marketFeed.history(symbol), kind: 'EXPERIMENTAL_SHADOW_OBSERVATIONS'});
@@ -239,8 +258,10 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       if (path === '/api/events' && req.method === 'GET') {
         if (clients.size >= 200) return send(req, res, 503, {error: 'Too many connections'});
         res.writeHead(200, {...headers(req), 'Content-Type': 'text/event-stream; charset=utf-8', Connection: 'keep-alive', 'X-Accel-Buffering': 'no'});
-        res.write('event: state\ndata: ' + JSON.stringify(publicState()) + '\n\n');
-        res.write('event: market\ndata: ' + JSON.stringify(marketState()) + '\n\n');
+        const allowed = await canReadSignals(req);
+        res.nabdRequest = req;
+        res.write('event: state\ndata: ' + JSON.stringify(protectSignals('state', publicState(), allowed)) + '\n\n');
+        res.write('event: market\ndata: ' + JSON.stringify(protectSignals('market', marketState(), allowed)) + '\n\n');
         res.write('event: news\ndata: ' + JSON.stringify(newsFeed.publicState()) + '\n\n');
         clients.add(res); req.on('close', () => clients.delete(res)); return;
       }
@@ -250,8 +271,12 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         return send(req, res, 200, {tf, symbol: snapshot?.symbol || null, source: snapshot?.broker || null,
           candles: snapshot?.candles[tf].slice(-320) || []});
       }
-      if (path === '/api/signals' && req.method === 'GET') return send(req, res, 200, {signals: signalRows(), kind: 'EXPERIMENTAL_SHADOW_OBSERVATIONS'});
+      if (path === '/api/signals' && req.method === 'GET') {
+        if (!await canReadSignals(req)) return send(req, res, 401, {error: 'سجّل الدخول بحساب مؤكد ومخوّل لمشاهدة التوصيات.'});
+        return send(req, res, 200, {signals: signalRows(), kind: 'EXPERIMENTAL_SHADOW_OBSERVATIONS'});
+      }
       if (path === '/api/signals.csv' && req.method === 'GET') {
+        if (!await canReadSignals(req)) return send(req, res, 401, {error: 'تسجيل الدخول مطلوب لتصدير سجل التوصيات.'});
         const cols = ['id','source','issued_at','symbol','side','entry','sl','tp1','tp2','status','tp1_hit','exit','r','tracking'];
         const csv = '\uFEFF' + [cols.join(','), ...signalRows().map(s => cols.map(k => escapeCsv(s[k])).join(','))].join('\r\n');
         return send(req, res, 200, csv, 'text/csv; charset=utf-8', {'Content-Disposition': 'attachment; filename="nabd-signals.csv"'});
@@ -352,7 +377,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         audit('COMMAND_RESULT', {id: c.id, status: b.status, message: text(b.message, 500)});
         return send(req, res, 200, {ok: true});
       }
-      const files = {'/':'index.html','/index.html':'index.html','/app.js':'app.js','/live.js':'live.js','/state-connection.js':'state-connection.js','/styles.css':'styles.css','/manifest.webmanifest':'manifest.webmanifest','/icon.svg':'icon.svg','/brand-logo.png':'brand-logo.png'};
+      const files = {'/':'index.html','/index.html':'index.html','/app.js':'app.js','/live.js':'live.js','/state-connection.js':'state-connection.js','/styles.css':'styles.css','/manifest.webmanifest':'manifest.webmanifest','/icon.svg':'icon.svg','/brand-logo.png':'brand-logo.png',
+        '/auth':'accounts.html','/account':'accounts.html','/admin':'accounts.html','/privacy':'accounts.html','/accounts.js':'accounts.js','/accounts.css':'accounts.css'};
       if (req.method === 'GET' && files[path]) {
         const type = path.endsWith('.js') ? 'text/javascript; charset=utf-8' : path.endsWith('.css') ? 'text/css; charset=utf-8'
           : path.endsWith('.webmanifest') ? 'application/manifest+json' : path.endsWith('.svg') ? 'image/svg+xml' : path.endsWith('.png') ? 'image/png' : 'text/html; charset=utf-8';
@@ -381,16 +407,16 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     } catch (e) { console.error('State update failed:', e.message); }
   }, 5000); timer.unref();
   const close = async () => {clearInterval(timer); for (const c of clients) c.end();
-    await Promise.allSettled([telegram.close(), marketFeed.close(), newsFeed.close(), researchWorker.close()]);
+    await Promise.allSettled([telegram.close(), marketFeed.close(), newsFeed.close(), researchWorker.close(), accounts.close()]);
     await new Promise(r => server.close(r)); db.close();};
-  return {server, ingest, publicState, signalRows, db, close, marketFeed, newsFeed, researchWorker, telegram,
+  return {server, ingest, publicState, signalRows, db, close, marketFeed, newsFeed, researchWorker, telegram, accounts,
     startFeeds: () => {marketFeed.start(); newsFeed.start(); researchWorker.start();}};
 }
 export function startServer() {
   const app = createApplication();
   const port = Number(process.env.PORT || 3000);
   app.server.listen(port, process.env.BIND_ADDRESS || '0.0.0.0', () => {
-    console.log(`NABD v3.3.4 listening on ${app.server.address().port}`);
+    console.log(`NABD v3.4.0 listening on ${app.server.address().port}`);
     if (process.env.PUBLIC_FEEDS_ENABLED !== 'false') app.startFeeds();
   });
   if (!(process.env.MT5_INGEST_TOKEN?.length >= 32 && process.env.DASHBOARD_TOKEN?.length >= 32))

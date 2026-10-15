@@ -110,3 +110,10 @@ All market/account fixtures are synthetic test data. They are never loaded into 
 - Gold API and Coinbase quotes returned LIVE. News returned100 items with all four configured sourcesLIVE, respecting each source's caching/cadence. The public research interface stays removed.
 - The deployed homepage loads the revised readiness wording and current prices; no application-origin browser error appeared. Two observed metadata errors originated in the browser extension. The local release tree matches the uploaded runtime tree and all95 tests pass.
 - To complete broker-linked recommendations, the user's actual MT5 terminal and bridge must provide fresh telemetry and closed D1 history, and the exact account cost profile must be verified. The server/publisher configuration is resumed; the strategy filters continue to withhold recommendations until those inputs exist.
+# NABD 3.4.0 — email accounts
+
+Implemented email verification and password recovery, persistent PostgreSQL identity storage, cookie sessions and CSRF protection, owner-bound admin bootstrap with required TOTP, user/session/preferences pages, admin user permissions and audit, and encrypted external backups with guarded restore. Signal levels/history are protected on HTTP, CSV and ongoing SSE; public chart, prices and news remain accessible.
+
+Before deployment: 111 tests cover the existing system and the new identity lifecycle, MFA replay/recovery, ownership isolation, expiry, rate limiting, session revocation, live-stream permission revocation, encrypted restore and failed-backup preservation. Deployment and real provider verification must be recorded separately; test adapters do not demonstrate a working production PostgreSQL or email provider.
+
+Production activation requires the original Render account, a durable PostgreSQL connection, configured mail delivery, the owner's confirmed email, encryption keys, and independent backup storage. Missing prerequisites leave registration closed. See ACCOUNTS_SETUP_AR.md. Trading/MT5 connectivity and temporary trading history are separate from account storage.
