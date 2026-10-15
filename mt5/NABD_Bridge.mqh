@@ -9,6 +9,8 @@ bool g_nb_timer_seen=false;
 string g_nb_local_warning="";
 ulong g_nb_last_send=0;
 datetime g_nb_calendar_time=0;
+datetime g_nb_daily_time=0;
+string g_nb_daily="[]";
 string g_nb_calendar="{\"status\":\"unavailable\",\"events\":[]}";
 uint NABDHash(const string s)
   { uint h=2166136261; for(int i=0;i<StringLen(s);i++) h=(h^(uint)StringGetCharacter(s,i))*16777619; return h; }
@@ -77,10 +79,10 @@ int NBRequest(const string method,const string path,const string payload,string 
       PrintFormat("NABD link failed. Error=%d. Check allowed WebRequest URLs and the internet connection.",g_nb_last_network_error);
    return code;
   }
-string NBCandles(const ENUM_TIMEFRAMES tf,const long offset)
+string NBCandles(const ENUM_TIMEFRAMES tf,const long offset,const int count=320)
   {
    MqlRates bars[];ArraySetAsSeries(bars,false);
-   int n=CopyRates(g_symbol,tf,1,320,bars);
+   int n=CopyRates(g_symbol,tf,1,count,bars);
    string json="[";
    for(int i=0;i<n;i++)
      {
@@ -265,6 +267,12 @@ void NABDOnTimer()
       candles="{\"M5\":"+NBCandles(PERIOD_M5,offset)+",\"M15\":"+NBCandles(PERIOD_M15,offset)+
         ",\"H1\":"+NBCandles(PERIOD_H1,offset)+",\"H4\":"+NBCandles(PERIOD_H4,offset)+"}";
       calendar=g_nb_calendar;
+      if(g_nb_daily_time==0 || TimeGMT()-g_nb_daily_time>=3600)
+        {
+         NBStatus("Loading closed daily history for internal analysis...");
+         g_nb_daily=NBCandles(PERIOD_D1,offset,1200);
+         g_nb_daily_time=g_nb_daily=="[]"?TimeGMT()-3540:TimeGMT();
+        }
      }
    // History/calendar may take time; send the latest broker tick available after they finish.
    if(!SymbolInfoTick(g_symbol,tick) || tick.bid<=0 || tick.ask<tick.bid)
@@ -298,6 +306,7 @@ void NABDOnTimer()
      ",\"managed_magic\":"+NBQ((string)InpMagicNumber)+",\"small_profit_target\":"+NBD(NBMainValue("TP"),2)+
      ",\"max_daily_loss_percent\":"+NBD(NBMainValue("DL"),2)+",\"risk_percent\":"+NBD(NBMainValue("RP"),2)+
      ",\"news_filter\":"+NBB(NBMainValue("NF")>0.5)+"},\"ea\":"+NBEA(offset);
+   if(g_nb_bootstrap_done)payload+=",\"daily_candles\":"+g_nb_daily;
    if(InpNABDSendAccount)
       payload+=",\"account\":{\"currency\":"+NBQ(AccountInfoString(ACCOUNT_CURRENCY))+
         ",\"balance\":"+NBD(AccountInfoDouble(ACCOUNT_BALANCE),2)+",\"equity\":"+NBD(AccountInfoDouble(ACCOUNT_EQUITY),2)+

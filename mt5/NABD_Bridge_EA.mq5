@@ -1,5 +1,5 @@
 #property strict
-#property version "3.03"
+#property version "3.04"
 #property description "NABD MT5 telemetry bridge. Separate chart; it does not open trades."
 #include <Trade/Trade.mqh>
 CTrade g_trade;
@@ -20,7 +20,7 @@ string g_symbol="";
 int g_digits=0;
 double g_point=0;
 void NBStatus(const string status)
-  {Comment("NABD Bridge 3.03 | "+g_symbol+"\n"+status);}
+  {Comment("NABD Bridge 3.04 | "+g_symbol+"\n"+status);}
 string NABDKey(const string suffix);
 void NABDOnTimer();
 double NBMainValue(const string suffix)
@@ -72,7 +72,7 @@ int OnInit()
    g_trade.SetTypeFillingBySymbol(g_symbol);g_trade.SetMarginMode();g_trade.SetAsyncMode(false);
    if(!EventSetTimer((int)MathMax(3,InpNABDRefreshSeconds)))return INIT_FAILED;
    NBStatus("Waiting for first timer update. No trade entry.");
-   Print("NABD bridge v3.03 started. No trade entry; remote management requires opt-in in both EAs.");
+   Print("NABD bridge v3.04 started. No trade entry; remote management requires opt-in in both EAs.");
    return INIT_SUCCEEDED;
   }
 void OnTimer(){NABDOnTimer();}
