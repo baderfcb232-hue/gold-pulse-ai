@@ -1,4 +1,16 @@
 import {TF_SECONDS} from '../engine.mjs';
+export function fakeTelegram(onSend) {
+  return async (url, options) => {
+    const method = String(url).split('/').at(-1);
+    const results = {getMe: {id: 123, is_bot: true, username: 'FixtureBot'},
+      getChat: {id: -100123, type: 'channel', username: 'FixtureChannel'},
+      getChatMember: {status: 'administrator', user: {id: 123}, can_post_messages: true}};
+    if (Object.hasOwn(results, method)) return new Response(JSON.stringify({ok: true, result: results[method]}));
+    assertTelegramMethod(method);
+    return onSend(url, options);
+  };
+}
+function assertTelegramMethod(method) {if (method !== 'sendMessage') throw Error('Unexpected fake Telegram method');}
 export const NOW = 1791511200;
 export function fixture(now = NOW) {
   const candles = {};
