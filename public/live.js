@@ -1,5 +1,3 @@
-import {ema} from '/engine.mjs';
-
 export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   const $ = id => document.getElementById(id);
   const node = (tag, cls, text) => {const n = document.createElement(tag); if (cls) n.className = cls;
@@ -11,10 +9,9 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   const side = v => ({BUY: 'شراء', SELL: 'بيع', NEUTRAL: 'محايد', UNKNOWN: 'غير مكتمل'}[v] || 'انتظار');
   const status = {TRACKING: 'قيد المتابعة', TP2: 'بلغ الهدف المرجعي', SL: 'بلغ الوقف المرجعي', EXPIRED: 'انتهت الصلاحية'};
   const category = {GOLD: 'ذهب / دولار', BTC: 'عملات رقمية', ECON: 'اقتصاد', WORLD: 'عام'};
-  const tfSeconds = {M1: 60, M5: 300, M15: 900, H1: 3600, H4: 14400};
   const tfLabels = {M1: 'دقيقة', M5: '5 دقائق', M15: '15 دقيقة', H1: 'ساعة', H4: '4 ساعات'};
   const tfButtons = {M1: '1د', M5: '5د', M15: '15د', H1: '1س', H4: '4س'};
-  let data = null, news = null, symbol = 'XAUUSD', tf = 'M1', rows = [], chartKey = '', chartRequest = 0;
+  let data = null, news = null, symbol = 'XAUUSD', tf = 'M15', chartKey = '';
   let lastServerSeen = 0, fetched = false, historyFetched = false, historyRows = [], historyStamp = '', newsStamp = '';
   let initialized = false;
   let chartSourceKey = '';
@@ -32,19 +29,14 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     for (const item of Object.values(data.markets)) if (item.currentSignal) seenSignals.add(item.currentSignal.id);
     initialized = true;
     render();
-    const key = `${chartSourceKey}:${tf}:${Math.floor((m?.last_bar || 0) / tfSeconds[tf])}:${m?.history_revision}`;
-    mergeChartTail();
-    if (key !== chartKey) {chartKey = key; loadChart();} else drawChart();
+    loadChart();
     const stamp = Object.values(data.markets).map(m => m.recentSignals.map(p => p.id + p.status).join(':')).join('|');
     if (stamp !== historyStamp) {historyStamp = stamp; loadHistory();}
   }
   function configureChart() {
-    const m = market(), key = `${symbol}:${m?.source_id || 'REFERENCE'}`;
-    if (key === chartSourceKey) return;
-    chartSourceKey = key; rows = []; chartKey = ''; chartRequest++;
-    const available = m?.chart_tfs || ['M1', 'M5', 'M15'];
-    tf = m?.default_tf || 'M1';
-    $('live-chart-tfs').replaceChildren(...available.map(value => {
+    if (symbol === chartSourceKey) return;
+    chartSourceKey = symbol; tf = 'M15'; chartKey = '';
+    $('live-chart-tfs').replaceChildren(...['M1', 'M5', 'M15', 'H1', 'H4'].map(value => {
       const b = node('button', value === tf ? 'active' : '', tfButtons[value]);
       b.dataset.tf = value; b.setAttribute('aria-pressed', String(value === tf)); return b;
     }));
@@ -63,7 +55,6 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     $('live-frames').style.gridTemplateColumns = broker ? 'repeat(2,minmax(0,1fr))' : 'repeat(3,minmax(0,1fr))';
     put('live-price-kind', broker ? 'سعر البروكر' : 'سعر مرجعي');
     put('live-strategy-frames', broker ? 'M5 / M15 / H1 / H4 · EMA / RSI / ATR' : 'M1 + M5 · EMA / RSI / ATR');
-    put('live-chart-kind', broker ? 'شموع مغلقة من البروكر · الخطط متابعة افتراضية' : 'آخر شمعة قيد التكوين · خطوط الخطة مرجعية');
     put('live-source-note', broker ? `متوسط سعر الشراء والبيع لـ ${m.broker_symbol}. التحليل يستخدم شموع البروكر المغلقة؛ تاريخها يصل من الجسر دون انتظار تجميع جديد.`
       : m ? `${m.symbol === 'XAUUSD' ? 'الذهب المرجعي يُجلب كل نحو 30 ثانية؛ الشموع من عينات السعر المتاحة.' : (m.transport === 'WebSocket' ? 'بث Coinbase المباشر؛' : 'جلب Coinbase الاحتياطي كل ثانية؛') + ' سعر BTC-USD على المنصة.'} مستقل عن سعر تنفيذ بروكرك.` : 'ننتظر بيانات المصدر؛ لن نعرض أسعارًا تجريبية.');
     const states = {NO_DATA: 'انتظار المصدر', WARMING: 'تحميل الشموع', SCANNING: 'البحث عن فرصة', WATCH: 'فرصة مشروطة', READY: 'تحققت شروط السعر', GAP: 'فجوة بيانات', NEWS_BLOCK: 'فلتر الأخبار', BLOCKED: 'شروط الدخول تمنع الإشارة', STALE: 'تحديث متأخر'};
@@ -105,44 +96,31 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
       node('p', 'subtle', confirmed ? `صدرت ${time(p.issued_at)} · متبقي ${Math.max(0, Math.ceil(p.expires_at - now()))} ثانية` : 'مراقبة فقط؛ لا تُعامل كإشارة دخول مؤكدة.'));
     $('scalp-plan').replaceChildren(box);
   }
-  async function loadChart() {
-    const requestedSymbol = symbol, requestedTf = tf, id = ++chartRequest;
-    put('live-chart-title', 'شارت ' + (market()?.name || symbol));
-    if (!rows.length) {put('live-chart-source', 'جلب شارت ' + symbol + ' من مصدره…'); drawChart();}
-    try {const result = await api(`/api/market/candles?symbol=${symbol}&tf=${tf}`);
-      if (id !== chartRequest || symbol !== requestedSymbol || tf !== requestedTf) return;
-      rows = result.candles || []; mergeChartTail(); drawChart();
-      put('live-chart-title', 'شارت ' + (market()?.name || symbol));
-      put('live-chart-source', `${result.source} · ${result.broker_symbol || result.symbol} · ${result.candle_kind === 'BROKER_OHLC' ? 'شموع البروكر المغلقة' : result.candle_kind === 'SAMPLED_REFERENCE' ? 'عينات أسعار؛ ليست كامل تداولات البروكر' : 'تاريخ المنصة + متابعة السعر'} · ${tf}`);
-    } catch {if (id === chartRequest) put('live-chart-source', 'تعذر تحديث الشارت؛ آخر بيانات متاحة محفوظة.');}
-  }
-  function mergeChartTail() {
-    const tail = market()?.chart_tail?.[tf];
-    if (!tail?.length) return;
-    const merged = new Map(rows.map(c => [c.time, c]));
-    for (const c of tail) merged.set(c.time, c);
-    rows = [...merged.values()].sort((a, b) => a.time - b.time).slice(-320);
-  }
-  function drawChart() {
-    const canvas = $('live-chart'), rect = canvas.getBoundingClientRect(); if (rect.width < 10) return;
-    const dpr = window.devicePixelRatio || 1; canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
-    const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr); const W = rect.width, H = rect.height, left = 5, right = 82, top = 22, bottom = 30, width = W - left - right, height = H - top - bottom;
-    ctx.clearRect(0, 0, W, H); $('live-chart-empty').hidden = rows.length > 0; if (!rows.length) return;
-    const visible = rows.slice(-Math.min(100, Math.max(1, Math.floor(width / 6)))), p = activePlan();
-    const levels = p ? [['دخول', p.entry, '#b399ff'], ['SL', p.sl, '#fa929e'], ['TP1', p.tp1, '#75dcb1'], ['TP2', p.tp2, '#75dcb1']] : [];
-    const prices = [...visible.flatMap(c => [c.high, c.low]), ...levels.map(l => l[1])], lo = Math.min(...prices), hi = Math.max(...prices), pad = (hi - lo) * .1 || 1, min = lo - pad, max = hi + pad;
-    const py = price => top + (max - price) / (max - min) * height, dx = width / visible.length;
-    ctx.font = '11px ui-monospace,monospace'; ctx.textAlign = 'left';
-    for (let i = 0; i <= 4; i++) {const y = top + height * i / 4; ctx.strokeStyle = '#342b415f'; ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(W - right, y); ctx.stroke(); ctx.fillStyle = '#a89bbd'; ctx.fillText(fmt(max - (max - min) * i / 4), W - right + 7, y + 4);}
-    visible.forEach((c, i) => {const x = left + dx * (i + .5); ctx.strokeStyle = ctx.fillStyle = c.close >= c.open ? '#75dcb1' : '#fa929e'; ctx.globalAlpha = i === visible.length - 1 && c.time + tfSeconds[tf] > now() ? .65 : 1;
-      ctx.beginPath(); ctx.moveTo(x, py(c.high)); ctx.lineTo(x, py(c.low)); ctx.stroke(); ctx.fillRect(x - Math.min(8, Math.max(1, dx * .25)), Math.min(py(c.open), py(c.close)), Math.min(16, Math.max(2, dx * .5)), Math.max(1, Math.abs(py(c.open) - py(c.close))));}); ctx.globalAlpha = 1;
-    const closes = rows.map(c => c.close), start = rows.length - visible.length; ctx.strokeStyle = '#b399ff'; ctx.beginPath(); let begun = false;
-    for (let i = 0; i < visible.length; i++) {const value = ema(closes.slice(0, start + i + 1), 21); if (value != null) {const x = left + dx * (i + .5), y = py(value); if (!begun) {ctx.moveTo(x, y); begun = true;} else ctx.lineTo(x, y);}} ctx.stroke();
-    for (const [label, price, color] of levels) {ctx.strokeStyle = color; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(left, py(price)); ctx.lineTo(W - right, py(price)); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = color; ctx.fillText(label, W - right + 7, py(price) - 4);}
-    ctx.fillStyle = '#9385a7'; ctx.textAlign = 'center';
-    for (const i of [...new Set([0, Math.floor(visible.length / 2), visible.length - 1])]) ctx.fillText(time(visible[i].time), Math.min(W - right - 20, Math.max(28, left + dx * (i + .5))), H - 7);
-    canvas.onpointermove = event => {const i = Math.min(visible.length - 1, Math.max(0, Math.floor((event.offsetX - left) / dx))), c = visible[i]; put('live-chart-tooltip', `${time(c.time, true)}\nO ${fmt(c.open)}  H ${fmt(c.high)}\nL ${fmt(c.low)}  C ${fmt(c.close)}`); $('live-chart-tooltip').hidden = false;};
-    canvas.onpointerleave = () => {$('live-chart-tooltip').hidden = true;};
+  function loadChart() {
+    const key = `${symbol}:${tf}`;
+    if (key === chartKey) return;
+    chartKey = key;
+    const tvSymbol = symbol === 'BTCUSD' ? 'COINBASE:BTCUSD' : 'OANDA:XAUUSD';
+    const interval = {M1: '1', M5: '5', M15: '15', H1: '60', H4: '240'}[tf];
+    const config = {autosize: true, symbol: tvSymbol, interval, timezone: 'Etc/UTC',
+      theme: 'dark', backgroundColor: 'rgba(12,21,29,1)', gridColor: 'rgba(255,255,255,0.04)',
+      style: '1', withdateranges: true, hide_side_toolbar: false, hide_top_toolbar: false,
+      hide_legend: false, hide_volume: false, allow_symbol_change: false, save_image: false,
+      studies: ['MASimple@tv-basicstudies', 'RSI@tv-basicstudies', 'MACD@tv-basicstudies'],
+      support_host: 'https://www.tradingview.com', width: '100%', height: '100%'};
+    const frame = $('live-chart');
+    frame.title = `شارت TradingView المرجعي · ${tvSymbol}`;
+    frame.onload = () => {$('live-chart-empty').hidden = true;};
+    frame.onerror = () => {$('live-chart-empty').hidden = false;};
+    $('live-chart-empty').hidden = false;
+    // Keep the external widget isolated. It supplies display data only and
+    // never replaces broker quotes, indicators or recommendation inputs.
+    frame.src = 'https://www.tradingview-widget.com/embed-widget/advanced-chart/?locale=ar#' +
+      encodeURIComponent(JSON.stringify(config));
+    put('live-chart-title', 'شارت ' + (symbol === 'BTCUSD' ? 'بيتكوين' : 'الذهب'));
+    put('live-chart-source', `TradingView · ${tvSymbol} · سعر مرجعي · ${tfLabels[tf]}`);
+    put('live-chart-kind', 'أسعار الشارت للمقارنة وقد تختلف عن سعر تنفيذ الوسيط.');
+    $('live-chart-full').href = 'https://www.tradingview.com/chart/?symbol=' + encodeURIComponent(tvSymbol) + '&interval=' + interval;
   }
   async function loadHistory() {
     if (historyFetched) return; historyFetched = true;
@@ -183,15 +161,14 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   $('market-symbols').querySelectorAll('button').forEach(b => b.onclick = () => {symbol = b.dataset.symbol; configureChart(); $('market-symbols').querySelectorAll('button').forEach(x => {x.classList.toggle('active', x === b); x.setAttribute('aria-pressed', String(x === b));}); render(); loadChart();});
   $('live-chart-tfs').onclick = event => {
     const b = event.target.closest('button[data-tf]'); if (!b || !$('live-chart-tfs').contains(b)) return;
-    tf = b.dataset.tf; rows = []; chartKey = ''; chartRequest++;
+    tf = b.dataset.tf;
     $('live-chart-tfs').querySelectorAll('button').forEach(x => {x.classList.toggle('active', x === b); x.setAttribute('aria-pressed', String(x === b));}); loadChart();
   };
   $('scalp-history-filter').onchange = renderHistory; $('headline-filter').onchange = () => {newsStamp = ''; renderNews();};
   stream.addEventListener('market', event => {try {applyMarket(JSON.parse(event.data));} catch {}});
   stream.addEventListener('news', event => {try {news = JSON.parse(event.data); newsStamp = ''; renderNews();} catch {}});
-  new ResizeObserver(drawChart).observe($('live-chart'));
   document.addEventListener('visibilitychange', () => {if (!document.hidden) {fetchLive(); loadHistory();}});
-  setInterval(() => {render(); renderNews(); if (activePlan()) drawChart();}, 1000);
+  setInterval(() => {render(); renderNews();}, 1000);
   setInterval(() => {if (Date.now() - lastServerSeen > 4500) fetchLive();}, 5000);
-  fetchLive(); loadHistory();
+  configureChart(); loadChart(); fetchLive(); loadHistory();
 }
