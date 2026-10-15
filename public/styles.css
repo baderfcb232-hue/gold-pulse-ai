@@ -46,3 +46,6 @@ body{background:radial-gradient(ellipse at 68% 0,#2a1c332e,transparent 55%),var(
 #live-chart-card .chart-footer a{color:var(--muted);font-size:12px;text-decoration:underline;text-underline-offset:3px}
 #live-chart-card .chart-footer a:hover{color:var(--gold)}
 @media(max-width:760px){.tradingview-chart{height:520px;min-height:460px}#live-chart-card .card-heading>div:first-child{min-width:0}#live-chart-card .segmented{max-width:100%;flex-wrap:wrap}}
+/* Display the approved artwork without redrawing its emblem or lettering. */
+.brand .brand-logo{display:block;width:190px;height:64px;flex-shrink:0}
+@media(max-width:760px){.brand .brand-logo{width:156px;height:52px}}
