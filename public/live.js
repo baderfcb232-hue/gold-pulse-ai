@@ -64,8 +64,10 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     put('scalp-status', p ? 'متابعة إشارة محفوظة' : states[state]); $('scalp-status').className = 'pill ' + (p ? 'good' : state === 'WATCH' ? 'warn' : 'neutral');
     put('scalp-reason', !live && m?.quote ? 'إصدار فرص جديدة متوقف. نحتفظ بالشارت والتحليل السابق حتى يعود مصدر حديث.'
       : p ? `الإشارة صدرت ${time(p.issued_at)} ومستوياتها ثابتة. الشروط الحالية لفرصة جديدة: ${a?.reason || 'تجري المتابعة.'}` : a?.reason || 'يجري الاتصال بمصدر السوق.');
-    put('scalp-score', live && a?.checks?.length ? `${a.score} / 100` : '—');
-    $('scalp-score-fill').style.width = live && a?.checks?.length ? a.score + '%' : '0%';
+    const score = live && a?.checks?.length && Number.isFinite(a.score) && a.score >= 0 && a.score <= 100 ? a.score : null;
+    put('scalp-score', score === null ? '— / 100' : `${score} / 100`);
+    $('scalp-score').title = score === null ? 'تقييم توافق الشروط غير متاح حاليًا.' : 'توافق الشروط، وليس احتمال نجاح الصفقة.';
+    $('scalp-score-fill').style.width = `${score ?? 0}%`;
     const checks = (a?.checks || []).map(ch => {const row = node('div', 'check'); row.append(node('span', ch.pass ? 'pass' : 'fail', ch.pass ? '✓' : '○'), node('span', '', ch.name)); return row;});
     if (m && state === 'WARMING') checks.push(empty(broker
       ? `ننتظر تحميل ${a.required_bars} شمعة مغلقة لكل إطار من البروكر؛ لا يلزم تجميعها من الصفر.`
