@@ -118,6 +118,9 @@ test('server publishes only a matching fresh broker plan once; costs and diagnos
   });
   app.ingest(raw);
   const state = app.publicState(); assert.ok(state.currentSignal); assert.equal(state.confidence, null);
+  const markets = await (await fetch(base + '/api/market')).json();
+  assert.equal(markets.markets.XAUUSD.currentSignal.id, state.currentSignal.id);
+  assert.equal(markets.markets.BTCUSD.currentSignal, null);
   assert.equal(state.currentSignal.claimedSuccessRate, null);
   assert.doesNotMatch(JSON.stringify(state), /TEST_ACCOUNT_ONLY|SYNTHETIC TEST ONLY|TEST_TOKEN|verifiedAt/);
   await app.telegram.publish(); await app.telegram.publish(); assert.equal(sends, 1);

@@ -75,7 +75,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   };
   const marketFeed = createMarketFeed({db, clock, ...feedOptions, calendar: () => snapshot?.calendar || null,
     brokerSnapshot: () => snapshot,
-    onChange: () => {researchWorker.reviewCandidates(); emit('market', () => researchMarketState(marketFeed.publicState()));}});
+    onChange: () => {researchWorker.reviewCandidates(); emit('market', marketState);}});
   const newsFeed = createNewsFeed({db, clock, ...feedOptions, onChange: () => emit('news', newsFeed.publicState)});
   const telegram = createTelegramPublisher({db, clock, ...telegramOptions, enabled: cfg.publicationEnabled,
     signals: () => {const p = publicationReview().plan; return p ? [p] : [];}});
@@ -87,6 +87,16 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       p.bar_time === a.plan?.bar_time && p.side === a.plan?.side);
     return reviewPublication({enabled: cfg.publicationEnabled, snapshot, analysis: a, plan,
       costs: costStatus(), daily: researchWorker.brokerContext(), now: clock(), config: cfg});
+  }
+  function marketState() {
+    const state = researchMarketState(marketFeed.publicState()), plan = publicationReview().plan;
+    const gold = state.markets.XAUUSD;
+    // A broker plan may appear over its own gold feed. It must never be drawn
+    // over Coinbase or Gold API prices, including a broker's BTC CFD plan.
+    if (plan && gold?.broker_symbol === plan.symbol && gold.source?.startsWith('MT5'))
+      state.markets.XAUUSD = {...gold, currentSignal: plan, suspendedSignal: null,
+        analysis: {...gold.analysis, decision: plan.side, status: 'READY', reason: publicationReasons.READY}};
+    return state;
   }
   const cookieSession = req => {
     const key = (req.headers.cookie ?? '').split(';').map(s => s.trim()).find(s => s.startsWith('nabd_session='))?.slice(13);
@@ -214,7 +224,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       if (path === '/research.html' && req.method === 'GET')
         return send(req, res, 303, '', 'text/plain; charset=utf-8', {Location: '/'});
       if (path === '/api/state' && req.method === 'GET') return send(req, res, 200, publicState());
-      if (path === '/api/market' && req.method === 'GET') return send(req, res, 200, researchMarketState(marketFeed.publicState()));
+      if (path === '/api/market' && req.method === 'GET') return send(req, res, 200, marketState());
       if (path === '/api/news' && req.method === 'GET') return send(req, res, 200, newsFeed.publicState());
       if (path === '/api/market/candles' && req.method === 'GET') {
         const data = marketFeed.candles(url.searchParams.get('symbol') || 'XAUUSD', url.searchParams.get('tf') || 'M1');
@@ -230,7 +240,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         if (clients.size >= 200) return send(req, res, 503, {error: 'Too many connections'});
         res.writeHead(200, {...headers(req), 'Content-Type': 'text/event-stream; charset=utf-8', Connection: 'keep-alive', 'X-Accel-Buffering': 'no'});
         res.write('event: state\ndata: ' + JSON.stringify(publicState()) + '\n\n');
-        res.write('event: market\ndata: ' + JSON.stringify(researchMarketState(marketFeed.publicState())) + '\n\n');
+        res.write('event: market\ndata: ' + JSON.stringify(marketState()) + '\n\n');
         res.write('event: news\ndata: ' + JSON.stringify(newsFeed.publicState()) + '\n\n');
         clients.add(res); req.on('close', () => clients.delete(res)); return;
       }
