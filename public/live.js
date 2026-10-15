@@ -66,7 +66,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     put('live-chart-kind', broker ? 'شموع مغلقة من البروكر · الخطط متابعة افتراضية' : 'آخر شمعة قيد التكوين · خطوط الخطة مرجعية');
     put('live-source-note', broker ? `متوسط سعر الشراء والبيع لـ ${m.broker_symbol}. التحليل يستخدم شموع البروكر المغلقة؛ تاريخها يصل من الجسر دون انتظار تجميع جديد.`
       : m ? `${m.symbol === 'XAUUSD' ? 'الذهب المرجعي يُجلب كل نحو 30 ثانية؛ الشموع من عينات السعر المتاحة.' : (m.transport === 'WebSocket' ? 'بث Coinbase المباشر؛' : 'جلب Coinbase الاحتياطي كل ثانية؛') + ' سعر BTC-USD على المنصة.'} مستقل عن سعر تنفيذ بروكرك.` : 'ننتظر بيانات المصدر؛ لن نعرض أسعارًا تجريبية.');
-    const states = {RESEARCH_ONLY: 'بحث فقط · التوصيات متوقفة', NO_DATA: 'انتظار المصدر', WARMING: 'تحميل الشموع', SCANNING: 'البحث عن فرصة', WATCH: 'فرصة مشروطة', READY: 'تحققت شروط السعر', GAP: 'فجوة بيانات', NEWS_BLOCK: 'فلتر الأخبار', BLOCKED: 'شروط الدخول تمنع الإشارة', STALE: 'تحديث متأخر'};
+    const states = {NO_DATA: 'انتظار المصدر', WARMING: 'تحميل الشموع', SCANNING: 'البحث عن فرصة', WATCH: 'فرصة مشروطة', READY: 'تحققت شروط السعر', GAP: 'فجوة بيانات', NEWS_BLOCK: 'فلتر الأخبار', BLOCKED: 'شروط الدخول تمنع الإشارة', STALE: 'تحديث متأخر'};
     const state = !live && m?.quote ? 'STALE' : a?.status || 'NO_DATA';
     put('scalp-decision', p ? side(p.side) + (broker ? ' · MT5' : ' · مرجعي') : states[state]);
     $('scalp-decision').className = p ? (p.side === 'BUY' ? 'buy' : 'sell') : '';
@@ -92,7 +92,6 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
       node('span', 'subtle', `${time(p.issued_at)} · ${status[p.status] || 'مراقبة'}`)); return row;
   }
   function renderPlan(m, p, confirmed) {
-    if(data?.researchPolicy?.publicationAllowed === false){put('scalp-plan-status', 'بحث فقط'); $('scalp-plan').replaceChildren(empty(data.researchPolicy.reason)); return;}
     put('scalp-plan-status', confirmed ? 'خطة متابعة' : p ? 'بانتظار التأكيد' : 'مراقبة');
     if (!p) {const box = node('div', 'empty-signal'); box.append(node('span', 'empty-symbol', '⌖'), node('h3', '', m?.analysis?.status === 'WARMING' ? m.candle_kind === 'BROKER_OHLC' ? 'بانتظار تحميل شموع البروكر' : 'يجري بناء سجل ' + m.name : 'نبحث عن فرصة'),
       node('p', '', m?.suspendedSignal ? 'متابعة الخطة معلّقة حتى يعود سعر حديث؛ مستوياتها محفوظة في سجل الفرص.' : 'تظهر مستويات الدخول والوقف والأهداف عندما يتوافق الاتجاه وتكتمل البيانات.')); $('scalp-plan').replaceChildren(box); return;}
