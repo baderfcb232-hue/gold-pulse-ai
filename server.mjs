@@ -352,10 +352,10 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         audit('COMMAND_RESULT', {id: c.id, status: b.status, message: text(b.message, 500)});
         return send(req, res, 200, {ok: true});
       }
-      const files = {'/':'index.html','/index.html':'index.html','/app.js':'app.js','/live.js':'live.js','/state-connection.js':'state-connection.js','/styles.css':'styles.css','/manifest.webmanifest':'manifest.webmanifest','/icon.svg':'icon.svg'};
+      const files = {'/':'index.html','/index.html':'index.html','/app.js':'app.js','/live.js':'live.js','/state-connection.js':'state-connection.js','/styles.css':'styles.css','/manifest.webmanifest':'manifest.webmanifest','/icon.svg':'icon.svg','/brand-logo.png':'brand-logo.png'};
       if (req.method === 'GET' && files[path]) {
         const type = path.endsWith('.js') ? 'text/javascript; charset=utf-8' : path.endsWith('.css') ? 'text/css; charset=utf-8'
-          : path.endsWith('.webmanifest') ? 'application/manifest+json' : path.endsWith('.svg') ? 'image/svg+xml' : 'text/html; charset=utf-8';
+          : path.endsWith('.webmanifest') ? 'application/manifest+json' : path.endsWith('.svg') ? 'image/svg+xml' : path.endsWith('.png') ? 'image/png' : 'text/html; charset=utf-8';
         return send(req, res, 200, readFileSync(resolve(PUBLIC, files[path])), type);
       }
       send(req, res, 404, {error: 'Not found'});
