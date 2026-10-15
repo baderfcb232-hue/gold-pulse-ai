@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {createTelegramPublisher, formatSignal} from './telegram.mjs';
+import {fakeTelegram} from './tests/fixtures.mjs';
 test('only new active signals are delivered once', async () => {
   const db = new DatabaseSync(':memory:');
   let now = 100, calls = 0;
   const p = {id:'old',symbol:'XAUUSD',side:'BUY',status:'TRACKING',issued_at:99,expires_at:200,entry:10,sl:9,tp1:11,tp2:12};
   let signals = [p];
   const pub = createTelegramPublisher({db,clock:()=>now,signals:()=>signals,token:'test',chatId:'test',enabled:true,
-    fetcher:async()=>{calls++;return {ok:true,json:async()=>({ok:true})};}});
+    fetcher:fakeTelegram(async()=>{calls++;return {ok:true,json:async()=>({ok:true})};})});
   try {
     await pub.publish(); assert.equal(calls,0);
     now=102; signals=[{...p,id:'new',issued_at:101}];
@@ -21,11 +22,41 @@ test('uncertain delivery is not repeated and signal errors are contained', async
   let calls=0, failSource=false;
   const pub=createTelegramPublisher({db,clock:()=>100,token:'test',chatId:'test',enabled:true,
     signals:()=>{if(failSource)throw Error('private');return [{id:'new',side:'SELL',status:'TRACKING',issued_at:100,expires_at:200}];},
-    fetcher:async()=>{calls++;throw Error('private');}});
+    fetcher:fakeTelegram(async()=>{calls++;throw Error('private');})});
   try {
     await pub.publish();await pub.publish();assert.equal(calls,1);
     assert.equal(pub.status().deliveries[0].state,'UNCERTAIN');
     failSource=true;await pub.publish();assert.match(pub.status().lastError,/temporarily/);
     assert.match(formatSignal({symbol:'BTCUSD',side:'SELL',entry:null}),/الدخول: —/);
   } finally {await pub.close();db.close();}
+});
+
+test('publisher rejects missing, future and nonfinite issue/expiry times before claiming delivery', async () => {
+  const db = new DatabaseSync(':memory:'); let sends = 0;
+  const valid = {id: 'TEST', side: 'BUY', status: 'TRACKING', issued_at: 100, expires_at: 200};
+  const invalid = [{issued_at: undefined}, {issued_at: NaN}, {issued_at: 106}, {expires_at: Infinity}];
+  const pub = createTelegramPublisher({db, clock: () => 100, enabled: true, token: 'TEST', chatId: 'TEST',
+    signals: () => invalid.map((x, i) => ({...valid, ...x, id: 'INVALID_' + i})),
+    fetcher: fakeTelegram(async () => {sends++; return new Response('{"ok":true}');})});
+  try {await pub.publish(); assert.equal(sends, 0); assert.deepEqual(pub.status().deliveries, []);}
+  finally {await pub.close(); db.close();}
+});
+
+test('missing channel posting permission blocks signal polling and retries the check with bounded cadence', async () => {
+  const db = new DatabaseSync(':memory:'); let now = 100, checks = 0, sources = 0;
+  const transport = fakeTelegram(async () => {throw Error('Must not send');});
+  const pub = createTelegramPublisher({db, clock: () => now, enabled: true, token: 'TEST', chatId: 'TEST',
+    signals: () => {sources++; return [];}, fetcher: async (url, options) => {
+      checks++;
+      if (String(url).endsWith('/getChatMember')) return new Response(JSON.stringify({ok: true,
+        result: {status: 'administrator', user: {id: 123}, can_post_messages: false}}));
+      return transport(url, options);
+    }});
+  try {
+    await pub.publish(); assert.equal(checks, 3); assert.equal(sources, 0);
+    assert.equal(pub.status().verification.state, 'FAILED'); assert.equal(pub.status().mode, 'WAITING_VERIFICATION');
+    await pub.publish(); assert.equal(checks, 3);
+    now += 301; await pub.publish(); assert.equal(checks, 6); assert.equal(sources, 0);
+    assert.deepEqual(pub.status().deliveries, []);
+  } finally {await pub.close(); db.close();}
 });

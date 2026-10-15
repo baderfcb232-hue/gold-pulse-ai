@@ -47,7 +47,7 @@ test('worker automatically loads daily history once, refreshes hourly and preser
 test('broker daily analysis and known-cost backtest run internally without mixing reference sources', async () => {
   const db = new DatabaseSync(':memory:');
   const worker = createResearchWorker({db, clock: () => NOW,
-    costs: {XAUUSD: {spreadBps: 2, slippageBps: 1, commissionBps: 1, carryBpsPerDay: .1, acknowledged: true}}});
+    brokerCosts: s => s.symbol.startsWith('XAU') ? {spreadBps: 2, slippageBps: 1, commissionBps: 1, carryBpsPerDay: .1, acknowledged: true} : null});
   try {
     worker.acceptBrokerDaily({symbol: 'XAUUSD.m', broker: 'TEST_BROKER', daily_candles: daily(1000)});
     const r = worker.status().markets['MT5:XAUUSD.m'];
@@ -56,6 +56,25 @@ test('broker daily analysis and known-cost backtest run internally without mixin
     worker.acceptBrokerDaily({symbol: 'BTCUSD', broker: 'TEST_BROKER', daily_candles: daily(1000)});
     assert.ok(worker.status().markets['MT5:BTCUSD']); assert.equal(worker.status().markets.BTCUSD, undefined);
     assert.equal(worker.status().publicationAllowed, false);
+  } finally {await worker.close(); db.close();}
+});
+
+test('broker cost changes recalculate identical candles and unbound reference costs never cross into MT5', async () => {
+  const db = new DatabaseSync(':memory:'); let costs = null;
+  const worker = createResearchWorker({db, clock: () => NOW, brokerCosts: () => costs,
+    costs: {XAUUSD: {spreadBps: 0, slippageBps: 0, commissionBps: 0, carryBpsPerDay: 0, acknowledged: true}}});
+  try {
+    const snapshot = {symbol: 'XAUUSD', account_ref: 'TEST_ACCOUNT', broker: 'TEST_BROKER',
+      execution: {managed_magic: '1'}, daily_candles: daily(1000)};
+    worker.acceptBrokerDaily(snapshot);
+    assert.equal(worker.status().markets['MT5:XAUUSD'].backtest.status, 'WAITING_COSTS');
+    assert.ok(worker.brokerContext(snapshot));
+    assert.equal(worker.brokerContext({...snapshot, account_ref: 'OTHER_ACCOUNT'}), null);
+    costs = {spreadBps: 2, slippageBps: 1, commissionBps: 1, carryBpsPerDay: .1, acknowledged: true};
+    worker.acceptBrokerDaily(snapshot);
+    assert.equal(worker.status().markets['MT5:XAUUSD'].backtest.status, 'SIMULATION_ONLY');
+    costs = null; worker.acceptBrokerDaily(snapshot);
+    assert.equal(worker.status().markets['MT5:XAUUSD'].backtest.status, 'WAITING_COSTS');
   } finally {await worker.close(); db.close();}
 });
 

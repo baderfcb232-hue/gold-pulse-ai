@@ -13,6 +13,8 @@ import {createTelegramPublisher} from './telegram.mjs';
 import {researchPolicy, researchMarketState} from './research-policy.mjs';
 import {researchCatalog} from './research-catalog.mjs';
 import {createResearchWorker} from './research-worker.mjs';
+import {brokerCostStatus} from './broker-costs.mjs';
+import {reviewPublication, publicationReasons} from './publication.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = resolve(ROOT, 'public');
@@ -31,7 +33,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   ingestToken = process.env.MT5_INGEST_TOKEN || '', dashboardToken = process.env.DASHBOARD_TOKEN || '',
   publicBase = process.env.PUBLIC_BASE_URL || (process.env.RENDER === 'true' ? 'https://gold-pulse-ai.onrender.com' : ''),
   storagePersistent = process.env.PERSISTENT_STORAGE_CONFIRMED === 'true', clock = () => Date.now() / 1000,
-  config = {}, feedOptions = {}, researchOptions = {}} = {}) {
+  config = {}, feedOptions = {}, researchOptions = {}, telegramOptions = {}} = {}) {
   if (ingestToken.length >= 32 && ingestToken === dashboardToken)
     throw new Error('MT5_INGEST_TOKEN and DASHBOARD_TOKEN must be different.');
   mkdirSync(dataDir, {recursive: true, mode: 0o700});
@@ -46,9 +48,18 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   let snapshot = null;
   try { const row = db.prepare('SELECT data FROM snapshot WHERE id=1').get(); if (row) snapshot = JSON.parse(row.data); } catch {}
   let lastSource = snapshot ? `${snapshot.account_ref}|${snapshot.broker}|${snapshot.symbol}|${snapshot.execution.managed_magic}` : null;
+  const cfg = {...defaults, signalSource: process.env.SIGNAL_SOURCE || 'EA',
+    publicationEnabled: process.env.SIGNAL_PUBLICATION_ENABLED === 'true', ...config};
+  if (!['EA','DASHBOARD'].includes(cfg.signalSource)) throw new Error('SIGNAL_SOURCE must be EA or DASHBOARD');
+  if (typeof cfg.publicationEnabled !== 'boolean') throw new Error('publicationEnabled must be a boolean');
+  let costProfiles;
+  try {costProfiles = JSON.parse(process.env.BROKER_COST_PROFILES_JSON || '[]');} catch {costProfiles = null;}
+  if (config.brokerCostProfiles !== undefined) costProfiles = config.brokerCostProfiles;
+  const costStatus = (s = snapshot) => brokerCostStatus(s, costProfiles, clock());
   let researchCosts = {};
   try {researchCosts = JSON.parse(process.env.RESEARCH_COSTS_JSON || '{}');} catch {}
   const researchWorker = createResearchWorker({db, clock, brokerSnapshot: () => snapshot, costs: researchCosts,
+    brokerCosts: s => costStatus(s).costs || null,
     onUpdate: r => console.info(`NABD internal daily analysis: ${r.symbol}, ${r.candles} candles, ${r.status}`),
     candidates: () => [sourceAnalysis(snapshot, clock(), cfg).plan,
       ...Object.values(marketFeed.publicState().markets).map(m => m.currentSignal)], ...researchOptions});
@@ -66,16 +77,17 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     brokerSnapshot: () => snapshot,
     onChange: () => {researchWorker.reviewCandidates(); emit('market', () => researchMarketState(marketFeed.publicState()));}});
   const newsFeed = createNewsFeed({db, clock, ...feedOptions, onChange: () => emit('news', newsFeed.publicState)});
-  const telegram = createTelegramPublisher({db, clock, enabled: researchPolicy.publicationAllowed, signals: () => {
-    const state = publicState();
-    const markets = marketFeed.publicState().markets;
-    return [state.currentSignal, ...Object.values(markets).map(m => m.currentSignal)].filter(Boolean);
-  }});
+  const telegram = createTelegramPublisher({db, clock, ...telegramOptions, enabled: cfg.publicationEnabled,
+    signals: () => {const p = publicationReview().plan; return p ? [p] : [];}});
   let revision = 0;
-  const cfg = {...defaults, signalSource: process.env.SIGNAL_SOURCE || 'EA', ...config};
-  if (!['EA','DASHBOARD'].includes(cfg.signalSource)) throw new Error('SIGNAL_SOURCE must be EA or DASHBOARD');
   const audit = (event, data) => db.prepare('INSERT INTO audit(time,event,data) VALUES(?,?,?)').run(clock(), event, JSON.stringify(data));
   const signalRows = () => db.prepare('SELECT data FROM signals ORDER BY issued_at DESC LIMIT 200').all().map(x => JSON.parse(x.data));
+  function publicationReview(a = sourceAnalysis(snapshot, clock(), cfg)) {
+    const plan = signalRows().find(p => p.status === 'TRACKING' && p.strategy === a.strategy &&
+      p.bar_time === a.plan?.bar_time && p.side === a.plan?.side);
+    return reviewPublication({enabled: cfg.publicationEnabled, snapshot, analysis: a, plan,
+      costs: costStatus(), daily: researchWorker.brokerContext(), now: clock(), config: cfg});
+  }
   const cookieSession = req => {
     const key = (req.headers.cookie ?? '').split(';').map(s => s.trim()).find(s => s.startsWith('nabd_session='))?.slice(13);
     const expiry = sessions.get(key);
@@ -115,19 +127,20 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   }
   function publicState() {
     const a = sourceAnalysis(snapshot, clock(), cfg);
+    const publication = publicationReview(a);
     const active = signalRows().find(s => s.status === 'TRACKING' && (a.source === 'MT5_EA' ? s.source === 'MT5_EA' : s.source !== 'MT5_EA'));
     const available = a.connection === 'LIVE' && a.source_ready;
-    return {version: '3.3.3', revision, symbol: snapshot?.symbol || 'XAUUSD', broker: snapshot?.broker || null,
+    return {version: '3.3.4', revision, symbol: snapshot?.symbol || 'XAUUSD', broker: snapshot?.broker || null,
       bid: snapshot?.bid ?? null, ask: snapshot?.ask ?? null,
       spread: snapshot ? (snapshot.ask - snapshot.bid) / snapshot.spec.point : null,
       spreadUnit: 'points', lastUpdate: snapshot?.quote_at ?? null,
       bridgeReceivedAt: snapshot?.received_at ?? null, terminalConnected: snapshot?.terminal_connected ?? null,
       connection: a.connection, quoteAge: a.quote_age,
-      aiDecision: 'WAIT', confidence: null, confidenceMeaning: 'CONDITION_SCORE',
-      riskLevel: a.risk, reasons: [researchPolicy.reason, ...a.reasons], checks: a.checks,
+      aiDecision: publication.plan?.side || 'WAIT', confidence: null, confidenceMeaning: 'CONDITION_SCORE',
+      riskLevel: a.risk, reasons: [publicationReasons[publication.reason], ...a.reasons], checks: a.checks,
       timeframes: a.frames, zones: a.zones, strategy: a.strategy,
       signalSource: a.source, signalSourceReady: a.source_ready,
-      currentSignal: null,
+      currentSignal: publication.plan,
       suspendedSignal: !available ? active?.id ?? null : null,
       bot: snapshot?.ea ? {heartbeat_at: snapshot.ea.heartbeat_at, checked_at: snapshot.ea.checked_at,
         emergency_stop: snapshot.ea.emergency_stop, settings: snapshot.ea.settings} : null,
@@ -171,8 +184,14 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       if (!['GET', 'POST'].includes(req.method)) return send(req, res, 405, {error: 'Method not allowed'});
       if (req.method === 'POST' && !ownOrigin(req)) return send(req, res, 403, {error: 'Origin rejected'});
       if (path === '/healthz' && req.method === 'GET') {
-        const state = publicState(), sources = marketFeed.publicState().markets;
-        return send(req, res, 200, {ok: true, version: '3.3.3', storage: storagePersistent ? 'persistent' : 'ephemeral',
+        const state = publicState(), sources = marketFeed.publicState().markets, messaging = telegram.status();
+        const publication = publicationReview();
+        return send(req, res, 200, {ok: true, version: '3.3.4', storage: storagePersistent ? 'persistent' : 'ephemeral',
+          publication: {enabled: cfg.publicationEnabled, ready: publication.ready && messaging.verification.canPost,
+            reason: !cfg.publicationEnabled ? 'PAUSED' : !messaging.configured ? 'TELEGRAM_NOT_CONFIGURED'
+              : !messaging.verification.canPost ? 'TELEGRAM_NOT_VERIFIED' : publication.reason,
+            costs: costStatus().status, telegram: {configured: messaging.configured,
+              mode: messaging.mode, verification: messaging.verification}},
           mt5: {connection: state.connection, signalSourceReady: state.signalSourceReady,
             quoteAgeSeconds: state.quoteAge, lastQuoteAt: state.lastUpdate, lastIngestAt: snapshot?.received_at ?? null},
           markets: Object.fromEntries(Object.entries(sources).map(([symbol, source]) => [symbol, {
@@ -181,7 +200,12 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       }
       if (path === '/api/telegram/status' && req.method === 'GET') {
         if (!operator(req)) return send(req, res, 401, {error: 'Operator login required'});
-        return send(req, res, 200, telegram.status());
+        const {plan, ...publication} = publicationReview();
+        return send(req, res, 200, {...telegram.status(), publication});
+      }
+      if (path === '/api/internal/costs' && req.method === 'GET') {
+        if (!operator(req)) return send(req, res, 401, {error: 'Operator login required'});
+        return send(req, res, 200, costStatus());
       }
       if (['/api/research', '/api/internal/research'].includes(path) && req.method === 'GET') {
         if (!operator(req)) return send(req, res, 401, {error: 'Operator login required'});
@@ -349,14 +373,14 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   const close = async () => {clearInterval(timer); for (const c of clients) c.end();
     await Promise.allSettled([telegram.close(), marketFeed.close(), newsFeed.close(), researchWorker.close()]);
     await new Promise(r => server.close(r)); db.close();};
-  return {server, ingest, publicState, signalRows, db, close, marketFeed, newsFeed, researchWorker,
+  return {server, ingest, publicState, signalRows, db, close, marketFeed, newsFeed, researchWorker, telegram,
     startFeeds: () => {marketFeed.start(); newsFeed.start(); researchWorker.start();}};
 }
 export function startServer() {
   const app = createApplication();
   const port = Number(process.env.PORT || 3000);
   app.server.listen(port, process.env.BIND_ADDRESS || '0.0.0.0', () => {
-    console.log(`NABD v3.3.3 listening on ${app.server.address().port}`);
+    console.log(`NABD v3.3.4 listening on ${app.server.address().port}`);
     if (process.env.PUBLIC_FEEDS_ENABLED !== 'false') app.startFeeds();
   });
   if (!(process.env.MT5_INGEST_TOKEN?.length >= 32 && process.env.DASHBOARD_TOKEN?.length >= 32))

@@ -1,5 +1,6 @@
 import {readFeed, retrySeconds} from './feed-http.mjs';
 import {runResearch, analyzeDailyContext} from './research-engine.mjs';
+import {createHash} from 'node:crypto';
 
 const DAY = 86400;
 export function parseDailyCandles(raw, start, end, now) {
@@ -15,7 +16,7 @@ export function parseDailyCandles(raw, start, end, now) {
 
 // No order API or publisher is reachable from this worker.
 export function createResearchWorker({db, clock = () => Date.now() / 1000, fetcher = fetch,
-  brokerSnapshot = () => null, candidates = () => [], costs = {}, onUpdate = () => {}}) {
+  brokerSnapshot = () => null, brokerCosts = () => null, candidates = () => [], costs = {}, onUpdate = () => {}}) {
   if (!costs || typeof costs !== 'object' || Array.isArray(costs)) costs = {};
   db.exec('CREATE TABLE IF NOT EXISTS internal_research (symbol TEXT PRIMARY KEY, data TEXT NOT NULL)');
   const records = {};
@@ -31,8 +32,9 @@ export function createResearchWorker({db, clock = () => Date.now() / 1000, fetch
     const costKey = /^BTC/i.test(data.symbol) ? 'BTCUSD' : 'XAUUSD';
     let backtest = {status: 'WAITING_COSTS', publicationAllowed: false};
     if (data.bars.length < 800) backtest.status = 'WAITING_HISTORY';
-    else if (costs[costKey]) {
-      try {backtest = {status: 'SIMULATION_ONLY', report: runResearch({...data, costs: costs[costKey]}, clock())};}
+    const scenario = symbol.startsWith('MT5:') ? data.costScenario : costs[costKey];
+    if (data.bars.length >= 800 && scenario) {
+      try {backtest = {status: 'SIMULATION_ONLY', report: runResearch({...data, costs: scenario}, clock())};}
       catch {backtest = {status: 'INVALID_COSTS_OR_HISTORY', publicationAllowed: false};}
     }
     records[symbol] = {...data, evaluatedAt: clock(), context, backtest, error: null, publicationAllowed: false};
@@ -43,10 +45,17 @@ export function createResearchWorker({db, clock = () => Date.now() / 1000, fetch
     if (!snapshot?.daily_candles?.length) return;
     const symbol = snapshot.symbol, source = `MT5 · ${snapshot.broker}`;
     const key = 'MT5:' + symbol, old = records[key], bars = snapshot.daily_candles;
-    if (old?.source === source && old?.bars?.length === bars.length && old.bars.at(-1)?.time === bars.at(-1).time &&
-      old.bars.at(-1)?.close === bars.at(-1).close) return;
-    try {evaluate(key, {symbol, source, timeframe: 'D1', bars});}
+    const sourceIdentity = identity(snapshot), costScenario = brokerCosts(snapshot);
+    const fingerprint = createHash('sha256').update(JSON.stringify([sourceIdentity, bars, costScenario])).digest('hex');
+    if (old?.fingerprint === fingerprint) return;
+    try {evaluate(key, {symbol, source, sourceIdentity, fingerprint, costScenario, timeframe: 'D1', bars});}
     catch {records[key] = {symbol, source, timeframe: 'D1', error: 'INVALID_OR_INSUFFICIENT_DAILY_HISTORY', publicationAllowed: false}; persist(key);}
+  }
+  function identity(s) {return JSON.stringify([s.account_ref, s.broker, s.symbol, s.execution?.managed_magic]);}
+  function brokerContext(snapshot = brokerSnapshot()) {
+    const r = snapshot && records['MT5:' + snapshot.symbol];
+    if (!r?.context || r.error || r.sourceIdentity !== identity(snapshot)) return null;
+    return {...r.context, status: clock() - r.context.lastClosedAt > 3 * DAY ? 'STALE' : r.context.status};
   }
   function reviewCandidates() {
     let plans;
@@ -99,7 +108,7 @@ export function createResearchWorker({db, clock = () => Date.now() / 1000, fetch
     if (!Object.keys(markets).some(s => /XAU|GOLD/i.test(s))) markets.XAUUSD = {status: 'WAITING_BROKER_D1', publicationAllowed: false};
     return {mode: 'INTERNAL_ONLY', running: started && !closed, markets, candidateReviews, publicationAllowed: false};
   }
-  return {refresh, acceptBrokerDaily, reviewCandidates, status,
+  return {refresh, acceptBrokerDaily, reviewCandidates, brokerContext, status,
     start() {if (started || closed) return; started = true; refresh().catch(() => {}); timer = setInterval(() => {refresh().catch(() => {});}, 60000); timer.unref();},
     async close() {closed = true; clearInterval(timer); controller.abort(); if (pending) await pending;}};
 }
