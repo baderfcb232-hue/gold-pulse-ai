@@ -187,6 +187,11 @@ test('verification mail uses an HTTPS site link, keeps its token out of query st
   await mail({email: 'member@example.test', token: 'test-only-token', kind: 'verify'});
   assert.equal(sent.url, 'https://api.resend.com/emails'); const body = JSON.parse(sent.options.body);
   assert.deepEqual(body.to, ['member@example.test']); assert.match(body.text, /https:\/\/nabd.example\/auth#verify=test-only-token/); assert.doesNotMatch(body.text, /\?token=/);
+  const brevo = createAuthMailer({provider: 'brevo', apiKey: 'test-brevo-key', from: 'NABD <test@example.test>', publicBase: 'https://nabd.example', fetcher: async (url, options) => {sent = {url, options}; return new Response('{}');}});
+  await brevo({email: 'member@example.test', token: 'test-token', kind: 'reset'});
+  assert.equal(sent.url, 'https://api.brevo.com/v3/smtp/email'); assert.equal(sent.options.headers['api-key'], 'test-brevo-key');
+  const brevoBody = JSON.parse(sent.options.body); assert.deepEqual(brevoBody.sender, {name: 'NABD', email: 'test@example.test'});
+  assert.match(brevoBody.textContent, /\/auth#reset=test-token/);
   const broken = createAuthMailer({apiKey: 'test-key', from: 'test@example.test', publicBase: 'https://nabd.example', fetcher: async () => new Response('{}', {status: 500})});
   await assert.rejects(broken({email: 'member@example.test', token: 'test-token', kind: 'reset'}), /unavailable/);
 });
