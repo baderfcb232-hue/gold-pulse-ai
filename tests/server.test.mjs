@@ -53,7 +53,7 @@ test('weekend telemetry is accepted while stale quotes block signals and command
   raw.quote_at=NOW;raw.candles=fixture().candles;
   assert.equal((await post(base,'/api/mt5',raw,INGEST)).status,200);
   state=await (await fetch(base+'/api/state')).json();
-  assert.equal(state.connection,'LIVE');assert.equal(state.currentSignal,null);assert.equal(state.researchPolicy.publicationAllowed,false);
+  assert.equal(state.connection,'LIVE');assert.equal(state.currentSignal,null);assert.equal('researchPolicy' in state,false);
   assert.equal((await post(base,'/api/mt5',{...raw,quote_at:0},INGEST)).status,400);
   assert.equal((await post(base,'/api/mt5',{...raw,quote_at:NOW+60},INGEST)).status,400);
 });
