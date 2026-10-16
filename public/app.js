@@ -76,6 +76,16 @@ function renderOverview(){
   $('decision').className=live&&mainReady&&s.aiDecision==='BUY'?'buy':live&&mainReady&&s.aiDecision==='SELL'?'sell':'';
   const reasons=!live?[c==='ERROR'?'تعذر الوصول للخادم؛ البيانات المعروضة قديمة.':s.lastUpdate?'سعر MT5 متأخر أو اتصال البروكر منقطع؛ إصدار الإشارات الجديدة معلّق.':'لم يصل سعر من MT5 بعد؛ شغّل الجسر وتحقق من إعدادات الربط.']:mainReady?s.reasons:['الأسعار وصلت؛ ننتظر حالة البوت التجاري من الجسر على المنصة نفسها.'];
   put('decision-reason',(reasons||[]).join(' · ')||'بانتظار تحقق شروط الدخول.');
+  let readiness = $('publication-readiness');
+  if (!readiness) {
+    readiness = e('details', 'card'); readiness.id = 'publication-readiness';
+    $('decision-reason').after(readiness);
+  }
+  const stages = s.publicationReadiness || [], missing = stages.filter(x => !x.ready);
+  const summary = e('summary', '', stages.length ? `متطلبات إرسال تليجرام · ${missing.length ? missing.length + ' بانتظار الإكمال' : 'مكتملة؛ ننتظر فرصة مستوفية للشروط'}` : 'متطلبات الإرسال بانتظار بيانات الخادم');
+  readiness.replaceChildren(summary, ...stages.map(stage => {
+    const row = e('p', 'subtle'); row.textContent = `${stage.ready ? '✓' : '○'} ${stage.label}: ${stage.detail}`; return row;
+  }));
   put('score',live&&s.confidence!=null?`${num(s.confidence,0)} / 100`:'—');$('score-fill').style.width=live&&s.confidence!=null?Math.min(100,Math.max(0,s.confidence))+'%':'0%';
   put('banner-title',live?(!mainReady?'انتظار البوت':risk==='BLOCKED'?'الدخول متوقف مؤقتًا':s.aiDecision==='WAIT'?'متابعة السوق':ea?'خطة صادرة من البوت':'تحققت شروط إشارة جديدة'):(labels[c]||'انتظار الربط'));
   put('banner-detail',live?(reasons?.[0]||'الأسعار والتحليل من نفس مصدر MT5.'):'إصدار إشارات جديدة متوقف إلى أن يصل سعر حديث وبيانات مكتملة.');
