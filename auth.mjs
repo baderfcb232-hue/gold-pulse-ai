@@ -32,7 +32,7 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
   const provider = env.AUTH_MAIL_PROVIDER || 'resend';
   const mailConfigured = Boolean(injectedMailer || (env.AUTH_MAIL_FROM && (smtp || (env.AUTH_MAIL_API_KEY && ['resend', 'brevo'].includes(provider)))));
   const mailer = injectedMailer || createAuthMailer({apiKey: env.AUTH_MAIL_API_KEY, from: env.AUTH_MAIL_FROM, publicBase: base, provider, smtp});
-  let store = injectedStore, online = false, healthy = true, closed = false, timer, backupBusy = false;
+  let store = injectedStore, databaseReady = false, online = false, healthy = true, closed = false, timer, backupBusy = false;
   let backup = injectedBackup || {key: null, storage: null}, lastBackup = null, backupState = 'NOT_CONFIGURED';
   const needs = [];
   if (!store && !env.AUTH_DATABASE_URL) needs.push('DATABASE');
@@ -41,13 +41,16 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
   if (!owner || !owner.includes('@')) needs.push('ADMIN_EMAIL');
   if (!base || (!secure && !injectedStore)) needs.push('HTTPS_URL');
   const status = () => ({ready: online && healthy, status: online && healthy ? 'READY' : needs.length ? 'SETUP_REQUIRED' : 'UNAVAILABLE',
-    missing: [...needs], persistence: online && store.kind === 'postgres' ? 'postgres' : injectedStore ? 'test-only' : 'unavailable',
+    missing: [...needs], database: databaseReady ? 'CONNECTED' : needs.includes('DATABASE') ? 'NOT_CONFIGURED' : 'UNAVAILABLE',
+    persistence: databaseReady && store.kind === 'postgres' ? 'postgres' : injectedStore ? 'test-only' : 'unavailable',
     email: mailConfigured ? 'CONFIGURED' : 'NOT_CONFIGURED', backups: {state: backupState, last_success: lastBackup},
     note: online ? null : 'التسجيل بانتظار تهيئة الحفظ الدائم والبريد من مسؤول الموقع.'});
   const ready = (async () => {
-    if (needs.length) return;
+    if (!store && !env.AUTH_DATABASE_URL) return;
     try {
       store ||= await postgresAuthStore(env.AUTH_DATABASE_URL); await store.initialize();
+      databaseReady = true;
+      if (needs.length) return;
       if (!injectedBackup) backup = backupConfig(env);
       backupState = backup.key && backup.storage ? 'READY' : 'NOT_CONFIGURED';
       const last = (await store.query("SELECT value FROM nabd_auth_settings WHERE key='last_backup'")).rows[0];
