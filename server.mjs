@@ -101,6 +101,25 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     return reviewPublication({enabled: cfg.publicationEnabled, snapshot, analysis: a, plan,
       costs: costStatus(), daily: researchWorker.brokerContext(), now: clock(), config: cfg});
   }
+  // Independent prerequisites: show every missing input, even when no plan exists.
+  // These diagnostics never grant publication permission or change its filters.
+  function publicationReadiness(a = sourceAnalysis(snapshot, clock(), cfg)) {
+    const now = clock(), daily = researchWorker.brokerContext(), costs = costStatus();
+    const cal = snapshot?.calendar, messaging = telegram.status();
+    const framesReady = ['M5','M15','H1','H4'].every(tf =>
+      a.frames?.[tf]?.count >= 220 && a.frames[tf].direction !== 'UNKNOWN');
+    const recentDaily = daily?.status === 'CONTEXT_ONLY' && now - daily.lastClosedAt <= 3 * 86400;
+    const calendarReady = cal?.status === 'ok' && cal.updated_at > 0 && now - cal.updated_at <= cfg.calendarTtl;
+    return [
+      {id: 'publication', ready: cfg.publicationEnabled, label: 'تفعيل إرسال التوصيات', detail: cfg.publicationEnabled ? 'مفعّل' : 'الإرسال متوقف من الإعدادات'},
+      {id: 'broker', ready: a.connection === 'LIVE' && a.source_ready, label: 'بيانات MT5 وحالة البوت', detail: a.connection === 'LIVE' && a.source_ready ? 'بيانات حديثة' : 'ننتظر سعرًا حديثًا وحالة البوت؛ السعر القديم وحده لا يثبت تعطل الجسر'},
+      {id: 'costs', ready: costs.ready, label: 'تكاليف حساب الوسيط', detail: costs.ready ? 'مضبوطة والسبريد ضمن الحد' : publicationReasons.WAITING_COSTS},
+      {id: 'frames', ready: framesReady, label: 'شموع M5 وM15 وH1 وH4', detail: framesReady ? 'الشموع متوفرة؛ توافق الاتجاه يُفحص لكل فرصة' : 'ننتظر اكتمال شموع البروكر'},
+      {id: 'daily', ready: Boolean(recentDaily), label: 'شموع الذهب اليومية D1', detail: recentDaily ? 'السياق اليومي متوفر' : 'نحتاج تاريخ D1 حديثًا من الحساب نفسه؛ استخدم الجسر 3.04 أو أحدث'},
+      {id: 'calendar', ready: Boolean(calendarReady), label: 'التقويم الاقتصادي', detail: calendarReady ? 'التقويم حديث؛ نافذة منع الأخبار تُفحص لكل فرصة' : 'التقويم الاقتصادي غير متاح أو قديم'},
+      {id: 'telegram', ready: messaging.configured && messaging.verification.canPost, label: 'اتصال تليجرام وصلاحية النشر', detail: messaging.configured && messaging.verification.canPost ? 'جاهز للنشر' : 'إعداد تليجرام أو التحقق من صلاحياته غير مكتمل'}
+    ];
+  }
   function marketState() {
     const state = researchMarketState(marketFeed.publicState()), plan = publicationReview().plan;
     const gold = state.markets.XAUUSD;
@@ -163,6 +182,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       bridgeReceivedAt: snapshot?.received_at ?? null, terminalConnected: snapshot?.terminal_connected ?? null,
       connection: a.connection, quoteAge: a.quote_age,
       aiDecision: publication.plan?.side || 'WAIT', confidence: null, confidenceMeaning: 'CONDITION_SCORE',
+      publicationReadiness: publicationReadiness(a),
       riskLevel: a.risk, reasons: [publicationReasons[publication.reason], ...a.reasons], checks: a.checks,
       timeframes: a.frames, zones: a.zones, strategy: a.strategy,
       signalSource: a.source, signalSourceReady: a.source_ready,
@@ -218,7 +238,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           publication: {enabled: cfg.publicationEnabled, ready: publication.ready && messaging.verification.canPost,
             reason: !cfg.publicationEnabled ? 'PAUSED' : !messaging.configured ? 'TELEGRAM_NOT_CONFIGURED'
               : !messaging.verification.canPost ? 'TELEGRAM_NOT_VERIFIED' : publication.reason,
-            costs: costStatus().status, telegram: {configured: messaging.configured,
+            costs: costStatus().status, prerequisites: state.publicationReadiness, telegram: {configured: messaging.configured,
               mode: messaging.mode, verification: messaging.verification}},
           mt5: {connection: state.connection, signalSourceReady: state.signalSourceReady,
             quoteAgeSeconds: state.quoteAge, lastQuoteAt: state.lastUpdate, lastIngestAt: snapshot?.received_at ?? null},
