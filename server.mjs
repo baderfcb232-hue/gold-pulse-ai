@@ -16,6 +16,7 @@ import {createResearchWorker} from './research-worker.mjs';
 import {brokerCostStatus} from './broker-costs.mjs';
 import {reviewPublication, publicationReasons} from './publication.mjs';
 import {createAccounts} from './auth.mjs';
+import {createRuntimeBackup} from './runtime-backup.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = resolve(ROOT, 'public');
@@ -34,7 +35,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   ingestToken = process.env.MT5_INGEST_TOKEN || '', dashboardToken = process.env.DASHBOARD_TOKEN || '',
   publicBase = process.env.PUBLIC_BASE_URL || (process.env.RENDER === 'true' ? 'https://gold-pulse-ai.onrender.com' : ''),
   storagePersistent = process.env.PERSISTENT_STORAGE_CONFIRMED === 'true', clock = () => Date.now() / 1000,
-  config = {}, feedOptions = {}, researchOptions = {}, telegramOptions = {}, accountOptions = {}} = {}) {
+  runtimeBackup = null, config = {}, feedOptions = {}, researchOptions = {}, telegramOptions = {}, accountOptions = {}} = {}) {
   if (ingestToken.length >= 32 && ingestToken === dashboardToken)
     throw new Error('MT5_INGEST_TOKEN and DASHBOARD_TOKEN must be different.');
   mkdirSync(dataDir, {recursive: true, mode: 0o700});
@@ -195,7 +196,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       newsBlock: a.news_block ?? null,
       execution: snapshot ? {...snapshot.execution, managed_magic: undefined,
         remote_control: snapshot.execution.remote_control && storagePersistent} : null,
-      storage: {mode: storagePersistent ? 'persistent' : 'ephemeral', remoteControlAvailable: storagePersistent},
+      storage: {mode: storagePersistent ? 'persistent' : 'ephemeral', remoteControlAvailable: storagePersistent, checkpoint: runtimeBackup?.status() || {state: 'NOT_CONFIGURED'}},
       historyCount: db.prepare('SELECT COUNT(*) AS n FROM signals').get().n,
       publicBaseUrl: publicBase || null, accountDataShared: Boolean(snapshot?.account),
       serverTime: clock(), controlsConfigured: dashboardToken.length >= 32 && ingestToken.length >= 32};
@@ -234,7 +235,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       if (path === '/healthz' && req.method === 'GET') {
         const state = publicState(), sources = marketFeed.publicState().markets, messaging = telegram.status();
         const publication = publicationReview();
-        return send(req, res, 200, {ok: true, version: '3.4.0', storage: storagePersistent ? 'persistent' : 'ephemeral', accounts: accounts.status(),
+        return send(req, res, 200, {ok: true, version: '3.4.0', storage: storagePersistent ? 'persistent' : 'ephemeral', runtimeCheckpoint: runtimeBackup?.status() || {state: 'NOT_CONFIGURED'}, accounts: accounts.status(),
           publication: {enabled: cfg.publicationEnabled, ready: publication.ready && messaging.verification.canPost,
             reason: !cfg.publicationEnabled ? 'PAUSED' : !messaging.configured ? 'TELEGRAM_NOT_CONFIGURED'
               : !messaging.verification.canPost ? 'TELEGRAM_NOT_VERIFIED' : publication.reason,
@@ -428,12 +429,15 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   }, 5000); timer.unref();
   const close = async () => {clearInterval(timer); for (const c of clients) c.end();
     await Promise.allSettled([telegram.close(), marketFeed.close(), newsFeed.close(), researchWorker.close(), accounts.close()]);
-    await new Promise(r => server.close(r)); db.close();};
+    await new Promise(r => server.close(r)); await runtimeBackup?.close(); db.close();};
   return {server, ingest, publicState, signalRows, db, close, marketFeed, newsFeed, researchWorker, telegram, accounts,
     startFeeds: () => {marketFeed.start(); newsFeed.start(); researchWorker.start();}};
 }
-export function startServer() {
-  const app = createApplication();
+export async function startServer() {
+  const dataDir = process.env.DATA_DIR || resolve(ROOT, '.data');
+  const runtimeBackup = await createRuntimeBackup({connectionString: process.env.AUTH_DATABASE_URL, dataDir});
+  const app = createApplication({dataDir, runtimeBackup});
+  runtimeBackup.start(app.db);
   const port = Number(process.env.PORT || 3000);
   app.server.listen(port, process.env.BIND_ADDRESS || '0.0.0.0', () => {
     console.log(`NABD v3.4.0 listening on ${app.server.address().port}`);
@@ -447,5 +451,5 @@ export function startServer() {
   process.once('SIGINT', shutdown);
   return app;
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) startServer();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await startServer();
 
