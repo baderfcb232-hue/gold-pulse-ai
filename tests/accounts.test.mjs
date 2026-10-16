@@ -80,6 +80,14 @@ test('verified email ownership fixes the final password and cannot accept a requ
   const row = (await h.store.query('SELECT * FROM nabd_users')).rows[0]; assert.match(row.password_hash, /^scrypt\$/); assert.notEqual(row.password_hash, pass);
 });
 
+test('database setup can be verified while missing email keeps registration closed', async t => {
+  const h = await setup(t, {mailer: undefined});
+  const status = (await h.request('/api/auth/status')).body;
+  assert.equal(status.ready, false); assert.equal(status.database, 'CONNECTED'); assert.deepEqual(status.missing, ['EMAIL']);
+  assert.equal((await h.request('/api/auth/register', {email: 'member@example.test', name: 'Member', password: PASSWORD, acceptPrivacy: true})).status, 503);
+  assert.equal((await h.store.query('SELECT COUNT(*) AS count FROM nabd_users')).rows[0].count, 0);
+});
+
 test('cookie changes require same origin and CSRF; sessions and profile are scoped to their owner', async t => {
   const h = await setup(t); await h.verify('one@example.test'); await h.verify('two@example.test');
   const one = await h.login('one@example.test'), two = await h.login('two@example.test');
