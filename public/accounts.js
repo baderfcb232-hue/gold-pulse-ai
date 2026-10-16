@@ -26,15 +26,30 @@ function tab(name) {
   document.querySelectorAll('[data-auth-form]').forEach(el => {el.hidden = el.dataset.authForm !== name;});
   document.querySelectorAll('[data-auth-tab]').forEach(el => {el.classList.toggle('active', el.dataset.authTab === name);});
 }
-document.querySelectorAll('[data-auth-tab]').forEach(el => {el.onclick = () => tab(el.dataset.authTab);});
+function authNotice(title, detail, confirmed = false) {
+  let notice = $('auth-result');
+  if (!notice) {
+    notice = node('div', 'portal-message'); notice.id = 'auth-result';
+    notice.setAttribute('role', 'status'); notice.setAttribute('aria-live', 'polite');
+    notice.tabIndex = -1;
+    $('auth-readiness').after(notice);
+  }
+  notice.style.borderColor = confirmed ? '#66c99a80' : '';
+  notice.style.background = confirmed ? '#16382b' : '';
+  notice.style.color = confirmed ? '#c1f0d7' : '';
+  notice.replaceChildren(node('strong', '', title), node('p', '', detail));
+  $('portal-message').hidden = true;
+  notice.focus();
+}
+document.querySelectorAll('[data-auth-tab]').forEach(el => {el.onclick = () => {tab(el.dataset.authTab); if ($('auth-result')) $('auth-result').remove();};});
 async function logout(all = false) {
   await api(all ? '/api/auth/sessions/revoke' : '/api/auth/logout', all ? {all: true} : {}); location.assign('/auth');
 }
 $('member-logout').onclick = () => logout().catch(error => message(error.message, true));
 form('member-login', async (el, values) => {const response = await api('/api/auth/login', values); el.reset(); if (response.mfaRequired) tab('mfa-login'); else location.assign('/account');});
-form('member-register', async (el, values) => {const response = await api('/api/auth/register', {...values, acceptPrivacy: el.elements.privacy.checked}); el.reset(); message(response.message); tab('login');});
+form('member-register', async (el, values) => {const response = await api('/api/auth/register', {...values, acceptPrivacy: el.elements.privacy.checked}); el.reset(); tab('login'); $('member-login').elements.email.value = values.email; $('member-resend').elements.email.value = values.email; authNotice('تم استلام طلب التسجيل — الخطوة التالية تأكيد البريد', response.message + ' افتح رسالة نبض واضغط رابط التأكيد، ثم أكمل تأكيد بريدك قبل الدخول. تحقق أيضًا من البريد غير الهام.');});
 for (const action of ['forgot', 'resend']) form('member-' + action, async (el, values) => {const response = await api('/api/auth/' + action, values); el.reset(); message(response.message);});
-form('member-verify', async (el, values) => {const response = await api('/api/auth/verify', {token: flowToken, ...values}); flowToken = ''; el.reset(); message(response.message); tab('login');});
+form('member-verify', async (el, values) => {const response = await api('/api/auth/verify', {token: flowToken, ...values}); flowToken = ''; el.reset(); tab('login'); authNotice('✓ تم تأكيد بريدك واكتمل تسجيلك بنجاح', 'حسابك جاهز. أدخل بريدك الإلكتروني وكلمة المرور التي حفظتها لتسجيل الدخول إلى نبض.', true);});
 form('member-reset', async (el, values) => {const response = await api('/api/auth/reset', {token: flowToken, ...values}); flowToken = ''; el.reset(); message(response.message); tab('login');});
 form('member-mfa-login', async (el, values) => {await api('/api/auth/mfa-login', values); el.reset(); location.assign('/account');});
 form('profile-form', async (el, values) => {await api('/api/auth/profile', {name: values.name, notifications: el.elements.notifications.checked});
