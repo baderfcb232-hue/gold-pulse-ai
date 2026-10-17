@@ -60,3 +60,27 @@ test('missing channel posting permission blocks signal polling and retries the c
     assert.deepEqual(pub.status().deliveries, []);
   } finally {await pub.close(); db.close();}
 });
+
+test('operational alerts debounce faults, persist claims and send one recovery without private details', async () => {
+  const db=new DatabaseSync(':memory:');let now=100,faults=['BRIDGE'],messages=[];
+  const options={db,clock:()=>now,enabled:true,token:'TEST',chatId:'TEST',signals:()=>[],health:()=>faults,
+    fetcher:fakeTelegram(async (_url,options)=>{messages.push(JSON.parse(options.body).text);return new Response('{"ok":true}');})};
+  let pub=createTelegramPublisher(options);
+  try {
+    await pub.publish();now=399;await pub.publish();assert.equal(messages.length,0);
+    now=400;await pub.publish();await pub.publish();assert.equal(messages.length,1);
+    assert.match(messages[0],/تنبيه تشغيل/);assert.doesNotMatch(messages[0],/TEST|توصية جديدة/);
+    await pub.close();pub=createTelegramPublisher(options);now=800;await pub.publish();assert.equal(messages.length,1);
+    faults=[];await pub.publish();await pub.publish();assert.equal(messages.length,2);assert.match(messages[1],/عاد وصول/);
+    faults=['BRIDGE'];await pub.publish();now=1000;await pub.publish();assert.equal(messages.length,2);
+  } finally {await pub.close();db.close();}
+});
+
+test('uncertain operational alerts are not retried or followed by an unconfirmed recovery', async () => {
+  const db=new DatabaseSync(':memory:');let now=100,faults=['STORAGE'],sends=0;
+  const pub=createTelegramPublisher({db,clock:()=>now,enabled:true,token:'TEST',chatId:'TEST',signals:()=>[],health:()=>faults,
+    fetcher:fakeTelegram(async()=>{sends++;throw Error('PRIVATE');})});
+  try {await pub.publish();now=500;await pub.publish();now=5000;await pub.publish();assert.equal(sends,1);
+    faults=[];await pub.publish();assert.equal(sends,1);
+  } finally {await pub.close();db.close();}
+});
