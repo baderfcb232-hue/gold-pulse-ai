@@ -12,9 +12,11 @@ export function formatSignal(p) {
 }
 
 export function createTelegramPublisher({db, signals, enabled = false, clock = () => Date.now() / 1000,
-  token = process.env.TELEGRAM_BOT_TOKEN || '', chatId = process.env.TELEGRAM_CHAT_ID || '', fetcher = fetch}) {
+  health = () => [], token = process.env.TELEGRAM_BOT_TOKEN || '', chatId = process.env.TELEGRAM_CHAT_ID || '', fetcher = fetch}) {
   db.exec(`CREATE TABLE IF NOT EXISTS telegram_delivery
     (id TEXT PRIMARY KEY, state TEXT NOT NULL, updated_at REAL NOT NULL);`);
+  db.exec(`CREATE TABLE IF NOT EXISTS telegram_faults
+    (id TEXT PRIMARY KEY, active INTEGER NOT NULL, since REAL NOT NULL, attempted_at REAL, delivery TEXT);`);
   const started = clock();
   let busy = false, stopped = false, pending = Promise.resolve(), lastError = null;
   const configured = Boolean(token && chatId);
@@ -50,11 +52,49 @@ export function createTelegramPublisher({db, signals, enabled = false, clock = (
       return false;
     }
   }
+  async function publishFaults() {
+    // Static text only: never publish account details, tokens or database errors.
+    const messages = {
+      BRIDGE: ['لم تصل تحديثات جسر MT5 منذ أكثر من دقيقة ونصف. افحص المنصة والاتصال؛ هذا لا يثبت وجود عطل في السوق.', 'عاد وصول تحديثات جسر MT5. جاهزية التوصيات تُفحص بشكل مستقل.'],
+      STORAGE: ['تعذر تحديث نسخة استرداد السجل. راجع حالة الحفظ في الموقع.', 'عاد حفظ نسخة استرداد السجل بنجاح.']
+    };
+    const faults = new Set(health().filter(id => Object.hasOwn(messages, id)));
+    for (const id of Object.keys(messages)) {
+      let row = db.prepare('SELECT * FROM telegram_faults WHERE id=?').get(id);
+      const active = faults.has(id);
+      if (!row) {
+        db.prepare('INSERT INTO telegram_faults VALUES(?,?,?,?,?)').run(id, Number(active), clock(), null, null);
+        continue;
+      }
+      if (Boolean(row.active) !== active) {
+        db.prepare('UPDATE telegram_faults SET active=?,since=?,delivery=NULL WHERE id=?')
+          .run(Number(active), clock(), id);
+        row = {...row, active: Number(active), since: clock(), recovery: row.delivery === 'SENT'};
+        if (!active && !row.recovery) continue;
+      } else if (!active) continue;
+      // Startup grace, sustained failure and an hour between repeated incidents.
+      if (active && (clock()-started < 300 || clock()-row.since < 90 ||
+        row.delivery || row.attempted_at != null && clock()-row.attempted_at < 3600)) continue;
+      // Claim before network I/O. Unknown outcomes are never blindly retried.
+      db.prepare('UPDATE telegram_faults SET attempted_at=?,delivery=? WHERE id=?').run(clock(), 'UNCERTAIN', id);
+      let delivery = 'UNCERTAIN';
+      try {
+        const response = await fetcher(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({chat_id: chatId, text: 'نبض | تنبيه تشغيل\n' + messages[id][active ? 0 : 1],
+            link_preview_options: {is_disabled: true}}), signal: AbortSignal.timeout(10000)});
+        delivery = response.ok && (await response.json()).ok === true ? 'SENT' : 'FAILED';
+      } catch {}
+      db.prepare('UPDATE telegram_faults SET delivery=? WHERE id=?').run(delivery, id);
+    }
+  }
   async function publish() {
     if (!enabled || !configured || busy || stopped) return;
     busy = true;
     try {
       if (!await verifyConfiguration() || stopped) return;
+      await publishFaults();
+      if (stopped) return;
       for (const p of signals()) {
         if (stopped) break;
         if (!p?.id || p.status !== 'TRACKING' || !Number.isFinite(p.issued_at) ||
@@ -82,6 +122,7 @@ export function createTelegramPublisher({db, signals, enabled = false, clock = (
   timer.unref();
   return {status: () => ({configured, enabled, mode: !enabled ? 'PAUSED_RESEARCH' : !configured ? 'WAITING_CONFIGURATION'
     : verification.canPost ? 'PUBLISHING' : 'WAITING_VERIFICATION', channel: chatId || null, verification: {...verification}, lastError,
+    faultAlerts: db.prepare('SELECT id,active,since,attempted_at,delivery FROM telegram_faults').all(),
     deliveries: db.prepare('SELECT state,COUNT(*) AS count FROM telegram_delivery GROUP BY state').all()}),
     async close() {stopped = true; clearInterval(timer); await pending;}, publish};
 }

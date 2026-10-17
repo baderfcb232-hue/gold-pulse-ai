@@ -92,6 +92,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     onChange: () => {researchWorker.reviewCandidates(); emit('market', marketState);}});
   const newsFeed = createNewsFeed({db, clock, ...feedOptions, onChange: () => emit('news', newsFeed.publicState)});
   const telegram = createTelegramPublisher({db, clock, ...telegramOptions, enabled: cfg.publicationEnabled,
+    health: () => [...(!snapshot?.received_at || clock()-snapshot.received_at>90 ? ['BRIDGE'] : []),
+      ...(runtimeBackup?.status().state==='ERROR' ? ['STORAGE'] : [])],
     signals: () => {const p = publicationReview().plan; return p ? [p] : [];}});
   let revision = 0;
   const audit = (event, data) => db.prepare('INSERT INTO audit(time,event,data) VALUES(?,?,?)').run(clock(), event, JSON.stringify(data));
@@ -239,7 +241,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           publication: {enabled: cfg.publicationEnabled, ready: publication.ready && messaging.verification.canPost,
             reason: !cfg.publicationEnabled ? 'PAUSED' : !messaging.configured ? 'TELEGRAM_NOT_CONFIGURED'
               : !messaging.verification.canPost ? 'TELEGRAM_NOT_VERIFIED' : publication.reason,
-            costs: costStatus().status, prerequisites: state.publicationReadiness, telegram: {configured: messaging.configured,
+            costs: costStatus().status, prerequisites: state.publicationReadiness, telegram: {faultAlerts: messaging.faultAlerts, configured: messaging.configured,
               mode: messaging.mode, verification: messaging.verification}},
           mt5: {connection: state.connection, signalSourceReady: state.signalSourceReady,
             quoteAgeSeconds: state.quoteAge, lastQuoteAt: state.lastUpdate, lastIngestAt: snapshot?.received_at ?? null},
