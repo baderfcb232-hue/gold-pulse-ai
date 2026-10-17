@@ -35,14 +35,35 @@ jobs:
             --retry 1 --retry-delay 5 \
             https://gold-pulse-ai.onrender.com/healthz)"
           printf '%s' "$response" | python -c '
-          import json, sys
+          import json, sys, time
           body = json.load(sys.stdin)
+          problems = []
           if body.get("ok") is not True:
-              raise SystemExit("Service did not report ok=true")
-          print("Render service responded successfully; version", body.get("version", "unknown"))
+              problems.append("HTTP service did not report ok=true")
+          if body.get("accounts", {}).get("ready") is not True:
+              problems.append("Account service is not ready; inspect database and account setup")
+          checkpoint = body.get("runtimeCheckpoint", {})
+          saved = checkpoint.get("lastSavedAt")
+          if checkpoint.get("state") not in ("SAVED", "RESTORED"):
+              problems.append("Runtime recovery checkpoint is unavailable or failed")
+          if not isinstance(saved, (int, float)) or isinstance(saved, bool) or not 0 <= time.time() - saved <= 180:
+              problems.append("Runtime recovery checkpoint has no recent confirmed save (180 seconds)")
+          publication = body.get("publication", {})
+          telegram = publication.get("telegram", {})
+          if publication.get("enabled") is True and (telegram.get("configured") is not True or
+              telegram.get("verification", {}).get("canPost") is not True):
+              problems.append("Telegram publishing configuration or posting permission is unavailable")
+          if problems:
+              raise SystemExit("; ".join(problems))
+          print("Service, accounts, recovery checkpoint and enabled Telegram configuration passed; version", body.get("version", "unknown"))
           '
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
-          The public Render health endpoint responded with `ok=true`.
+          Checked HTTP availability, account service readiness, a confirmed recovery
+          checkpoint within 180 seconds, and Telegram posting permission when publishing is enabled.
+
+          Missing MT5 data or an intentionally paused recommendation publisher does not fail this check.
+          Email configuration is not proof of successful email delivery.
+          Failed runs appear in GitHub Actions; notification delivery depends on the owner settings.
 
           This scheduled check helps reduce idle periods on Render Free.
           It does not guarantee continuous hosting or preserve Render's temporary storage.
