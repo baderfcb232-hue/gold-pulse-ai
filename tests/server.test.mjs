@@ -92,7 +92,7 @@ test('login issues an HttpOnly cookie; logout revokes it; cross-origin mutations
   response=await fetch(base+'/api/login',{method:'POST',headers:{Origin:'https://unrelated.example','Content-Type':'application/json'},body:JSON.stringify({token:ADMIN})});assert.equal(response.status,403);
 });
 test('web assets load and path traversal cannot expose the database or source secrets',async t=>{
-  const {base}=await setup(t);for(const path of ['/','/app.js','/state-connection.js','/styles.css','/engine.mjs','/icon.svg','/manifest.webmanifest'])assert.equal((await fetch(base+path)).status,200);
+  const {base}=await setup(t);for(const path of ['/','/app.js','/http.js','/state-connection.js','/styles.css','/engine.mjs','/icon.svg','/manifest.webmanifest'])assert.equal((await fetch(base+path)).status,200);
   assert.equal((await fetch(base+'/.data/nabd.sqlite')).status,404);assert.equal((await fetch(base+'/server.mjs')).status,404);
   const res=await fetch(base+'/');assert.match(res.headers.get('content-security-policy'),/script-src 'self'/);assert.match(await res.text(),/viewport/);
 });
