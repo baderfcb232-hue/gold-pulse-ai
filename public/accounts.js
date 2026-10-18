@@ -1,3 +1,4 @@
+import {requestJson} from '/http.js';
 const $ = id => document.getElementById(id);
 const node = (tag, cls, text) => {const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = String(text); return el;};
 const page = ({'/auth': 'auth', '/account': 'account', '/admin': 'admin', '/privacy': 'privacy'})[location.pathname] || 'auth';
@@ -8,11 +9,8 @@ let member = null, csrf = '', usersPage = 0, flowToken = '', signedIn = false;
 const date = value => value ? new Intl.DateTimeFormat('ar-PS', {dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Gaza'}).format(Number(value) * 1000) : '—';
 function message(text, error = false) {const el = $('portal-message'); el.textContent = text; el.classList.toggle('error', error); el.hidden = false;}
 async function api(path, data) {
-  const response = await fetch(path, {method: data === undefined ? 'GET' : 'POST', credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(30000),
-    headers: data === undefined ? {} : {'Content-Type': 'application/json', 'X-NABD-CSRF': csrf}, ...(data === undefined ? {} : {body: JSON.stringify(data)})});
-  const body = await response.json();
-  if (!response.ok) throw Object.assign(Error(body.error || 'تعذر إكمال الطلب.'), {status: response.status});
-  return body;
+  return requestJson(path, {method: data === undefined ? 'GET' : 'POST',
+    headers: data === undefined ? {} : {'Content-Type': 'application/json', 'X-NABD-CSRF': csrf}, ...(data === undefined ? {} : {body: JSON.stringify(data)})}, 30000);
 }
 function form(id, run) {
   $(id).onsubmit = async event => {

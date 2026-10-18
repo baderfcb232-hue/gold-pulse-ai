@@ -1,6 +1,7 @@
 import {positionSize, ema, botHeartbeatFresh, BOT_CONTROL_TTL} from '/engine.mjs';
 import {initLiveWorkspace} from '/live.js';
 import {createStateConnection} from '/state-connection.js';
+import {requestJson} from '/http.js';
 const $ = id => document.getElementById(id);
 const e = (tag, cls, content) => {const x = document.createElement(tag); if (cls) x.className = cls; if (content != null) x.textContent = String(content); return x;};
 const put = (id, value) => {$(id).textContent = value ?? '—';};
@@ -25,9 +26,7 @@ const badge = (s, cls='neutral') => e('span','pill '+cls,s);
 const empty = text => e('p','empty-inline',text);
 function toast(message, error=false) {const box=e('div','toast'+(error?' error':'')); const b=e('button','', '×');b.setAttribute('aria-label','إغلاق التنبيه');b.onclick=()=>box.remove();box.append(b,e('span','',message));$('toasts').append(box);setTimeout(()=>box.remove(),9000);}
 async function api(path, options={}) {
-  const res=await fetch(path,{credentials:'same-origin',cache:'no-store',signal:AbortSignal.timeout(10000),...options,headers:options.body?{'Content-Type':'application/json',...options.headers}:options.headers});
-  let data; try{data=await res.json();}catch{throw new Error('استجابة الخادم غير صالحة.');}
-  if(!res.ok){const err=new Error(data.error||'تعذر إكمال الطلب.');err.status=res.status;throw err;}return data;
+  return requestJson(path,{...options,headers:options.body?{'Content-Type':'application/json',...options.headers}:options.headers});
 }
 function normalize(raw) {
   if(/^3\./.test(raw.version))return raw;
@@ -210,7 +209,7 @@ function drawChart(){
   canvas.onpointermove=event=>{const i=Math.min(rows.length-1,Math.max(0,Math.floor((event.offsetX-left)/dx))),c=rows[i];put('chart-tooltip',`${time(c.time,true)}\nO ${price(c.open)}  H ${price(c.high)}\nL ${price(c.low)}  C ${price(c.close)}`);$('chart-tooltip').hidden=false;};canvas.onpointerleave=()=>$('chart-tooltip').hidden=true;
 }
 const stateConnection=createStateConnection({
-  readState:()=>api('/api/state',{signal:AbortSignal.timeout(10000)}),
+  readState:()=>api('/api/state'),
   applyState:raw=>{applyState(raw);stateErrorShown=false;},
   onError:()=>{state={...state,connection:'ERROR',currentSignal:null,reasons:['تعذر الوصول للخادم؛ البيانات المعروضة قديمة.']};renderOverview();renderExecution();renderLink();renderDiagnostics();if(!stateErrorShown){toast('تعذر الاتصال بالخادم؛ عرض الإشارات معلّق.',true);stateErrorShown=true;}}
 });
