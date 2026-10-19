@@ -242,7 +242,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
             reason: !cfg.publicationEnabled ? 'PAUSED' : !messaging.configured ? 'TELEGRAM_NOT_CONFIGURED'
               : !messaging.verification.canPost ? 'TELEGRAM_NOT_VERIFIED' : publication.reason,
             costs: costStatus().status, prerequisites: state.publicationReadiness, telegram: {faultAlerts: messaging.faultAlerts, configured: messaging.configured,
-              mode: messaging.mode, verification: messaging.verification}},
+              mode: messaging.mode, verification: messaging.verification, testDelivery: messaging.testDelivery}},
           mt5: {connection: state.connection, signalSourceReady: state.signalSourceReady,
             quoteAgeSeconds: state.quoteAge, lastQuoteAt: state.lastUpdate, lastIngestAt: snapshot?.received_at ?? null},
           markets: Object.fromEntries(Object.entries(sources).map(([symbol, source]) => [symbol, {

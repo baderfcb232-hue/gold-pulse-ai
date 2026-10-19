@@ -12,14 +12,22 @@ export function formatSignal(p) {
 }
 
 export function createTelegramPublisher({db, signals, enabled = false, clock = () => Date.now() / 1000,
-  health = () => [], token = process.env.TELEGRAM_BOT_TOKEN || '', chatId = process.env.TELEGRAM_CHAT_ID || '', fetcher = fetch}) {
+  health = () => [], token = process.env.TELEGRAM_BOT_TOKEN || '', chatId = process.env.TELEGRAM_CHAT_ID || '', fetcher = fetch,
+  testId = process.env.TELEGRAM_TEST_ID || '', testText = process.env.TELEGRAM_TEST_TEXT || '',
+  testChannel = process.env.TELEGRAM_TEST_CHANNEL || ''}) {
   db.exec(`CREATE TABLE IF NOT EXISTS telegram_delivery
     (id TEXT PRIMARY KEY, state TEXT NOT NULL, updated_at REAL NOT NULL);`);
   db.exec(`CREATE TABLE IF NOT EXISTS telegram_faults
     (id TEXT PRIMARY KEY, active INTEGER NOT NULL, since REAL NOT NULL, attempted_at REAL, delivery TEXT);`);
+  db.exec(`CREATE TABLE IF NOT EXISTS telegram_tests
+    (id TEXT PRIMARY KEY, state TEXT NOT NULL, updated_at REAL NOT NULL, message_id INTEGER);`);
   const started = clock();
   let busy = false, stopped = false, pending = Promise.resolve(), lastError = null;
   const configured = Boolean(token && chatId);
+  let verifiedChannel = null;
+  const testRequested = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(testId) &&
+    typeof testText === 'string' && testText.trim().length > 0 && testText.length <= 1000 &&
+    /^@[a-zA-Z0-9_]{5,32}$/.test(testChannel);
   let verification = {state: !enabled ? 'PAUSED' : !configured ? 'NOT_CONFIGURED' : 'PENDING', checkedAt: null,
     botUsername: null, canPost: false};
   async function verifyConfiguration() {
@@ -43,14 +51,41 @@ export function createTelegramPublisher({db, signals, enabled = false, clock = (
       const member = await api('getChatMember', {chat_id: chatId, user_id: me.id});
       if (member?.user?.id !== me.id || !(member.status === 'creator' ||
         member.status === 'administrator' && member.can_post_messages === true)) throw Error('POST_PERMISSION_MISSING');
+      verifiedChannel = chat.username ? '@' + String(chat.username).toLowerCase() : null;
       verification = {state: 'READY', checkedAt: clock(), botUsername: me.username, canPost: true};
       lastError = null;
       return true;
     } catch {
+      verifiedChannel = null;
       verification = {...verification, state: 'FAILED', canPost: false};
       lastError = 'Telegram bot or channel posting permission could not be verified.';
       return false;
     }
+  }
+  async function publishTest() {
+    if (!testRequested || stopped) return;
+    // A diagnostic is separate from trading signals and requires an exact public-channel match.
+    if (verifiedChannel !== testChannel.toLowerCase()) {
+      db.prepare('INSERT OR IGNORE INTO telegram_tests VALUES(?,?,?,NULL)').run(testId, 'REJECTED_CHANNEL', clock());
+      return;
+    }
+    // Claim before network I/O. Never retry an uncertain outcome or a claimed test after restart.
+    const claim = db.prepare('INSERT OR IGNORE INTO telegram_tests VALUES(?,?,?,NULL)').run(testId, 'SENDING', clock());
+    if (!claim.changes) return;
+    let state = 'UNCERTAIN', messageId = null;
+    try {
+      const response = await fetcher(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({chat_id: chatId,
+          text: 'نبض | رسالة اختبار اتصال\n' + testText.trim() + '\nرسالة تجريبية فقط، ليست توصية تداول.',
+          link_preview_options: {is_disabled: true}}), signal: AbortSignal.timeout(10000)});
+      const data = await response.json();
+      if (response.ok && data.ok === true && Number.isSafeInteger(data.result?.message_id)) {
+        state = 'SENT'; messageId = data.result.message_id;
+      } else if (!response.ok || data.ok === false) state = 'FAILED';
+    } catch {}
+    db.prepare('UPDATE telegram_tests SET state=?,updated_at=?,message_id=? WHERE id=?')
+      .run(state, clock(), messageId, testId);
   }
   async function publishFaults() {
     // Static text only: never publish account details, tokens or database errors.
@@ -93,6 +128,8 @@ export function createTelegramPublisher({db, signals, enabled = false, clock = (
     busy = true;
     try {
       if (!await verifyConfiguration() || stopped) return;
+      await publishTest();
+      if (stopped) return;
       await publishFaults();
       if (stopped) return;
       for (const p of signals()) {
@@ -123,6 +160,7 @@ export function createTelegramPublisher({db, signals, enabled = false, clock = (
   return {status: () => ({configured, enabled, mode: !enabled ? 'PAUSED_RESEARCH' : !configured ? 'WAITING_CONFIGURATION'
     : verification.canPost ? 'PUBLISHING' : 'WAITING_VERIFICATION', channel: chatId || null, verification: {...verification}, lastError,
     faultAlerts: db.prepare('SELECT id,active,since,attempted_at,delivery FROM telegram_faults').all(),
+    testDelivery: db.prepare('SELECT id,state,updated_at,message_id FROM telegram_tests ORDER BY updated_at DESC LIMIT 1').get() || null,
     deliveries: db.prepare('SELECT state,COUNT(*) AS count FROM telegram_delivery GROUP BY state').all()}),
     async close() {stopped = true; clearInterval(timer); await pending;}, publish};
 }
