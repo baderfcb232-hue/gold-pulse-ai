@@ -84,3 +84,49 @@ test('uncertain operational alerts are not retried or followed by an unconfirmed
     faults=[];await pub.publish();assert.equal(sends,1);
   } finally {await pub.close();db.close();}
 });
+
+test('explicit diagnostic sends labelled text once, confirms its message ID and stays outside signal history', async () => {
+  const db = new DatabaseSync(':memory:'); let sends = 0, message;
+  const options = {db, clock: () => 100, enabled: true, token: 'TEST', chatId: '@FixtureChannel',
+    signals: () => [], testId: 'diagnostic-1', testChannel: '@FixtureChannel', testText: 'تحية من نبض $$$$$$',
+    fetcher: fakeTelegram(async (_url, request) => {
+      sends++; message = JSON.parse(request.body);
+      return new Response(JSON.stringify({ok: true, result: {message_id: 42}}));
+    })};
+  let pub = createTelegramPublisher(options);
+  try {
+    await pub.publish(); await pub.publish();
+    assert.equal(sends, 1); assert.equal(message.chat_id, '@FixtureChannel');
+    assert.match(message.text, /تحية من نبض \$\$\$\$\$\$/);
+    assert.match(message.text, /رسالة اختبار اتصال/); assert.match(message.text, /ليست توصية تداول/);
+    assert.doesNotMatch(message.text, /الدخول:|وقف الخسارة:|الهدف الأول:/);
+    assert.equal(pub.status().testDelivery.state, 'SENT'); assert.equal(pub.status().testDelivery.message_id, 42);
+    assert.deepEqual(pub.status().deliveries, []);
+    await pub.close(); pub = createTelegramPublisher(options); await pub.publish(); assert.equal(sends, 1);
+  } finally {await pub.close(); db.close();}
+});
+
+test('diagnostic requires the verified recipient and posting permission', async () => {
+  for (const denied of [false, true]) {
+    const db = new DatabaseSync(':memory:'); let sends = 0;
+    const transport = fakeTelegram(async () => {sends++; return new Response('{"ok":true,"result":{"message_id":1}}');});
+    const pub = createTelegramPublisher({db, clock: () => 100, enabled: true, token: 'TEST', chatId: '@FixtureChannel',
+      signals: () => [], testId: 'recipient-test', testChannel: denied ? '@FixtureChannel' : '@DifferentChannel', testText: 'مرحبا',
+      fetcher: async (url, options) => denied && String(url).endsWith('/getChatMember')
+        ? new Response('{"ok":true,"result":{"status":"member","user":{"id":123}}}') : transport(url, options)});
+    try {await pub.publish(); assert.equal(sends, 0);
+      assert.equal(pub.status().testDelivery?.state ?? null, denied ? null : 'REJECTED_CHANNEL');}
+    finally {await pub.close(); db.close();}
+  }
+});
+
+test('uncertain diagnostic is never retried, including after publisher restart', async () => {
+  const db = new DatabaseSync(':memory:'); let sends = 0;
+  const options = {db, clock: () => 100, enabled: true, token: 'TEST', chatId: '@FixtureChannel', signals: () => [],
+    testId: 'uncertain-test', testChannel: '@FixtureChannel', testText: 'مرحبا',
+    fetcher: fakeTelegram(async () => {sends++; throw Error('PRIVATE');})};
+  let pub = createTelegramPublisher(options);
+  try {await pub.publish(); await pub.publish(); assert.equal(pub.status().testDelivery.state, 'UNCERTAIN');
+    await pub.close(); pub = createTelegramPublisher(options); await pub.publish(); assert.equal(sends, 1);}
+  finally {await pub.close(); db.close();}
+});
