@@ -102,3 +102,15 @@ test('real signal issuance is deduplicated and quotes cannot move its original l
   now++;raw.quote_at=now;raw.bid+=.05;raw.ask+=.05;await post(base,'/api/mt5',raw,INGEST);
   const rows=app.signalRows();assert.equal(rows.length,1);assert.equal(rows[0].entry,before.entry);assert.equal(rows[0].tp1,before.tp1);assert.equal(rows[0].sl,before.sl);
 });
+
+
+test('dashboard control module is served as JavaScript and can be imported by app.js', async t => {
+  const {base}=await setup(t);
+  const moduleResponse=await fetch(base+'/control-readiness.js');
+  assert.equal(moduleResponse.status,200);
+  assert.match(moduleResponse.headers.get('content-type'),/javascript/);
+  assert.match(await moduleResponse.text(),/export function controlBlockers/);
+  const appResponse=await fetch(base+'/app.js');
+  assert.equal(appResponse.status,200);
+  assert.match(await appResponse.text(),/from '\/control-readiness\.js'/);
+});
