@@ -54,6 +54,9 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     publicationEnabled: process.env.SIGNAL_PUBLICATION_ENABLED === 'true', ...config};
   if (!['EA','DASHBOARD'].includes(cfg.signalSource)) throw new Error('SIGNAL_SOURCE must be EA or DASHBOARD');
   if (typeof cfg.publicationEnabled !== 'boolean') throw new Error('publicationEnabled must be a boolean');
+  // Restore the original Telegram candidate sources without relaxing order controls.
+  const telegramPolicy = config.telegramPolicy ?? process.env.TELEGRAM_SIGNAL_POLICY ?? 'LEGACY';
+  if (!['LEGACY', 'STRICT'].includes(telegramPolicy)) throw new Error('Invalid TELEGRAM_SIGNAL_POLICY');
   let costProfiles;
   try {costProfiles = JSON.parse(process.env.BROKER_COST_PROFILES_JSON || '[]');} catch {costProfiles = null;}
   if (config.brokerCostProfiles !== undefined) costProfiles = config.brokerCostProfiles;
@@ -94,10 +97,25 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   const telegram = createTelegramPublisher({db, clock, ...telegramOptions, enabled: cfg.publicationEnabled,
     health: () => [...(!snapshot?.received_at || clock()-snapshot.received_at>90 ? ['BRIDGE'] : []),
       ...(runtimeBackup?.status().state==='ERROR' ? ['STORAGE'] : [])],
-    signals: () => {const p = publicationReview().plan; return p ? [p] : [];}});
+    signals: telegramCandidates});
   let revision = 0;
   const audit = (event, data) => db.prepare('INSERT INTO audit(time,event,data) VALUES(?,?,?)').run(clock(), event, JSON.stringify(data));
   const signalRows = () => db.prepare('SELECT data FROM signals ORDER BY issued_at DESC LIMIT 200').all().map(x => JSON.parse(x.data));
+  function telegramCandidates() {
+    if (!cfg.publicationEnabled) return [];
+    if (telegramPolicy === 'STRICT') {const p = publicationReview().plan; return p ? [p] : [];}
+    const a = sourceAnalysis(snapshot, clock(), cfg);
+    const active = a.connection === 'LIVE' && a.source_ready ? signalRows().find(p =>
+      p.status === 'TRACKING' && (a.source === 'MT5_EA' ? p.source === 'MT5_EA' : p.source !== 'MT5_EA')) : null;
+    return [active, ...Object.values(marketFeed.publicState().markets).map(m => m.currentSignal)]
+      .filter(Boolean).map(p => ({...p, claimedSuccessRate: null, costMeaning: 'NOT_VERIFIED'}));
+  }
+  function telegramReadiness() {
+    const candidates = telegramCandidates();
+    const ready = candidates.some(p => p.status === 'TRACKING' && p.expires_at > clock());
+    return {policy: telegramPolicy, ready, reason: !cfg.publicationEnabled ? 'PAUSED' :
+      telegramPolicy === 'STRICT' ? publicationReview().reason : ready ? 'READY' : 'WAITING_SETUP'};
+  }
   function publicationReview(a = sourceAnalysis(snapshot, clock(), cfg)) {
     const plan = signalRows().find(p => p.status === 'TRACKING' && p.strategy === a.strategy &&
       p.bar_time === a.plan?.bar_time && p.side === a.plan?.side);
@@ -241,7 +259,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           publication: {enabled: cfg.publicationEnabled, ready: publication.ready && messaging.verification.canPost,
             reason: !cfg.publicationEnabled ? 'PAUSED' : !messaging.configured ? 'TELEGRAM_NOT_CONFIGURED'
               : !messaging.verification.canPost ? 'TELEGRAM_NOT_VERIFIED' : publication.reason,
-            costs: costStatus().status, prerequisites: state.publicationReadiness, telegram: {faultAlerts: messaging.faultAlerts, configured: messaging.configured,
+            costs: costStatus().status, prerequisites: state.publicationReadiness, telegram: {...telegramReadiness(), faultAlerts: messaging.faultAlerts, configured: messaging.configured,
               mode: messaging.mode, verification: messaging.verification, testDelivery: messaging.testDelivery}},
           mt5: {connection: state.connection, signalSourceReady: state.signalSourceReady,
             quoteAgeSeconds: state.quoteAge, lastQuoteAt: state.lastUpdate, lastIngestAt: snapshot?.received_at ?? null},
@@ -252,7 +270,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       if (path === '/api/telegram/status' && req.method === 'GET') {
         if (!operator(req)) return send(req, res, 401, {error: 'Operator login required'});
         const {plan, ...publication} = publicationReview();
-        return send(req, res, 200, {...telegram.status(), publication});
+        return send(req, res, 200, {...telegram.status(), publication: telegramReadiness(), brokerPublication: publication});
       }
       if (path === '/api/internal/costs' && req.method === 'GET') {
         if (!operator(req)) return send(req, res, 401, {error: 'Operator login required'});

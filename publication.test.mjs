@@ -97,7 +97,7 @@ test('server publishes only a matching fresh broker plan once; costs and diagnos
   const admin = 'TEST_OPERATOR_XXXXXXXXXXXXXXXXXXXXXXXXXXXX';
   const dir = mkdtempSync(join(tmpdir(), 'nabd-publication-'));
   const app = createApplication({dataDir: dir, clock: () => now, dashboardToken: admin,
-    config: {publicationEnabled: true, brokerCostProfiles: [profile()]},
+    config: {publicationEnabled: true, telegramPolicy: 'STRICT', brokerCostProfiles: [profile()]},
     telegramOptions: {token: 'TEST_TOKEN', chatId: 'TEST_CHANNEL', fetcher: fakeTelegram(async (_url, options) => {
       sends++; message = JSON.parse(options.body); return new Response('{"ok":true}');
     })}});

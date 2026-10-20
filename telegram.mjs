@@ -8,6 +8,7 @@ export function formatSignal(p) {
     `المصدر: ${p.source || p.source_id || 'REFERENCE'}`,
     `صدرت: ${time(p.issued_at)}`, `تنتهي: ${time(p.expires_at)}`,
     ...(p.broker_symbol ? ['استخدم أسعار الرمز نفسه لدى الوسيط؛ قد تختلف أسعار المنصات الأخرى.'] : []),
+    ...(p.costMeaning === 'NOT_VERIFIED' ? ['الأهداف قبل التكاليف؛ لم تُتحقق تكاليف الوسيط لهذه الرسالة.'] : []),
     'توصية تحليلية وليست ضمان ربح.', 'https://gold-pulse-ai.onrender.com/'].join('\n');
 }
 
