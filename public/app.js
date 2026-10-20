@@ -163,7 +163,7 @@ function renderPrivate(){
   replace('commands-list',...(privateData?.commands?.length?privateData.commands.map(c=>{const row=e('div','command-row'),info=e('div');info.append(e('span','',actions[c.action]||c.action),e('small','',` · ${time(c.time,true)}${c.ticket!=='0'?' · #'+c.ticket:''}`));row.append(info,badge(statuses[c.status]||c.status,c.status==='CONFIRMED'?'good':c.status==='REJECTED'?'bad':'neutral'));if(c.result)row.title=c.result;return row;}):[empty('لا توجد أوامر تحكم سابقة.')]));renderExecution();renderDeals();
 }
 function getControlBlockers(action){
-  return controlBlockers({action,authenticated,persistent:state?.storage?.mode==='persistent',
+  return controlBlockers({action,authenticated,persistent:state?.storage?.remoteControlAvailable===true,
     live:effectiveConnection()==='LIVE',fresh:controlFresh(),remoteControl:!!state?.execution?.remote_control,
     enabled:!!state?.execution?.enabled});
 }
