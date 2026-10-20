@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {createApplication} from '../server.mjs';
 import {fixture,NOW,samplePlan,entryFixture,eaFixture} from './fixtures.mjs';
 const INGEST='test-ingest-token-xxxxxxxxxxxxxxxxxxxxxxxx',ADMIN='test-admin-token-yyyyyyyyyyyyyyyyyyyyyyyy';
-async function setup(t,{dir,clock,config={signalSource:'DASHBOARD'}}={}){const dataDir=dir||mkdtempSync(join(tmpdir(),'nabd-test-'));const app=createApplication({dataDir,storagePersistent:true,ingestToken:INGEST,dashboardToken:ADMIN,clock:clock||(()=>NOW),config});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;t.after(async()=>{await app.close();if(!dir)rmSync(dataDir,{recursive:true,force:true});});return {app,base,dataDir};}
+async function setup(t,{dir,clock,config={signalSource:'DASHBOARD'},commandJournal=null,storagePersistent=true}={}){const dataDir=dir||mkdtempSync(join(tmpdir(),'nabd-test-'));const app=createApplication({dataDir,storagePersistent,commandJournal,ingestToken:INGEST,dashboardToken:ADMIN,clock:clock||(()=>NOW),config});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+app.server.address().port;t.after(async()=>{await app.close();if(!dir)rmSync(dataDir,{recursive:true,force:true});});return {app,base,dataDir};}
 const post=(base,path,data,token)=>fetch(base+path,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(data)});
 
 test('MT5 telemetry credentials cannot double as the operator credential',()=>{
@@ -113,4 +113,38 @@ test('dashboard control module is served as JavaScript and can be imported by ap
   const appResponse=await fetch(base+'/app.js');
   assert.equal(appResponse.status,200);
   assert.match(await appResponse.text(),/from '\/control-readiness\.js'/);
+});
+
+
+test('durable journal enables controls on ephemeral disk and survives application restart', async t => {
+  const records=[];
+  const journal={
+    async enqueue(time,action,ticket,fraction){if(records.some(r=>r.status==='QUEUED'))return null;
+      const row={id:2000000000000+records.length,time,expires:time+20,action,ticket,fraction,status:'QUEUED'};records.push(row);return row;},
+    async list(){return records;},async next(){return records.find(r=>r.status==='QUEUED');},
+    async get(id){return records.find(r=>r.id===id);},async result(id,status,result){Object.assign(await this.get(id),{status,result});},async close(){}
+  };
+  const first=await setup(t,{storagePersistent:false,commandJournal:journal});
+  await post(first.base,'/api/mt5',fixture(),INGEST);
+  const state=await (await fetch(first.base+'/api/state')).json();
+  assert.equal(state.storage.mode,'ephemeral');assert.equal(state.storage.remoteControlAvailable,true);assert.equal(state.execution.remote_control,true);
+  assert.equal((await post(first.base,'/api/commands',{action:'PAUSE'},ADMIN)).status,202);
+  assert.equal((await post(first.base,'/api/commands',{action:'RESUME'},ADMIN)).status,409);
+  const second=await setup(t,{storagePersistent:false,commandJournal:journal});
+  const command=await (await fetch(second.base+'/api/bridge/next',{headers:{Authorization:'Bearer '+INGEST}})).text();
+  assert.match(command,/2000000000000\|PAUSE/);
+  assert.equal((await post(second.base,'/api/bridge/result',{id:2000000000000,status:'CONFIRMED',message:'paused'},INGEST)).status,200);
+  const account=await (await fetch(second.base+'/api/account',{headers:{Authorization:'Bearer '+ADMIN}})).json();
+  assert.equal(account.commands[0].status,'CONFIRMED');
+  await post(second.base,'/api/mt5',{...fixture(),execution:{...fixture().execution,remote_control:false}},INGEST);
+  assert.equal((await post(second.base,'/api/commands',{action:'RESUME'},ADMIN)).status,409);
+});
+
+test('journal failure never falls back to ephemeral command delivery', async t => {
+  const journal={async enqueue(){throw Error('Journal unavailable');},async next(){throw Error('Journal unavailable');},async close(){}};
+  const {app,base}=await setup(t,{storagePersistent:false,commandJournal:journal});
+  await post(base,'/api/mt5',fixture(),INGEST);
+  assert.notEqual((await post(base,'/api/commands',{action:'CLOSE_ALL'},ADMIN)).status,202);
+  assert.equal(app.db.prepare('SELECT count(*) AS n FROM commands').get().n,0);
+  assert.notEqual((await fetch(base+'/api/bridge/next',{headers:{Authorization:'Bearer '+INGEST}})).status,200);
 });

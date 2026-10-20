@@ -17,6 +17,7 @@ import {brokerCostStatus} from './broker-costs.mjs';
 import {reviewPublication, publicationReasons} from './publication.mjs';
 import {createAccounts} from './auth.mjs';
 import {createRuntimeBackup} from './runtime-backup.mjs';
+import {createCommandJournal} from './command-journal.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = resolve(ROOT, 'public');
@@ -35,7 +36,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   ingestToken = process.env.MT5_INGEST_TOKEN || '', dashboardToken = process.env.DASHBOARD_TOKEN || '',
   publicBase = process.env.PUBLIC_BASE_URL || (process.env.RENDER === 'true' ? 'https://gold-pulse-ai.onrender.com' : ''),
   storagePersistent = process.env.PERSISTENT_STORAGE_CONFIRMED === 'true', clock = () => Date.now() / 1000,
-  runtimeBackup = null, config = {}, feedOptions = {}, researchOptions = {}, telegramOptions = {}, accountOptions = {}} = {}) {
+  runtimeBackup = null, commandJournal = null, config = {}, feedOptions = {}, researchOptions = {}, telegramOptions = {}, accountOptions = {}} = {}) {
   if (ingestToken.length >= 32 && ingestToken === dashboardToken)
     throw new Error('MT5_INGEST_TOKEN and DASHBOARD_TOKEN must be different.');
   mkdirSync(dataDir, {recursive: true, mode: 0o700});
@@ -215,8 +216,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       calendar: snapshot?.calendar ?? {status: 'unavailable', updated_at: null, events: []},
       newsBlock: a.news_block ?? null,
       execution: snapshot ? {...snapshot.execution, managed_magic: undefined,
-        remote_control: snapshot.execution.remote_control && storagePersistent} : null,
-      storage: {mode: storagePersistent ? 'persistent' : 'ephemeral', remoteControlAvailable: storagePersistent, checkpoint: runtimeBackup?.status() || {state: 'NOT_CONFIGURED'}},
+        remote_control: snapshot.execution.remote_control && (storagePersistent || !!commandJournal)} : null,
+      storage: {mode: storagePersistent ? 'persistent' : 'ephemeral', remoteControlAvailable: storagePersistent || !!commandJournal, commandJournal: commandJournal ? 'postgres' : storagePersistent ? 'disk' : 'unavailable', checkpoint: runtimeBackup?.status() || {state: 'NOT_CONFIGURED'}},
       historyCount: db.prepare('SELECT COUNT(*) AS n FROM signals').get().n,
       publicBaseUrl: publicBase || null, accountDataShared: Boolean(snapshot?.account),
       serverTime: clock(), controlsConfigured: dashboardToken.length >= 32 && ingestToken.length >= 32};
@@ -367,7 +368,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         if (!operator(req)) return send(req, res, 401, {error: 'تسجيل دخول المشغّل مطلوب.'});
         return send(req, res, 200, {account: snapshot?.account ?? null, positions: snapshot?.positions ?? [],
           deals: db.prepare('SELECT data FROM deals ORDER BY time DESC LIMIT 1000').all().map(x => JSON.parse(x.data)),
-          commands: db.prepare('SELECT * FROM commands ORDER BY id DESC LIMIT 100').all(),
+          commands: commandJournal ? await commandJournal.list(clock()) : db.prepare('SELECT * FROM commands ORDER BY id DESC LIMIT 100').all(),
           lastUpdate: snapshot?.received_at ?? null});
       }
       if (path === '/api/mt5.zip' && req.method === 'GET') {
@@ -376,7 +377,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       }
       if (path === '/api/commands' && req.method === 'POST') {
         if (!operator(req)) return send(req, res, 401, {error: 'تسجيل دخول المشغّل مطلوب.'});
-        if (!storagePersistent) return send(req, res, 409, {error: 'إدارة الصفقات من الموقع تحتاج حفظًا دائمًا لسجل الأوامر. المراقبة متاحة.'});
+        if (!storagePersistent && !commandJournal) return send(req, res, 409, {error: 'إدارة الصفقات من الموقع تحتاج حفظًا دائمًا لسجل الأوامر. المراقبة متاحة.'});
         const a = analyze(snapshot, clock(), cfg);
         if (a.connection !== 'LIVE') return send(req, res, 409, {error: 'الربط غير حي؛ لا يمكن إرسال أمر.'});
         if ((cfg.signalSource === 'EA' || snapshot.ea) && !botHeartbeatFresh(snapshot.ea?.heartbeat_at,
@@ -394,27 +395,35 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           return send(req, res, 400, {error: 'هذه الصفقة ليست ضمن صفقات البوت المرتبطة.'});
         const fraction = action === 'PARTIAL_CLOSE' ? Number(b.fraction) : 0;
         if (action === 'PARTIAL_CLOSE' && !(fraction > 0 && fraction < 1)) return send(req, res, 400, {error: 'نسبة إغلاق جزئي غير صالحة.'});
-        if (db.prepare("SELECT id FROM commands WHERE status='QUEUED' AND expires>? LIMIT 1").get(clock()))
-          return send(req, res, 409, {error: 'يوجد أمر قيد الانتظار؛ انتظر تأكيده أولًا.'});
-        const id = db.prepare("INSERT INTO commands(time,expires,action,ticket,fraction,status) VALUES(?,?,?,?,?,'QUEUED')")
-          .run(clock(), clock() + 20, action, ticket, fraction).lastInsertRowid;
+        let id;
+        if (commandJournal) {
+          const queued = await commandJournal.enqueue(clock(), action, ticket, fraction);
+          if (!queued) return send(req, res, 409, {error: 'يوجد أمر قيد الانتظار؛ انتظر تأكيده أولًا.'});
+          id = queued.id;
+        } else {
+          if (db.prepare("SELECT id FROM commands WHERE status='QUEUED' AND expires>? LIMIT 1").get(clock()))
+            return send(req, res, 409, {error: 'يوجد أمر قيد الانتظار؛ انتظر تأكيده أولًا.'});
+          id = db.prepare("INSERT INTO commands(time,expires,action,ticket,fraction,status) VALUES(?,?,?,?,?,'QUEUED')")
+            .run(clock(), clock() + 20, action, ticket, fraction).lastInsertRowid;
+        }
         audit('COMMAND_QUEUED', {id: Number(id), action, ticket});
         return send(req, res, 202, {id: Number(id), status: 'QUEUED', message: 'الأمر في الانتظار؛ التنفيذ يحتاج تأكيد MT5.'});
       }
       if (path === '/api/bridge/next' && req.method === 'GET') {
         if (!bridge(req)) return send(req, res, 401, {error: 'Invalid bridge token'});
-        if (!storagePersistent) return send(req, res, 200, '', 'text/plain; charset=utf-8');
+        if (!storagePersistent && !commandJournal) return send(req, res, 200, '', 'text/plain; charset=utf-8');
         db.prepare("UPDATE commands SET status='EXPIRED' WHERE status='QUEUED' AND expires<?").run(clock());
-        const c = db.prepare("SELECT * FROM commands WHERE status='QUEUED' ORDER BY id LIMIT 1").get();
+        const c = commandJournal ? await commandJournal.next(clock()) : db.prepare("SELECT * FROM commands WHERE status='QUEUED' ORDER BY id LIMIT 1").get();
         return send(req, res, 200, c ? [c.id,c.action,c.ticket,c.fraction,Math.floor(c.time),Math.floor(c.expires)].join('|') : '', 'text/plain; charset=utf-8');
       }
       if (path === '/api/bridge/result' && req.method === 'POST') {
         if (!bridge(req)) return send(req, res, 401, {error: 'Invalid bridge token'});
-        const b = await body(req), c = db.prepare('SELECT * FROM commands WHERE id=?').get(Number(b.id));
+        const b = await body(req), c = commandJournal ? await commandJournal.get(Number(b.id)) : db.prepare('SELECT * FROM commands WHERE id=?').get(Number(b.id));
         if (!c) return send(req, res, 404, {error: 'Unknown command'});
         if (!['QUEUED','EXPIRED'].includes(c.status)) return send(req, res, 200, {ok: true, status: c.status});
         if (!['CONFIRMED','REJECTED','UNCERTAIN'].includes(b.status)) return send(req, res, 400, {error: 'Invalid confirmation'});
-        db.prepare('UPDATE commands SET status=?,result=? WHERE id=?').run(b.status, text(b.message, 500), c.id);
+        if (commandJournal) await commandJournal.result(c.id, b.status, text(b.message, 500));
+        else db.prepare('UPDATE commands SET status=?,result=? WHERE id=?').run(b.status, text(b.message, 500), c.id);
         audit('COMMAND_RESULT', {id: c.id, status: b.status, message: text(b.message, 500)});
         return send(req, res, 200, {ok: true});
       }
@@ -449,14 +458,15 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   }, 5000); timer.unref();
   const close = async () => {clearInterval(timer); for (const c of clients) c.end();
     await Promise.allSettled([telegram.close(), marketFeed.close(), newsFeed.close(), researchWorker.close(), accounts.close()]);
-    await new Promise(r => server.close(r)); await runtimeBackup?.close(); db.close();};
+    await new Promise(r => server.close(r)); await runtimeBackup?.close(); await commandJournal?.close(); db.close();};
   return {server, ingest, publicState, signalRows, db, close, marketFeed, newsFeed, researchWorker, telegram, accounts,
     startFeeds: () => {marketFeed.start(); newsFeed.start(); researchWorker.start();}};
 }
 export async function startServer() {
   const dataDir = process.env.DATA_DIR || resolve(ROOT, '.data');
   const runtimeBackup = await createRuntimeBackup({connectionString: process.env.AUTH_DATABASE_URL, dataDir});
-  const app = createApplication({dataDir, runtimeBackup});
+  const commandJournal = await createCommandJournal(process.env.AUTH_DATABASE_URL);
+  const app = createApplication({dataDir, runtimeBackup, commandJournal});
   runtimeBackup.start(app.db);
   const port = Number(process.env.PORT || 3000);
   app.server.listen(port, process.env.BIND_ADDRESS || '0.0.0.0', () => {
