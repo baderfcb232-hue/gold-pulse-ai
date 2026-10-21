@@ -13,6 +13,6 @@ test('reject real accounts',()=>{let s=snapshot();s.execution.demo=false;assert.
 test('reject other brokers',()=>{let s=snapshot();s.broker='Other-Demo';assert.equal(demoTradeDecision({enabled:true,snapshot:s,publication:pub(),now}).reason,'NOT_JUSTMARKETS_DEMO')});
 test('reject stale quotes',()=>{let s=snapshot();s.quote_at=now-60;assert.equal(demoTradeDecision({enabled:true,snapshot:s,publication:pub(),now}).reason,'STALE_MT5')});
 test('reject rejected recommendation',()=>assert.equal(demoTradeDecision({enabled:true,snapshot:snapshot(),publication:{ready:false},now}).reason,'PLAN_NOT_APPROVED'));
-test('reject moved entry',()=>{let p=pub();p.plan.entry=2495;assert.equal(demoTradeDecision({enabled:true,snapshot:snapshot(),publication:p,now}).reason,'PRICE_OR_SPREAD_MOVED')});
+test('reject moved entry',()=>{let p=pub();p.plan.entry=2499.2;assert.equal(demoTradeDecision({enabled:true,snapshot:snapshot(),publication:p,now}).reason,'PRICE_OR_SPREAD_MOVED')});
 test('reject flipped stop',()=>{let p=pub();p.plan.sl=2501;assert.equal(demoTradeDecision({enabled:true,snapshot:snapshot(),publication:p,now}).reason,'INVALID_PLAN')});
 test('approve fresh demo with short TTL',()=>{let r=demoTradeDecision({enabled:true,snapshot:snapshot(),publication:pub(),now});assert.equal(r.ready,true);assert.equal(r.plan.expires_at,now+15);assert.equal(r.plan.tp,2504.1)});
