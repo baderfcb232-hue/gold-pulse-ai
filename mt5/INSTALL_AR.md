@@ -109,3 +109,20 @@ https://gold-pulse-ai.onrender.com
 خدمة Render الحالية تستخدم تخزينًا مؤقتًا، لذلك إدارة الصفقات من الموقع مقفلة. إظهار بيانات الحساب اختياري ولا يفعّل تداولًا أو أوامر إدارة.
 
 المراجع الرسمية: [تشغيل Expert Advisors وتحميل الإعدادات](https://www.metatrader5.com/en/terminal/help/algotrading/trade_robots_indicators)، [Compile في MetaEditor](https://www.metatrader5.com/en/metaeditor/help/development/compile)، [WebRequest](https://www.mql5.com/en/docs/network/webrequest).
+
+
+## تحديث 22 أكتوبر 2026: تنفيذ توصيات الذهب على JustMarkets Demo
+
+هذه الحزمة تحتوي على مصدر MQL5؛ تحتاج Compile داخل MetaEditor. لم يُجرَ تجميعها أو اختبار تنفيذ صفقة داخل MT5 في بيئة التطوير.
+
+1. أوقف Algo Trading مؤقتًا أثناء استبدال الملفات. احتفظ بإعداداتك ورمز الربط الحالي ولا ترسله لأحد.
+2. انسخ ملفات mq5 وmqh إلى مجلد MQL5/Experts نفسه، ثم افتح كل ملف mq5 في MetaEditor واضغط F7. يجب أن تكون النتيجة 0 errors.
+3. على شارت الذهب XAUUSD.m ضع البوت الرئيسي 1.14. استخدم حساب JustMarkets Demo فقط. طابق الرمز وMagic مع الجسر.
+4. في Inputs للبوت الرئيسي فعّل InpEnableLiveTrading وInpEnableNABDLink وInpNABDAllowRemoteControl وInpNABDDemoRecommendations. أبقِ إعدادات فلاتر الاستراتيجية والمخاطرة الحالية. لضبط نموذج كامل جديد على Demo يمكنك تحميل NABD_Demo_Recommendations.set؛ يضبط صفقة واحدة للمجموعة ومخاطرة 0.5% ولا يصلح لحساب حقيقي.
+5. على شارت منفصل ضع الجسر 3.05، واحتفظ بالرابط ورمز الإرسال السابقين. فعّل InpNABDSendAccount وInpNABDAllowRemoteControl وInpEnableNABDLink. أبقِ تحديث الجسر 3 ثوانٍ وأضف https://gold-pulse-ai.onrender.com إلى عناوين WebRequest المسموحة.
+6. أعد تشغيل Algo Trading. إن كنت تستخدم VPS المدمج في MT5 أعد مزامنة Experts والإعدادات بعد نجاح Compile.
+7. في الموقع يجب أن تختفي رسالة «يحتاج تحديث البوت والجسر» ويظهر «ننتظر توصية ذهب معتمدة ومستوفية للشروط». إعداد الخادم المطلوب DEMO_RECOMMENDATION_EXECUTION=true.
+
+يصدر البوت الخطة المحلية ثم ينتظر موافقة شروط الموقع (التكاليف والأخبار والفريمات والسياق اليومي). يعيد MT5 التحقق من الشروط والسبريد والسعر والمخاطرة والهامش قبل إرسالها؛ لا يفتح عند وصول توصية قديمة أو من مصدر مرجعي. لا تُنفذ كل رسائل Telegram القديمة تلقائيًا. خطة الذهب المعتمدة فقط مؤهلة، ولا يعاد إرسال أمر فتح للشمعة نفسها عند فقد التأكيد أو إعادة التشغيل.
+
+تابع Toolbox → Experts: WAIT_DASHBOARD تعني انتظار الموافقة، وDEMO_BLOCKED تعرض سبب المنع، وORDER_ACCEPTED تعرض قبول طلب الوسيط. إثبات فتح الصفقة هو ظهورها في Trade أو سجل Deal في History، وليس ظهور التوصية وحدها. فلتر الربح الصغير وإدارة الصفقات القائمة يبقيان حسب إعداداتك المحلية.

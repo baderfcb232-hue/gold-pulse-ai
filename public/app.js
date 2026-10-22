@@ -184,6 +184,8 @@ function renderExecution(){
   if(!notice){notice=e('p','subtle');notice.id='control-help';notice.setAttribute('role','status');$('close-all').parentElement.after(notice);}
   const issues=getControlBlockers('CLOSE_ALL');
   notice.textContent=issues.length?'أسباب تعليق أزرار إدارة الصفقات: '+issues.join(' · '):'أزرار إدارة الصفقات جاهزة، وكل أمر يحتاج تأكيدًا من المشغّل ثم من MT5.';
+  if(state?.execution?.demo_recommendations) notice.textContent+=' تنفيذ التوصيات على Demo: '+(state.execution.demo_result==='SUBMITTED'?'أُرسل طلب إلى MT5؛ راجع سجل العمليات لتأكيد الصفقة.':state.execution.demo_result==='BLOCKED'?'رفض MT5 آخر تنفيذ؛ السبب في Experts.':state.demoExecution?.ready?'توصية معتمدة بانتظار فحص MT5.':'ننتظر توصية ذهب معتمدة ومستوفية للشروط.');
+  else if(state?.demoExecution?.reason==='MT5_UPDATE_REQUIRED') notice.textContent+=' تنفيذ توصيات Demo يحتاج تحديث البوت والجسر وتفعيل وضع التوصيات.';
   document.querySelectorAll('.position .actions button').forEach(button=>{
     const blockers=getControlBlockers(button.dataset.action||'CLOSE_POSITION');
     button.disabled=false;

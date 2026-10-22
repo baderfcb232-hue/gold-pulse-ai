@@ -1,5 +1,5 @@
 #property strict
-#property version   "1.13"
+#property version   "1.14"
 #property description "NABD JustMarkets MT5 gold EA: EMA/RSI signals, protected risk and estimated net small-profit cycles."
 
 #include <Trade/Trade.mqh>
@@ -84,6 +84,7 @@ input bool            InpShowChartPanel         = true;
 input group "NABD dashboard coordination (optional)"
 input bool            InpEnableNABDLink          = false; // Share runtime settings with a separate bridge EA
 input bool            InpNABDAllowRemoteControl  = false; // Accept pause/resume and managed-position controls
+input bool            InpNABDDemoRecommendations = false; // JustMarkets Demo: wait for approved dashboard recommendation
 void NABDOnTimer();
 void NABDOnDeinit();
 bool NABDRemotePaused();
@@ -241,6 +242,8 @@ double SPVolumePerLeg(const double total_volume,const int legs,const double mini
 //+------------------------------------------------------------------+
 int OnInit()
   {
+   if(InpNABDDemoRecommendations && (AccountInfoInteger(ACCOUNT_TRADE_MODE)!=ACCOUNT_TRADE_MODE_DEMO || !InpEnableNABDLink || !InpNABDAllowRemoteControl))
+     {Print("Recommendation execution requires a Demo account, NABD link and remote control.");return INIT_PARAMETERS_INCORRECT;}
    if(!IsJustMarketsAccount())
      {
       Print("This EA requires a JustMarkets MT5 account. Check the server in account details.");
@@ -363,6 +366,8 @@ void OnTick()
                                    g_digits,signal.entry,g_digits,signal.stop_loss,g_digits,signal.take_profit,
                                    signal.rsi,g_digits,signal.atr));
    NABDPublishSignal(signal);
+   if(InpNABDDemoRecommendations)
+     {LogEvent("WAIT_DASHBOARD","local signal published; waiting for matching Demo approval");return;}
 
    if(!TradingExecutionEnabled())
      {
@@ -1046,6 +1051,7 @@ bool ClaimEntryBar()
       if(previous>=(double)g_last_entry_bar ||
          !GlobalVariableSetOnCondition(g_cycle_key+"_entrybar",(double)g_last_entry_bar,previous))
          return(false);
+      GlobalVariablesFlush(); // Persist the bar claim before any broker request.
      }
    g_last_claimed_bar=g_last_entry_bar;
    return(true);
