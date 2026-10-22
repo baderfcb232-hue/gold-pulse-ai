@@ -3,6 +3,7 @@ import {initLiveWorkspace} from '/live.js';
 import {createStateConnection} from '/state-connection.js';
 import {requestJson} from '/http.js';
 import {controlBlockers} from '/control-readiness.js';
+import {createCommandTracker, commandProgress, demoExecutionMessage} from '/command-feedback.js';
 const $ = id => document.getElementById(id);
 const e = (tag, cls, content) => {const x = document.createElement(tag); if (cls) x.className = cls; if (content != null) x.textContent = String(content); return x;};
 const put = (id, value) => {$(id).textContent = value ?? '—';};
@@ -10,14 +11,15 @@ const replace = (id, ...children) => $(id).replaceChildren(...children);
 const labels = {LIVE:'متصل بـ MT5',NO_DATA:'انتظار البيانات',STALE:'بيانات قديمة',DELAYED:'تحديث متأخر',DISCONNECTED:'اتصال MT5 منقطع',ERROR:'تعذر الاتصال'};
 const sides = {BUY:'شراء',SELL:'بيع',WAIT:'انتظار',NEUTRAL:'محايد',UNKNOWN:'غير مكتمل'};
 const statuses = {TRACKING:'قيد المتابعة',TP2:'بلغت الهدف',SL:'وقف الخسارة',EXPIRED:'انتهت الصلاحية',QUEUED:'بانتظار MT5',CONFIRMED:'أكد MT5 التنفيذ',REJECTED:'رُفض الأمر',UNCERTAIN:'التأكيد غير مكتمل'};
-const actions = {PAUSE:'إيقاف دخول جديد',RESUME:'استئناف الدخول',CLOSE_POSITION:'إغلاق الصفقة',CLOSE_ALL:'إغلاق صفقات البوت',BREAK_EVEN:'نقل الستوب لسعر الدخول',PARTIAL_CLOSE:'إغلاق نصف الصفقة'};
+const actions = {PAUSE:'إيقاف دخول جديد',RESUME:'تشغيل الدخول التلقائي',CLOSE_POSITION:'إغلاق الصفقة',CLOSE_ALL:'إغلاق صفقات البوت',BREAK_EVEN:'نقل الستوب لسعر الدخول',PARTIAL_CLOSE:'إغلاق نصف الصفقة'};
 const views = {overview:'نظرة السوق',signals:'التوصيات',positions:'الصفقات',news:'الأخبار الاقتصادية',results:'النتائج',settings:'الإعدادات والربط'};
 const descriptions = {overview:'أسعار وسياق السوق وأخبار، ومتابعة جاهزية التوصيات.',signals:'فرص المضاربة وخطط البوت، كل خطة بوقتها ومصدرها.',positions:'حسابك وصفقات البوت وأوامر الإدارة.',news:'عناوين المصادر ومواعيد الأحداث الاقتصادية بتوقيت غزة.',results:'متابعة الخطط وعمليات MT5 الفعلية.',settings:'ربط المنصة وفحص البيانات وحساب المخاطرة.'};
 let state = null, signals = [], privateData = null, authenticated = false, view = 'overview';
 let chartTf = 'M5', chartRows = [], chartKey = '', chartLoading = false;
 let lastSignalId = null, signalsStamp = '', clockOffset = 0, pendingCommand = null, stream = null;
 let stateErrorShown = false;
-let privateEpoch = 0, privateReadAllowed = true;
+let privateEpoch = 0, privateReadAllowed = true, privateLoading = null, commandSending = false, privateErrorShown = false;
+const commandTracker = createCommandTracker();
 let memberIdentity = null, memberCsrf = '';
 const price = v => v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('en-US',{minimumFractionDigits:state?.spec?.digits ?? 2,maximumFractionDigits:state?.spec?.digits ?? 2});
 const num = (v, digits = 2) => v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('en-US',{maximumFractionDigits:digits});
@@ -151,7 +153,19 @@ function renderNews(){
   replace('news-list',...(rows.length?rows.map(ev=>{const box=e('article','news-card'),top=e('div','event-top');top.append(badge(ev.importance===3?'أهمية مرتفعة':ev.importance===2?'متوسطة':'منخفضة',ev.importance===3?'warn':'neutral'),e('span','subtle',time(ev.time,true)));box.append(top,e('h3','',ev.name));const data=e('div','news-numbers');for(const [label,v]of [['السابق',ev.previous],['المتوقع',ev.forecast],['الفعلي',ev.actual]]){const cell=e('div');cell.append(e('small','',label),e('strong','',num(v,3)));data.append(cell);}box.append(data,e('div','event-meta',`${ev.currency} · ${ev.time>now()?countdown(ev.time):'صدر الحدث'}${ev.unit?' · '+ev.unit:''}`),e('p','news-source','المصدر: تقويم MetaTrader · التأثير يُقرأ مع السعر والسياق.'));return box;}):[empty(fresh?'لا توجد أحداث ضمن نطاق البيانات المستلمة.':'لا توجد بيانات أخبار موثقة حتى الآن. ربط MT5 يرسل التقويم ويحوّل الوقت إلى UTC.') ]));
 }
 function switchView(next){if(!views[next])return;view=next;document.querySelectorAll('[data-panel]').forEach(p=>p.hidden=p.dataset.panel!==next);document.querySelectorAll('[data-view]').forEach(b=>{b.classList.toggle('selected',b.dataset.view===next);if(b.dataset.view===next)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});put('view-title',views[next]);put('view-description',descriptions[next]);if(next==='settings')renderLink();if(next==='positions'||next==='results')loadPrivate();if(next==='signals'||next==='results')loadSignals();if(next==='overview')requestAnimationFrame(drawChart);}
-async function loadPrivate(){if(!privateReadAllowed)return;const epoch=privateEpoch;try{const data=await api('/api/account');if(epoch!==privateEpoch)return;privateData=data;authenticated=true;put('login-open','تسجيل خروج');renderPrivate();}catch(err){if(epoch!==privateEpoch)return;if(err.status===401){authenticated=false;privateData=null;put('login-open','دخول المشغّل');renderPrivate();renderExecution();}else toast(err.message,true);}}
+async function loadPrivate(){
+  if(!privateReadAllowed || privateLoading===privateEpoch)return;
+  const epoch=privateEpoch;privateLoading=epoch;
+  try{
+    const data=await api('/api/account');if(epoch!==privateEpoch)return;
+    privateData=data;authenticated=true;privateErrorShown=false;commandTracker.observe(data.commands,now());
+    put('login-open','تسجيل خروج');renderPrivate();
+  }catch(err){
+    if(epoch!==privateEpoch)return;
+    if(err.status===401){authenticated=false;privateData=null;commandTracker.clear();put('login-open','دخول المشغّل');renderPrivate();renderExecution();}
+    else if(!privateErrorShown){toast(err.message,true);privateErrorShown=true;}
+  }finally{if(privateLoading===epoch)privateLoading=null;}
+}
 function renderPrivate(){
   renderLink();$('account-lock').hidden=authenticated;$('account-content').hidden=!authenticated;
   if(!authenticated){replace('account-metrics');replace('positions-list');replace('commands-list');replace('deals-list',empty('سجّل دخول المشغّل لرؤية سجل حسابك.'));return;}
@@ -160,15 +174,45 @@ function renderPrivate(){
   if(a&&!$('risk-form').elements.equity.value)$('risk-form').elements.equity.value=a.equity;
   const rows=privateData?.positions||[];
   replace('positions-list',...(rows.length?rows.map(p=>{const box=e('article','position'),top=e('div','position-top');top.append(e('h3',p.side==='BUY'?'buy':'sell',`${sides[p.side]} · #${p.ticket}`),e('strong','number '+(p.profit>=0?'buy':'sell'),`${num(p.profit+p.swap)} ${currency}`));const data=e('div','position-data');for(const [label,v]of [['اللوت',num(p.volume,3)],['الدخول',price(p.entry)],['الستوب',p.sl?price(p.sl):'غير مضبوط'],['الهدف',p.tp?price(p.tp):'غير مضبوط']]){const cell=e('div');cell.append(e('small','',label),e('strong','',v));data.append(cell);}const buttons=e('div','actions');for(const [action,title]of [['BREAK_EVEN','ستوب على الدخول'],['PARTIAL_CLOSE','إغلاق نصف الصفقة'],['CLOSE_POSITION','إغلاق الصفقة']]){const b=e('button','button '+(action==='CLOSE_POSITION'?'danger':'ghost'),title);b.dataset.action=action;b.disabled=false;b.setAttribute('aria-disabled',String(getControlBlockers(action).length>0));b.onclick=()=>confirmCommand(action,p.ticket);buttons.append(b);}const spec=state?.spec,validStop=p.sl>0&&(p.side==='BUY'?p.sl<p.entry:p.sl>p.entry);const loss=validStop&&spec?.tick_size>0&&spec?.tick_value_loss>0?Math.abs(p.entry-p.sl)/spec.tick_size*spec.tick_value_loss*p.volume:null;const protection=!p.sl?'تحذير: الصفقة بدون وقف خسارة.':loss!=null?`خسارة مقدّرة من الدخول حتى الوقف: ${num(loss)} ${currency}، قبل العمولات والانزلاق.`:'الوقف مضبوط؛ تقدير الخسارة من الدخول غير متاح أو الوقف تجاوز الدخول.';box.append(top,data,e('p',!p.sl?'error-text':'subtle',protection),...(!p.tp?[e('p','error-text','الصفقة بدون هدف ربح مضبوط.')]:[]),buttons);return box;}):[empty('لا توجد صفقات مفتوحة للبوت المرتبط.') ]));
-  replace('commands-list',...(privateData?.commands?.length?privateData.commands.map(c=>{const row=e('div','command-row'),info=e('div');info.append(e('span','',actions[c.action]||c.action),e('small','',` · ${time(c.time,true)}${c.ticket!=='0'?' · #'+c.ticket:''}`));row.append(info,badge(statuses[c.status]||c.status,c.status==='CONFIRMED'?'good':c.status==='REJECTED'?'bad':'neutral'));if(c.result)row.title=c.result;return row;}):[empty('لا توجد أوامر تحكم سابقة.')]));renderExecution();renderDeals();
+  replace('commands-list',...(privateData?.commands?.length?privateData.commands.map(c=>{
+    const row=e('div','command-row'),info=e('div'),progress=commandProgress(c,now());
+    info.append(e('strong','',actions[c.action]||c.action),e('small','',`${time(c.time,true)}${c.ticket!=='0'?' · #'+c.ticket:''}`));
+    if(progress.result)info.append(e('p','command-result',progress.result));
+    row.append(info,badge(progress.title,progress.tone));return row;
+  }):[empty('لا توجد أوامر تحكم سابقة.')]));renderExecution();renderDeals();
+}
+function activeCommandBusy(){return commandSending || commandTracker.busy() ||
+  (privateData?.commands||[]).some(c=>c.status==='QUEUED');}
+function renderCommandProgress(){
+  const tracked=commandTracker.get(),recent=(privateData?.commands||[])[0];
+  const progress=commandProgress(tracked||recent,now()),box=$('command-progress');
+  box.hidden=!progress;if(!progress)return;
+  box.className='command-progress '+progress.tone;
+  // Keep the live region stable while its countdown changes.
+  if(!box.firstChild){box.append(e('strong'),e('p'),e('p','command-result'));}
+  const command=tracked||recent,title=`${actions[command.action]||command.action} · ${progress.title}`;
+  for(const [node,value]of [[box.children[0],title],[box.children[1],progress.detail],[box.children[2],progress.result||'']])
+    if(node.textContent!==value)node.textContent=value;
 }
 function getControlBlockers(action){
-  return controlBlockers({action,authenticated,persistent:state?.storage?.remoteControlAvailable===true,
+  const reasons=controlBlockers({action,authenticated,persistent:state?.storage?.remoteControlAvailable===true,
     live:effectiveConnection()==='LIVE',fresh:controlFresh(),remoteControl:!!state?.execution?.remote_control,
     enabled:!!state?.execution?.enabled});
+  if(activeCommandBusy())reasons.push('يوجد أمر قيد الإرسال أو التأكيد؛ انتظر تحديث سجله.');
+  if(controlFresh() && effectiveConnection()==='LIVE'){
+    if(action==='PAUSE' && state?.execution?.paused)reasons.push('الدخول موقوف بالفعل.');
+    if(action==='RESUME' && state?.execution?.paused===false)reasons.push('الدخول التلقائي مسموح بالفعل؛ البوت ينتظر اكتمال شروط التوصية.');
+  }
+  if(action==='CLOSE_ALL' && authenticated && privateData?.positions?.length===0 && now()-privateData.lastUpdate<=10)
+    reasons.push('لا توجد صفقات مفتوحة للبوت المرتبط لإغلاقها.');
+  return reasons;
 }
 function renderExecution(){
   const x=state?.execution;
+  put('control-connection-summary',!mainFresh()?'حالة MT5 غير حديثة؛ ننتظر تحديث البوت.':x?.paused?'دخول صفقات جديدة موقوف':x?.enabled?'الدخول التلقائي مسموح عند اكتمال الشروط':'التنفيذ غير مفعّل داخل MT5');
+  put('demo-execution-status',demoExecutionMessage(state));
+  $('control-download-mt5').hidden=x?.demo_recommendations===true;
+  renderCommandProgress();
   put('execution-badge',!mainFresh()?'حالة البوت غير متاحة':x?.enabled?(x.demo?'حساب تجريبي':'حساب حقيقي'):'التنفيذ المحلي غير مفعّل');
   $('execution-badge').className='pill '+(x?.enabled?'warn':'neutral');
   put('execution-description',x?`${x.paused?'دخول الصفقات موقوف':'إدارة البوت من MT5'} · هدف الربح الصغير ${num(x.small_profit_target)} ${state?.spec?.currency||''} · مخاطرة الإعداد المحلي ${num(x.risk_percent)}% · ${x.remote_control?'التحكم من الموقع متاح':'التحكم من الموقع غير مفعّل'}`:'إعدادات التنفيذ تظهر عند وصول ربط البوت.');
@@ -176,19 +220,17 @@ function renderExecution(){
   // confirmCommand(), rechecked before POST, and revalidated on the server.
   for(const [id,action] of [['pause-bot','PAUSE'],['resume-bot','RESUME'],['close-all','CLOSE_ALL']]){
     const button=$(id),issues=getControlBlockers(action);
-    button.disabled=false;
+    button.disabled=activeCommandBusy();
     button.setAttribute('aria-disabled',String(issues.length>0));
     button.title=issues.join(' · ')||'سيُطلب التأكيد قبل إرسال الأمر إلى MT5.';
+    if(id==='pause-bot')button.textContent=x?.paused?'الدخول موقوف':'إيقاف دخول جديد';
+    if(id==='resume-bot')button.textContent=x?.paused===false?'الدخول التلقائي مسموح':'تشغيل الدخول التلقائي';
   }
-  let notice=$('control-help');
-  if(!notice){notice=e('p','subtle');notice.id='control-help';notice.setAttribute('role','status');$('close-all').parentElement.after(notice);}
-  const issues=getControlBlockers('CLOSE_ALL');
-  notice.textContent=issues.length?'أسباب تعليق أزرار إدارة الصفقات: '+issues.join(' · '):'أزرار إدارة الصفقات جاهزة، وكل أمر يحتاج تأكيدًا من المشغّل ثم من MT5.';
-  if(state?.execution?.demo_recommendations) notice.textContent+=' تنفيذ التوصيات على Demo: '+(state.execution.demo_result==='SUBMITTED'?'أُرسل طلب إلى MT5؛ راجع سجل العمليات لتأكيد الصفقة.':state.execution.demo_result==='BLOCKED'?'رفض MT5 آخر تنفيذ؛ السبب في Experts.':state.demoExecution?.ready?'توصية معتمدة بانتظار فحص MT5.':'ننتظر توصية ذهب معتمدة ومستوفية للشروط.');
-  else if(state?.demoExecution?.reason==='MT5_UPDATE_REQUIRED') notice.textContent+=' تنفيذ توصيات Demo يحتاج تحديث البوت والجسر وتفعيل وضع التوصيات.';
+  const notice=$('control-help'),issues=getControlBlockers(state?.execution?.paused?'RESUME':'PAUSE');
+  notice.textContent=issues.length?issues.join(' · '):'اختر الأمر ثم أكّد إرساله. النتيجة تظهر بعد رد MT5.';
   document.querySelectorAll('.position .actions button').forEach(button=>{
     const blockers=getControlBlockers(button.dataset.action||'CLOSE_POSITION');
-    button.disabled=false;
+    button.disabled=activeCommandBusy();
     button.setAttribute('aria-disabled',String(blockers.length>0));
     button.title=blockers.join(' · ')||'سيُطلب التأكيد قبل إرسال الأمر إلى MT5.';
   });
@@ -255,10 +297,36 @@ const stateConnection=createStateConnection({
 });
 function fetchState(){return stateConnection.refresh();}
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>switchView(b.dataset.view));document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>switchView(b.dataset.goto));$('diagnostics-open').onclick=()=>switchView('settings');$('refresh-now').onclick=fetchState;
-document.querySelectorAll('.login-trigger').forEach(b=>b.onclick=async()=>{if(authenticated){privateEpoch++;privateReadAllowed=false;authenticated=false;privateData=null;put('login-open','دخول المشغّل');renderPrivate();renderExecution();try{await api('/api/logout',{method:'POST',body:'{}'});}catch(err){toast(err.message,true);}}else{$('login-error').textContent='';$('login-dialog').showModal();}});
+document.querySelectorAll('.login-trigger').forEach(b=>b.onclick=async()=>{if(authenticated){privateEpoch++;privateReadAllowed=false;authenticated=false;privateData=null;commandTracker.clear();put('login-open','دخول المشغّل');renderPrivate();renderExecution();try{await api('/api/logout',{method:'POST',body:'{}'});}catch(err){toast(err.message,true);}}else{$('login-error').textContent='';$('login-dialog').showModal();}});
 document.querySelectorAll('.dialog-close').forEach(b=>b.onclick=()=>b.closest('dialog').close());
 $('login-form').onsubmit=async event=>{event.preventDefault();const form=event.currentTarget;try{await api('/api/login',{method:'POST',body:JSON.stringify({token:form.elements.token.value})});privateEpoch++;privateReadAllowed=true;form.reset();$('login-dialog').close();await loadPrivate();toast('تم تسجيل الدخول.');}catch(err){put('login-error',err.message);}};
-$('command-confirm').onclick=async()=>{if(!pendingCommand)return;const issues=getControlBlockers(pendingCommand.action);if(issues.length){$('command-dialog').close();pendingCommand=null;toast(issues.join(' · '),true);return;}$('command-confirm').disabled=true;try{const result=await api('/api/commands',{method:'POST',body:JSON.stringify(pendingCommand)});$('command-dialog').close();pendingCommand=null;toast(result.message);await loadPrivate();}catch(err){toast(err.message,true);}finally{$('command-confirm').disabled=false;}};
+$('command-confirm').onclick=async()=>{
+  if(!pendingCommand || commandSending)return;
+  const issues=getControlBlockers(pendingCommand.action);
+  if(issues.length){$('command-dialog').close();pendingCommand=null;toast(issues.join(' · '),true);return;}
+  const command={...pendingCommand},epoch=privateEpoch;
+  if(!commandTracker.begin(command.action,command.ticket,now()))return;
+  commandSending=true;$('command-confirm').disabled=true;
+  // Close immediately so the same confirmation cannot be submitted twice.
+  $('command-dialog').close();pendingCommand=null;renderExecution();
+  try{
+    const result=await api('/api/commands',{method:'POST',body:JSON.stringify(command)});
+    if(epoch===privateEpoch){commandTracker.accepted(result);toast('استلم الموقع الأمر؛ ننتظر تأكيد MT5.');}
+  }catch(err){
+    if(epoch===privateEpoch){commandTracker.failed(err);toast(commandProgress(commandTracker.get(),now()).detail,true);}
+  }finally{
+    commandSending=false;$('command-confirm').disabled=false;renderExecution();
+    if(epoch===privateEpoch)await loadPrivate();
+  }
+};
+$('refresh-controls').onclick=async()=>{
+  const button=$('refresh-controls');if(button.disabled)return;
+  button.disabled=true;button.textContent='جارٍ تحديث الحالة…';
+  try{await Promise.all([fetchState(),loadPrivate()]);}
+  finally{button.disabled=false;button.textContent='تحديث الحالة والسجل';}
+};
+$('control-download-mt5').onclick=event=>{if(!authenticated){event.preventDefault();$('login-dialog').showModal();}};
+$('command-dialog').addEventListener('close',()=>{pendingCommand=null;});
 $('pause-bot').onclick=()=>confirmCommand('PAUSE');$('resume-bot').onclick=()=>confirmCommand('RESUME');$('close-all').onclick=()=>confirmCommand('CLOSE_ALL');$('signal-filter').onchange=renderSignals;$('signal-source-filter').onchange=renderSignals;$('results-source-filter').onchange=renderResults;$('news-filter').onchange=renderNews;
 $('download-mt5').onclick=event=>{if(!authenticated){event.preventDefault();$('login-dialog').showModal();}};
 $('copy-bridge-url').onclick=async()=>{try{await navigator.clipboard.writeText($('bridge-url').value);toast('تم نسخ رابط الجسر.');}catch{toast('انسخ الرابط من الحقل مباشرة.',true);$('bridge-url').select();}};
@@ -271,7 +339,8 @@ new ResizeObserver(drawChart).observe($('chart'));
 $('broker-details').addEventListener('toggle', drawChart);
 setInterval(()=>{put('server-clock',time(now())+' · غزة');if(state){renderOverview();renderExecution();renderLink();if(view==='settings')renderDiagnostics();}},1000);
 setInterval(()=>{if(stateConnection.needsPoll())fetchState();},5000);
-setInterval(()=>{if(authenticated&&(view==='positions'||view==='results'))loadPrivate();if(view==='signals'||view==='results')loadSignals();},10000);
+setInterval(()=>{if(authenticated&&!activeCommandBusy()&&(view==='positions'||view==='results'))loadPrivate();if(view==='signals'||view==='results')loadSignals();},10000);
+setInterval(()=>{if(authenticated&&activeCommandBusy())loadPrivate();},2000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)fetchState();});
 await fetchState();loadSignals();loadPrivate();
 stream=new EventSource('/api/events');stream.addEventListener('state',event=>{try{stateConnection.receive(JSON.parse(event.data));}catch{stateConnection.disconnected();}});stream.onerror=()=>stateConnection.disconnected();
