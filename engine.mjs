@@ -127,6 +127,8 @@ export function cleanSnapshot(raw, now = Date.now() / 1000) {
       updated_at: updated, events: events.sort((a, b) => a.time - b.time)},
     execution: {enabled: raw.execution?.enabled === true, main_connected: raw.execution?.main_connected === true,
       remote_control: raw.execution?.remote_control === true,
+      demo_recommendations: raw.execution?.demo_recommendations === true,
+      demo_result: ['WAITING','SUBMITTED','BLOCKED'].includes(raw.execution?.demo_result) ? raw.execution.demo_result : null,
       demo: raw.execution?.demo === true, paused: raw.execution?.paused === true,
       managed_magic: text(raw.execution?.managed_magic, 30),
       small_profit_target: Number(raw.execution?.small_profit_target) || null,

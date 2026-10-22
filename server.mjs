@@ -18,6 +18,7 @@ import {reviewPublication, publicationReasons} from './publication.mjs';
 import {createAccounts} from './auth.mjs';
 import {createRuntimeBackup} from './runtime-backup.mjs';
 import {createCommandJournal} from './command-journal.mjs';
+import {demoTradeDecision} from './demo-trade.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = resolve(ROOT, 'public');
@@ -52,7 +53,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   try { const row = db.prepare('SELECT data FROM snapshot WHERE id=1').get(); if (row) snapshot = JSON.parse(row.data); } catch {}
   let lastSource = snapshot ? `${snapshot.account_ref}|${snapshot.broker}|${snapshot.symbol}|${snapshot.execution.managed_magic}` : null;
   const cfg = {...defaults, signalSource: process.env.SIGNAL_SOURCE || 'EA',
-    publicationEnabled: process.env.SIGNAL_PUBLICATION_ENABLED === 'true', ...config};
+    publicationEnabled: process.env.SIGNAL_PUBLICATION_ENABLED === 'true',
+    demoRecommendationExecution: process.env.DEMO_RECOMMENDATION_EXECUTION === 'true', ...config};
   if (!['EA','DASHBOARD'].includes(cfg.signalSource)) throw new Error('SIGNAL_SOURCE must be EA or DASHBOARD');
   if (typeof cfg.publicationEnabled !== 'boolean') throw new Error('publicationEnabled must be a boolean');
   // Restore the original Telegram candidate sources without relaxing order controls.
@@ -192,6 +194,10 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
     catch { throw Object.assign(new Error('Invalid JSON body'), {status: 400}); }
   }
+  function demoExecutionReview() {
+    if (cfg.signalSource !== 'EA') return {ready: false, reason: 'EA_SOURCE_REQUIRED', plan: null};
+    return demoTradeDecision({enabled: cfg.demoRecommendationExecution === true, snapshot, publication: publicationReview(), now: clock()});
+  }
   function publicState() {
     const a = sourceAnalysis(snapshot, clock(), cfg);
     const publication = publicationReview(a);
@@ -220,7 +226,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       storage: {mode: storagePersistent ? 'persistent' : 'ephemeral', remoteControlAvailable: storagePersistent || !!commandJournal, commandJournal: commandJournal ? 'postgres' : storagePersistent ? 'disk' : 'unavailable', checkpoint: runtimeBackup?.status() || {state: 'NOT_CONFIGURED'}},
       historyCount: db.prepare('SELECT COUNT(*) AS n FROM signals').get().n,
       publicBaseUrl: publicBase || null, accountDataShared: Boolean(snapshot?.account),
-      serverTime: clock(), controlsConfigured: dashboardToken.length >= 32 && ingestToken.length >= 32};
+      serverTime: clock(), demoExecution: (() => {const {plan, ...status} = demoExecutionReview(); return status;})(),
+      controlsConfigured: dashboardToken.length >= 32 && ingestToken.length >= 32};
   }
   function broadcast() {
     emit('state', publicState);
@@ -408,6 +415,20 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         }
         audit('COMMAND_QUEUED', {id: Number(id), action, ticket});
         return send(req, res, 202, {id: Number(id), status: 'QUEUED', message: 'الأمر في الانتظار؛ التنفيذ يحتاج تأكيد MT5.'});
+      }
+      if (path === '/api/bridge/demo-recommendation' && req.method === 'POST') {
+        if (!bridge(req)) return send(req, res, 401, {error: 'Invalid bridge token'});
+        const b = await body(req, 2000);
+        if (!snapshot || b.account_ref !== snapshot.account_ref || b.broker !== snapshot.broker ||
+            b.symbol !== snapshot.symbol || b.magic !== snapshot.execution.managed_magic)
+          return send(req, res, 409, {error: 'Demo recommendation source mismatch'});
+        const decision = demoExecutionReview(), p = decision.plan;
+        // A short-lived approval only. The trading EA rechecks its local conditions and claims the bar before any order.
+        if (!decision.ready || !p) return send(req, res, 200, '', 'text/plain; charset=utf-8');
+        const fields = ['NBDEMO1', snapshot.account_ref, snapshot.symbol, snapshot.execution.managed_magic,
+          p.side, p.entry, p.sl, p.tp, Math.floor(p.issued_at), Math.floor(p.expires_at), p.bar_time];
+        if (fields.some(v => /[|\r\n]/.test(String(v)))) return send(req, res, 409, {error: 'Invalid source identity'});
+        return send(req, res, 200, fields.join('|'), 'text/plain; charset=utf-8');
       }
       if (path === '/api/bridge/next' && req.method === 'GET') {
         if (!bridge(req)) return send(req, res, 401, {error: 'Invalid bridge token'});

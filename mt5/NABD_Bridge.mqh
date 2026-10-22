@@ -1,4 +1,4 @@
-// Dashboard adapter for the existing JustMarkets EA. No new entries are sent by the site.
+// Dashboard adapter. Demo recommendation approvals are executed only by the opted-in main EA.
 // Network access is opt-in. All account details remain behind the operator login.
 bool g_nb_warned=false;
 int g_nb_last_http=0;
@@ -181,6 +181,28 @@ void NBAcknowledge(const long id,const string status,const string message)
    string response;
    NBRequest("POST","/api/bridge/result","{\"id\":"+(string)id+",\"status\":"+NBQ(status)+",\"message\":"+NBQ(message)+"}",response);
   }
+void NBProcessDemoRecommendation()
+  {
+   if(AccountInfoInteger(ACCOUNT_TRADE_MODE)!=ACCOUNT_TRADE_MODE_DEMO || !NBMainFresh() ||
+      NBMainValue("DM")<0.5 || !InpNABDAllowRemoteControl || !InpNABDSendAccount || NABDRemotePaused())return;
+   string response,payload="{\"account_ref\":"+NBQ((string)AccountInfoInteger(ACCOUNT_LOGIN))+
+     ",\"broker\":"+NBQ(AccountInfoString(ACCOUNT_SERVER))+",\"symbol\":"+NBQ(g_symbol)+",\"magic\":"+NBQ((string)InpMagicNumber)+"}";
+   if(NBRequest("POST","/api/bridge/demo-recommendation",payload,response)!=200 || StringLen(response)==0)return;
+   string parts[];if(StringSplit(response,'|',parts)!=11 || parts[0]!="NBDEMO1" ||
+      parts[1]!=(string)AccountInfoInteger(ACCOUNT_LOGIN) || parts[2]!=g_symbol || parts[3]!=(string)InpMagicNumber)return;
+   int direction=parts[4]=="BUY"?1:parts[4]=="SELL"?-1:0;
+   double entry=StringToDouble(parts[5]),sl=StringToDouble(parts[6]),tp=StringToDouble(parts[7]);
+   long issued=StringToInteger(parts[8]),expiry=StringToInteger(parts[9]),bar=StringToInteger(parts[10])+NBOffset();
+   if(!direction || !MathIsValidNumber(entry) || !MathIsValidNumber(sl) || !MathIsValidNumber(tp) ||
+      entry<=0 || sl<=0 || tp<=0 || issued<=0 || issued>(long)TimeGMT()+5 || (long)TimeGMT()-issued>75 ||
+      expiry<(long)TimeGMT() || expiry>(long)TimeGMT()+20 || (double)issued!=NBMainValue("ST") ||
+      (double)bar!=NBMainValue("SB") || (double)issued<=NBMainValue("DC"))return;
+   GlobalVariableSet(NABDKey("DA"),0.0);
+   GlobalVariableSet(NABDKey("DD"),(double)direction);GlobalVariableSet(NABDKey("DB"),(double)bar);
+   GlobalVariableSet(NABDKey("DE"),entry);GlobalVariableSet(NABDKey("DSL"),sl);GlobalVariableSet(NABDKey("DTP"),tp);
+   GlobalVariableSet(NABDKey("DX"),(double)expiry);
+   GlobalVariableSet(NABDKey("DA"),(double)issued);
+  }
 void NBProcessCommand()
   {
    string response;
@@ -302,6 +324,8 @@ void NABDOnTimer()
      ",\"quote_at\":"+(string)((long)tick.time-offset)+",\"bid\":"+NBD(tick.bid,g_digits)+",\"ask\":"+NBD(tick.ask,g_digits)+
      ",\"spec\":"+spec+",\"candles\":"+candles+",\"calendar\":"+calendar+
      ",\"execution\":{\"main_connected\":"+NBB(NBMainFresh())+",\"enabled\":"+NBB(TradingExecutionEnabled())+",\"remote_control\":"+NBB(InpNABDAllowRemoteControl && InpNABDSendAccount && NBMainFresh() && NBMainValue("R")>0.5)+
+     ",\"demo_recommendations\":"+NBB(NBMainFresh() && NBMainValue("DM")>0.5)+
+     ",\"demo_result\":"+NBQ(NBMainValue("DR")==2?"SUBMITTED":NBMainValue("DR")==3?"BLOCKED":"WAITING")+
      ",\"demo\":"+NBB(AccountInfoInteger(ACCOUNT_TRADE_MODE)==ACCOUNT_TRADE_MODE_DEMO)+",\"paused\":"+NBB(NABDRemotePaused())+
      ",\"managed_magic\":"+NBQ((string)InpMagicNumber)+",\"small_profit_target\":"+NBD(NBMainValue("TP"),2)+
      ",\"max_daily_loss_percent\":"+NBD(NBMainValue("DL"),2)+",\"risk_percent\":"+NBD(NBMainValue("RP"),2)+
@@ -335,5 +359,6 @@ void NABDOnTimer()
    bool first=!g_nb_bootstrap_done;g_nb_bootstrap_done=true;
    NBStatus(first?"First quote accepted. History/calendar will load on the next update.":
      NBMainFresh()?"Update accepted by dashboard. Main bot link present.":"Update accepted by dashboard. Waiting for the main bot link.");
-   if(InpNABDAllowRemoteControl && InpNABDSendAccount)NBProcessCommand();
+   if(InpNABDAllowRemoteControl && InpNABDSendAccount)
+     {NBProcessCommand();NBProcessDemoRecommendation();}
   }
