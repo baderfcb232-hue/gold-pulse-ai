@@ -110,6 +110,9 @@ test('dashboard control module is served as JavaScript and can be imported by ap
   assert.equal(moduleResponse.status,200);
   assert.match(moduleResponse.headers.get('content-type'),/javascript/);
   assert.match(await moduleResponse.text(),/export function controlBlockers/);
+  const feedback=await fetch(base+'/command-feedback.js');
+  assert.equal(feedback.status,200);assert.match(feedback.headers.get('content-type'),/javascript/);
+  assert.match(await feedback.text(),/export function createCommandTracker/);
   const appResponse=await fetch(base+'/app.js');
   assert.equal(appResponse.status,200);
   assert.match(await appResponse.text(),/from '\/control-readiness\.js'/);
