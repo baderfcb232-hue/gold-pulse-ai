@@ -326,15 +326,17 @@ export function trackPlan(plan, snapshot, now = Date.now() / 1000) {
 export function positionSize({equity, riskPercent, entry, sl, spec, commissionPerLot = 0, freeMargin = Infinity}) {
   for (const [k, val] of Object.entries({equity, riskPercent, entry, sl, commissionPerLot})) number(val, k, {min: 0});
   if (!(riskPercent > 0 && riskPercent <= 100 && entry > 0 && sl > 0 && entry !== sl)) throw new Error('Invalid risk inputs');
-  if (![spec.tick_size, spec.tick_value_loss, spec.volume_min, spec.volume_step, spec.volume_max].every(x => x > 0))
+  if (!spec || ![spec.tick_size, spec.tick_value_loss, spec.volume_min, spec.volume_step, spec.volume_max].every(x => Number.isFinite(x) && x > 0) || spec.volume_max < spec.volume_min)
     throw new Error('مواصفات العقد وقيمة النقطة من البروكر مطلوبة للحساب.');
   const budget = equity * riskPercent / 100;
   const perLot = Math.abs(entry - sl) / spec.tick_size * spec.tick_value_loss + commissionPerLot;
+  const minimumLoss = perLot * spec.volume_min, minimumEquity = minimumLoss * 100 / riskPercent;
+  const details = {budget, minimumLoss, minimumEquity, minimumVolume: spec.volume_min};
   const volume = Number((Math.floor(Math.min(budget / perLot, spec.volume_max) / spec.volume_step + 1e-9) * spec.volume_step).toFixed(8));
-  if (volume < spec.volume_min) return {budget, volume: 0, loss: null, margin: null, reason: 'الحد الأدنى للوت يتجاوز ميزانية المخاطرة.'};
+  if (volume < spec.volume_min || volume * perLot > budget + 1e-8) return {...details, code: 'BELOW_MINIMUM_VOLUME', volume: 0, loss: null, margin: null, reason: 'الحد الأدنى للوت يتجاوز ميزانية المخاطرة.'};
   const margin = spec.margin_per_lot > 0 ? volume * spec.margin_per_lot : null;
   if (Number.isFinite(freeMargin) && margin !== null && margin > freeMargin)
-    return {budget, volume: 0, loss: null, margin, reason: 'الهامش المتاح غير كافٍ.'};
-  return {budget, volume, loss: perLot * volume, margin,
+    return {...details, code: 'INSUFFICIENT_MARGIN', volume: 0, loss: null, margin, reason: 'الهامش المتاح غير كافٍ.'};
+  return {...details, code: 'SIZED', volume, loss: perLot * volume, margin,
     reason: margin === null ? 'تقدير؛ الهامش غير متاح ويجب تأكيده في MT5.' : 'تقدير حسب آخر مواصفات وصلتنا؛ التنفيذ يعاد التحقق منه في MT5.'};
 }

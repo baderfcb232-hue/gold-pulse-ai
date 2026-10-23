@@ -1,5 +1,13 @@
 # Verification — NABD Gold Pulse v3.3.3
 
+## Automatic account sizing and broker minimum diagnostics (23 October 2026)
+
+- Size estimates use current account equity, the risk percentage reported by MT5, original entry/stop levels, and the exact broker contract's loss tick value and volume step. The linked account currently reports 0.5%; no risk settings, stops, execution switches, or trading filters are changed by this release.
+- Before issuing an existing Demo approval, the server rejects an estimate below the broker minimum, insufficient free margin, or invalid risk/contract inputs. The wire protocol is unchanged. MT5 still recalculates the actual volume with OrderCalcProfit and enforces its remaining daily loss budget, margin ceiling and fresh-price checks. No MT5 reinstall is required for these server/UI changes.
+- Operator-only account data includes the automatic budget and a sizing estimate for a local plan or the most recent matching broker gold opportunity. Expired examples remain labelled as historical estimates. Public state, market data and health responses do not disclose account amounts or volumes.
+- The 200 USD / 0.5% / 4000.36–4008.04 regression produces a 1 USD budget and 7.68 USD minimum-lot stop estimate, so it returns zero volume rather than rounding up. Tests cover growing/shrinking equity, different stop widths, volume caps, contract mismatches, rejected approvals and private/public API isolation.
+- Local validation on Node 24.19.0: 163 tests passed; 36 focused account/approval tests passed. No synthetic quotes, recommendations, or broker order requests were sent to production during validation. Estimates are before commissions and slippage; they do not guarantee maximum realized loss or authorize a trade.
+
 ## Combined gold-history and connection release (3.3.3)
 
 - The previously prepared gold-history correction was verified against all 11 file hashes and published-base commit `86c9a459248143148e8fd8c0d0c4eff2bfaa4be5`, then merged with silent-stream recovery. Both changes ship together as 3.3.3.

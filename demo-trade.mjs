@@ -1,5 +1,6 @@
 // Broker-bound, short-lived execution approval. Never authorize on a reference feed.
 // This module does not submit orders; MT5 independently checks every prerequisite.
+import {automaticRiskSizing} from './automatic-risk.mjs';
 export function demoTradeDecision({enabled = false, snapshot: s, publication, now}) {
   const reject = reason => ({ready: false, reason, plan: null});
   if (!enabled) return reject('DISABLED');
@@ -32,6 +33,10 @@ export function demoTradeDecision({enabled = false, snapshot: s, publication, no
   if (Math.abs(quote - entry) > risk * 0.15 ||
       (s.ask - s.bid) / s.spec.point > Math.min(80, s.ea?.settings?.max_spread_points || 80))
     return reject('PRICE_OR_SPREAD_MOVED');
+  const sizing = automaticRiskSizing(s, p, now);
+  if (!sizing.available) return reject(sizing.reason);
+  if (!sizing.estimate || sizing.estimate.volume <= 0)
+    return reject(sizing.estimate?.code || 'INVALID_PLAN');
   return {ready: true, reason: 'READY', plan: {side: p.side, entry, sl, tp, 
     issued_at: p.issued_at, expires_at: Math.min(p.expires_at, now + 15), bar_time: p.bar_time}};
 }

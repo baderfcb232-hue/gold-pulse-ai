@@ -168,9 +168,10 @@ async function loadPrivate(){
 }
 function renderPrivate(){
   renderLink();$('account-lock').hidden=authenticated;$('account-content').hidden=!authenticated;
-  if(!authenticated){replace('account-metrics');replace('positions-list');replace('commands-list');replace('deals-list',empty('سجّل دخول المشغّل لرؤية سجل حسابك.'));return;}
+  if(!authenticated){replace('account-metrics');replace('automatic-risk-content');replace('positions-list');replace('commands-list');replace('deals-list',empty('سجّل دخول المشغّل لرؤية سجل حسابك.'));return;}
   const a=privateData?.account,currency=a?.currency||state?.spec?.currency||'';
   replace('account-metrics',metric('الرصيد',num(a?.balance),currency),metric('حقوق الحساب',num(a?.equity),currency),metric('الهامش المتاح',num(a?.free_margin),currency),metric('ربح/خسارة عائمة',num(a?.floating),currency));
+  renderAutomaticRisk();
   if(a&&!$('risk-form').elements.equity.value)$('risk-form').elements.equity.value=a.equity;
   const rows=privateData?.positions||[];
   replace('positions-list',...(rows.length?rows.map(p=>{const box=e('article','position'),top=e('div','position-top');top.append(e('h3',p.side==='BUY'?'buy':'sell',`${sides[p.side]} · #${p.ticket}`),e('strong','number '+(p.profit>=0?'buy':'sell'),`${num(p.profit+p.swap)} ${currency}`));const data=e('div','position-data');for(const [label,v]of [['اللوت',num(p.volume,3)],['الدخول',price(p.entry)],['الستوب',p.sl?price(p.sl):'غير مضبوط'],['الهدف',p.tp?price(p.tp):'غير مضبوط']]){const cell=e('div');cell.append(e('small','',label),e('strong','',v));data.append(cell);}const buttons=e('div','actions');for(const [action,title]of [['BREAK_EVEN','ستوب على الدخول'],['PARTIAL_CLOSE','إغلاق نصف الصفقة'],['CLOSE_POSITION','إغلاق الصفقة']]){const b=e('button','button '+(action==='CLOSE_POSITION'?'danger':'ghost'),title);b.dataset.action=action;b.disabled=false;b.setAttribute('aria-disabled',String(getControlBlockers(action).length>0));b.onclick=()=>confirmCommand(action,p.ticket);buttons.append(b);}const spec=state?.spec,validStop=p.sl>0&&(p.side==='BUY'?p.sl<p.entry:p.sl>p.entry);const loss=validStop&&spec?.tick_size>0&&spec?.tick_value_loss>0?Math.abs(p.entry-p.sl)/spec.tick_size*spec.tick_value_loss*p.volume:null;const protection=!p.sl?'تحذير: الصفقة بدون وقف خسارة.':loss!=null?`خسارة مقدّرة من الدخول حتى الوقف: ${num(loss)} ${currency}، قبل العمولات والانزلاق.`:'الوقف مضبوط؛ تقدير الخسارة من الدخول غير متاح أو الوقف تجاوز الدخول.';box.append(top,data,e('p',!p.sl?'error-text':'subtle',protection),...(!p.tp?[e('p','error-text','الصفقة بدون هدف ربح مضبوط.')]:[]),buttons);return box;}):[empty('لا توجد صفقات مفتوحة للبوت المرتبط.') ]));
@@ -180,6 +181,22 @@ function renderPrivate(){
     if(progress.result)info.append(e('p','command-result',progress.result));
     row.append(info,badge(progress.title,progress.tone));return row;
   }):[empty('لا توجد أوامر تحكم سابقة.')]));renderExecution();renderDeals();
+}
+function renderAutomaticRisk(){
+  const r=privateData?.riskSizing,box=$('automatic-risk-content'),currency=r?.currency||state?.spec?.currency||'';
+  if(!r?.available){box.replaceChildren(empty('ننتظر حقوق الحساب ونسبة المخاطرة ومواصفات العقد من MT5.'));return;}
+  const summary=e('div','position-data');
+  for(const [label,value]of [['حقوق الحساب',`${num(r.capital)} ${currency}`],['نسبة المخاطرة',`${num(r.riskPercent)}%`],['سقف الصفقة',`${num(r.budget,4)} ${currency}`],['أقل لوت',num(r.minimumVolume,8)]]){
+    const cell=e('div');cell.append(e('small','',label),e('strong','number',value));summary.append(cell);
+  }
+  const parts=[summary],p=r.plan,s=r.estimate;
+  if(p&&s){
+    parts.push(e('p','subtle',`${p.expired?'تقدير آخر فرصة منتهية؛ لا يُرسل للتنفيذ':'تقدير الفرصة الحالية؛ لا يؤكد اعتمادها أو تنفيذها'} · ${sides[p.side]} · ${time(p.issued_at,true)} · دخول ${price(p.entry)} · وقف ${price(p.sl)}`));
+    parts.push(e('p',s.volume>0?'control-explanation':'error-text',s.volume>0?`اللوت المحسوب ${num(s.volume,8)} · خسارة الستوب المقدّرة ${num(s.loss,4)} ${currency}.`:`${s.reason} خسارة أقل لوت لهذه الفرصة ${num(s.minimumLoss,4)} ${currency} مقابل سقف ${num(s.budget,4)} ${currency}.`));
+  }else parts.push(empty('ننتظر فرصة لحساب اللوت من دخولها ووقفها تلقائيًا.'));
+  parts.push(e('p','subtle',`مسافة الستوب القصوى لأقل لوت ضمن السقف الحالي: ${num(r.maxStopDistance,4)} من وحدات سعر الذهب، قبل التكاليف. لا يغيّر النظام وقف الاستراتيجية ليُجبر الصفقة على الدخول.`));
+  if(!privateData?.lastUpdate||now()-privateData.lastUpdate>10)parts.push(e('p','error-text','بيانات الحساب قديمة؛ هذا تقدير محفوظ ويحتاج تحديث MT5.'));
+  box.replaceChildren(...parts);
 }
 function activeCommandBusy(){return commandSending || commandTracker.busy() ||
   (privateData?.commands||[]).some(c=>c.status==='QUEUED');}

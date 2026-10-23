@@ -62,3 +62,12 @@ test('publication safeguards remain required for Demo execution',async t=>{
   app.ingest(raw);assert.equal(await (await post()).text(),'');
   assert.equal(app.publicState().demoExecution.reason,'PLAN_NOT_APPROVED');
 });
+test('a published plan over the account risk budget cannot receive bridge approval or disclose its account budget',async t=>{
+  const {app,raw,post}=await setup(t);
+  raw.account={...raw.account,balance:200,equity:200,free_margin:200};app.ingest(raw);
+  const state=app.publicState();
+  assert.equal(state.demoExecution.reason,'BELOW_MINIMUM_VOLUME');
+  assert.equal(await (await post()).text(),'');
+  assert.deepEqual(Object.keys(state.demoExecution).sort(),['ready','reason']);
+  assert.equal(app.db.prepare('SELECT count(*) n FROM commands').get().n,0);
+});

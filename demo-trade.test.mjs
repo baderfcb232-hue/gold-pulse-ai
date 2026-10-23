@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {demoTradeDecision} from './demo-trade.mjs';
 const now=2000000000;
-const snapshot=()=>({account:{equity:1000},broker:'JustMarkets-Demo',symbol:'XAUUSD.m',terminal_connected:true,
+const snapshot=()=>({account:{equity:1000,free_margin:1000},broker:'JustMarkets-Demo',symbol:'XAUUSD.m',terminal_connected:true,
   quote_at:now,received_at:now,bid:2500,ask:2500.2,
-  spec:{point:0.01},ea:{heartbeat_at:now,emergency_stop:false,signal:{bar_time:now-300,side:'BUY',entry:2500.1,sl:2498.1,tp2:2504.1},settings:{max_spread_points:80}},
-  execution:{demo_recommendations:true,demo:true,main_connected:true,enabled:true,remote_control:true,paused:false}});
+  spec:{point:0.01,tick_size:0.01,tick_value_loss:1,volume_min:.01,volume_max:100,volume_step:.01,margin_per_lot:500},ea:{heartbeat_at:now,emergency_stop:false,signal:{bar_time:now-300,side:'BUY',entry:2500.1,sl:2498.1,tp2:2504.1},settings:{max_spread_points:80}},
+  execution:{demo_recommendations:true,demo:true,main_connected:true,enabled:true,remote_control:true,paused:false,risk_percent:.5}});
 const pub=()=>({ready:true,plan:{id:'a1',broker_symbol:'XAUUSD.m',side:'BUY',
   entry:2500.1,sl:2498.1,tp1:2504.1,tp2:2504.1,issued_at:now-2,expires_at:now+100,bar_time:now-300}});
 test('off by default',()=>assert.equal(demoTradeDecision({snapshot:snapshot(),publication:pub(),now}).reason,'DISABLED'));
@@ -32,4 +32,15 @@ test('reject a different local signal, occupied account, future telemetry and in
     ['MT5_EXECUTION_NOT_READY',s=>s.execution.paused=true],
     ['MT5_EXECUTION_NOT_READY',s=>s.ea.emergency_stop=true]
   ]) {let s=snapshot();mutate(s);assert.equal(demoTradeDecision({enabled:true,snapshot:s,publication:pub(),now}).reason,reason);}
+});
+
+test('approved plans must also fit the actual account budget and broker minimum before crossing the bridge',()=>{
+  const s=snapshot();s.account.equity=200;
+  assert.equal(demoTradeDecision({enabled:true,snapshot:s,publication:pub(),now}).reason,'BELOW_MINIMUM_VOLUME');
+  s.account.equity=1000;s.account.free_margin=1;
+  assert.equal(demoTradeDecision({enabled:true,snapshot:s,publication:pub(),now}).reason,'INSUFFICIENT_MARGIN');
+  s.account.free_margin=1000;s.execution.risk_percent=null;
+  assert.equal(demoTradeDecision({enabled:true,snapshot:s,publication:pub(),now}).reason,'INVALID_RISK_SETTINGS');
+  s.execution.risk_percent=.5;s.spec.tick_value_loss=0;
+  assert.equal(demoTradeDecision({enabled:true,snapshot:s,publication:pub(),now}).reason,'INVALID_CONTRACT');
 });
