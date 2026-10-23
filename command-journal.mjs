@@ -1,4 +1,5 @@
 // PostgreSQL is authoritative for commands; periodic SQLite backups are not a journal.
+import {websiteEntryJournal} from './website-entry.mjs';
 export async function createCommandJournal(connectionString) {
   if (!connectionString) return null;
   const {default: pg} = await import('pg');
@@ -9,12 +10,18 @@ export async function createCommandJournal(connectionString) {
       CREATE TABLE IF NOT EXISTS nabd_command_journal (
         id bigint PRIMARY KEY DEFAULT nextval('nabd_command_id'), time double precision NOT NULL,
         expires double precision NOT NULL, action text NOT NULL, ticket text NOT NULL,
-        fraction double precision NOT NULL, status text NOT NULL, result text)`);
+        fraction double precision NOT NULL, status text NOT NULL, result text);
+      CREATE TABLE IF NOT EXISTS nabd_website_entries (
+        id bigint PRIMARY KEY DEFAULT nextval('nabd_command_id'), source_key text NOT NULL,
+        plan_id text NOT NULL, time double precision NOT NULL, expires double precision NOT NULL,
+        status text NOT NULL, plan text NOT NULL, reported_at double precision,
+        UNIQUE(source_key,plan_id))`);
   } catch {await pool.end(); throw Error('Could not initialize durable command journal');}
   const safe = async fn => {try {return await fn();} catch {throw Error('سجل الأوامر الدائم غير متاح؛ لم يتم تأكيد إرسال الأمر.');}};
   const expire = (client, now) => client.query("UPDATE nabd_command_journal SET status='EXPIRED' WHERE status='QUEUED' AND expires<=$1", [now]);
   const row = r => r ? {...r, id: Number(r.id)} : null;
   return {
+    ...websiteEntryJournal(pool),
     list: now => safe(async () => {await expire(pool, now); return (await pool.query('SELECT * FROM nabd_command_journal ORDER BY id DESC LIMIT 100')).rows.map(row);}),
     enqueue: (now, action, ticket, fraction) => safe(async () => {
       const c = await pool.connect();

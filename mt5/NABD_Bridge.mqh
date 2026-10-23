@@ -183,6 +183,7 @@ void NBAcknowledge(const long id,const string status,const string message)
   }
 void NBProcessDemoRecommendation()
   {
+   if(NBMainValue("WM")>0.5)return;
    if(AccountInfoInteger(ACCOUNT_TRADE_MODE)!=ACCOUNT_TRADE_MODE_DEMO || !NBMainFresh() ||
       NBMainValue("DM")<0.5 || !InpNABDAllowRemoteControl || !InpNABDSendAccount || NABDRemotePaused())return;
    string response,payload="{\"account_ref\":"+NBQ((string)AccountInfoInteger(ACCOUNT_LOGIN))+
@@ -202,6 +203,34 @@ void NBProcessDemoRecommendation()
    GlobalVariableSet(NABDKey("DE"),entry);GlobalVariableSet(NABDKey("DSL"),sl);GlobalVariableSet(NABDKey("DTP"),tp);
    GlobalVariableSet(NABDKey("DX"),(double)expiry);
    GlobalVariableSet(NABDKey("DA"),(double)issued);
+  }
+void NBProcessWebsiteRecommendation()
+  {
+   static double reported_id=0;
+   if(AccountInfoInteger(ACCOUNT_TRADE_MODE)!=ACCOUNT_TRADE_MODE_DEMO || !NBMainFresh() ||
+      NBMainValue("WM")<0.5 || NBMainValue("DM")<0.5 || !InpNABDAllowRemoteControl || !InpNABDSendAccount)return;
+   string source="\"account_ref\":"+NBQ((string)AccountInfoInteger(ACCOUNT_LOGIN))+
+     ",\"broker\":"+NBQ(AccountInfoString(ACCOUNT_SERVER))+",\"symbol\":"+NBQ(g_symbol)+",\"magic\":"+NBQ((string)InpMagicNumber);
+   double result_id=NBMainValue("WI"),result=NBMainValue("WR");string response;
+   if(result_id>reported_id && result_id==NBMainValue("WI") && (result==1 || result==2))
+      if(NBRequest("POST","/api/bridge/website-result","{"+source+",\"id\":"+NBD(result_id,0)+
+       ",\"status\":"+NBQ(result==2?"SUBMITTED":"REJECTED")+"}",response)==200)reported_id=result_id;
+   if(NABDRemotePaused())return;
+   if(NBRequest("POST","/api/bridge/website-recommendation","{"+source+"}",response)!=200 || StringLen(response)==0)return;
+   string parts[];if(StringSplit(response,'|',parts)!=12 || parts[0]!="NBWEB1" ||
+      parts[1]!=(string)AccountInfoInteger(ACCOUNT_LOGIN) || parts[2]!=g_symbol || parts[3]!=(string)InpMagicNumber)return;
+   int direction=parts[4]=="BUY"?1:parts[4]=="SELL"?-1:0;
+   double entry=StringToDouble(parts[5]),sl=StringToDouble(parts[6]),tp=StringToDouble(parts[7]);
+   long issued=StringToInteger(parts[8]),expiry=StringToInteger(parts[9]),bar=StringToInteger(parts[10])+NBOffset(),id=StringToInteger(parts[11]);
+   if(!direction || id<=0 || id>9007199254740991 || (double)id<=NBMainValue("WC") ||
+      issued<=0 || issued>(long)TimeGMT()+5 || (long)TimeGMT()-issued>75 || expiry<=(long)TimeGMT() ||
+      expiry>(long)TimeGMT()+20 || (double)issued<NBMainValue("WT") ||
+      !MathIsValidNumber(entry) || !MathIsValidNumber(sl) || !MathIsValidNumber(tp) || entry<=0 || sl<=0 || tp<=0)return;
+   GlobalVariableSet(NABDKey("WA"),0.0);
+   GlobalVariableSet(NABDKey("WD"),(double)direction);GlobalVariableSet(NABDKey("WB"),(double)bar);
+   GlobalVariableSet(NABDKey("WE"),entry);GlobalVariableSet(NABDKey("WL"),sl);GlobalVariableSet(NABDKey("WP"),tp);
+   GlobalVariableSet(NABDKey("WF"),(double)issued);GlobalVariableSet(NABDKey("WX"),(double)expiry);
+   GlobalVariableSet(NABDKey("WA"),(double)id);
   }
 void NBProcessCommand()
   {
@@ -325,6 +354,8 @@ void NABDOnTimer()
      ",\"spec\":"+spec+",\"candles\":"+candles+",\"calendar\":"+calendar+
      ",\"execution\":{\"main_connected\":"+NBB(NBMainFresh())+",\"enabled\":"+NBB(TradingExecutionEnabled())+",\"remote_control\":"+NBB(InpNABDAllowRemoteControl && InpNABDSendAccount && NBMainFresh() && NBMainValue("R")>0.5)+
      ",\"demo_recommendations\":"+NBB(NBMainFresh() && NBMainValue("DM")>0.5)+
+     ",\"website_recommendations\":"+NBB(NBMainFresh() && NBMainValue("WM")>0.5)+
+     ",\"website_since\":"+NBD(NBMainValue("WT"),0)+
      ",\"demo_result\":"+NBQ(NBMainValue("DR")==2?"SUBMITTED":NBMainValue("DR")==3?"BLOCKED":"WAITING")+
      ",\"demo\":"+NBB(AccountInfoInteger(ACCOUNT_TRADE_MODE)==ACCOUNT_TRADE_MODE_DEMO)+",\"paused\":"+NBB(NABDRemotePaused())+
      ",\"managed_magic\":"+NBQ((string)InpMagicNumber)+",\"small_profit_target\":"+NBD(NBMainValue("TP"),2)+
@@ -360,5 +391,5 @@ void NABDOnTimer()
    NBStatus(first?"First quote accepted. History/calendar will load on the next update.":
      NBMainFresh()?"Update accepted by dashboard. Main bot link present.":"Update accepted by dashboard. Waiting for the main bot link.");
    if(InpNABDAllowRemoteControl && InpNABDSendAccount)
-     {NBProcessCommand();NBProcessDemoRecommendation();}
+     {NBProcessCommand();NBProcessWebsiteRecommendation();NBProcessDemoRecommendation();}
   }

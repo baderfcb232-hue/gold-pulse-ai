@@ -20,6 +20,8 @@ import {createRuntimeBackup} from './runtime-backup.mjs';
 import {createCommandJournal} from './command-journal.mjs';
 import {demoTradeDecision} from './demo-trade.mjs';
 import {automaticRiskSizing} from './automatic-risk.mjs';
+import {websiteTradeDecision, entrySourceKey} from './website-entry.mjs';
+import {brokerGoldMarket} from './broker-market.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = resolve(ROOT, 'public');
@@ -107,6 +109,10 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   const signalRows = () => db.prepare('SELECT data FROM signals ORDER BY issued_at DESC LIMIT 200').all().map(x => JSON.parse(x.data));
   function telegramCandidates() {
     if (!cfg.publicationEnabled) return [];
+    if (snapshot?.execution.website_recommendations) {
+      const p=marketFeed.publicState().markets.XAUUSD?.currentSignal;
+      return p ? [{...p,claimedSuccessRate:null,costMeaning:'NOT_VERIFIED'}] : [];
+    }
     if (telegramPolicy === 'STRICT') {const p = publicationReview().plan; return p ? [p] : [];}
     const a = sourceAnalysis(snapshot, clock(), cfg);
     const active = a.connection === 'LIVE' && a.source_ready ? signalRows().find(p =>
@@ -146,7 +152,9 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     ];
   }
   function marketState() {
-    const state = researchMarketState(marketFeed.publicState()), plan = publicationReview().plan;
+    const raw = marketFeed.publicState(), state = researchMarketState(raw), plan = snapshot?.execution.website_recommendations ? null : publicationReview().plan;
+    if (snapshot?.execution.website_recommendations && raw.markets.XAUUSD?.source_id?.startsWith('MT5:'))
+      state.markets.XAUUSD = {...raw.markets.XAUUSD,execution_mode:'DEMO_WEBSITE',execution: (()=>{const {plan,...status}=websiteExecutionReview();return status;})()};
     const gold = state.markets.XAUUSD;
     // A broker plan may appear over its own gold feed. It must never be drawn
     // over Coinbase or Gold API prices, including a broker's BTC CFD plan.
@@ -196,12 +204,23 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     catch { throw Object.assign(new Error('Invalid JSON body'), {status: 400}); }
   }
   function demoExecutionReview() {
+    if (snapshot?.execution.website_recommendations) return websiteExecutionReview();
     if (cfg.signalSource !== 'EA') return {ready: false, reason: 'EA_SOURCE_REQUIRED', plan: null};
     return demoTradeDecision({enabled: cfg.demoRecommendationExecution === true, snapshot, publication: publicationReview(), now: clock()});
+  }
+  function websiteExecutionReview() {
+    if (!cfg.demoRecommendationExecution || !cfg.publicationEnabled) return {ready:false,reason:'DISABLED',plan:null};
+    if (!snapshot?.execution.website_recommendations) return {ready:false,reason:'MT5_WEBSITE_UPDATE_REQUIRED',plan:null};
+    return websiteTradeDecision({enabled: cfg.demoRecommendationExecution && cfg.publicationEnabled,
+      snapshot, market: marketFeed.publicState().markets.XAUUSD, analysisPlan: brokerGoldMarket(snapshot,clock())?.analysis.plan, costs: costStatus(),
+      durable: typeof commandJournal?.claimWebsite === 'function', now: clock()});
   }
   function publicState() {
     const a = sourceAnalysis(snapshot, clock(), cfg);
     const publication = publicationReview(a);
+    const websiteMode=!!snapshot?.execution.website_recommendations;
+    const website=websiteMode?marketFeed.publicState().markets.XAUUSD:null;
+    const websitePlan=website?.currentSignal;
     const active = signalRows().find(s => s.status === 'TRACKING' && (a.source === 'MT5_EA' ? s.source === 'MT5_EA' : s.source !== 'MT5_EA'));
     const available = a.connection === 'LIVE' && a.source_ready;
     return {version: '3.4.0', revision, symbol: snapshot?.symbol || 'XAUUSD', broker: snapshot?.broker || null,
@@ -210,12 +229,12 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       spreadUnit: 'points', lastUpdate: snapshot?.quote_at ?? null,
       bridgeReceivedAt: snapshot?.received_at ?? null, terminalConnected: snapshot?.terminal_connected ?? null,
       connection: a.connection, quoteAge: a.quote_age,
-      aiDecision: publication.plan?.side || 'WAIT', confidence: null, confidenceMeaning: 'CONDITION_SCORE',
+      aiDecision: (websiteMode?websitePlan:publication.plan)?.side || 'WAIT', confidence: null, confidenceMeaning: 'CONDITION_SCORE',
       publicationReadiness: publicationReadiness(a),
-      riskLevel: a.risk, reasons: [publicationReasons[publication.reason], ...a.reasons], checks: a.checks,
-      timeframes: a.frames, zones: a.zones, strategy: a.strategy,
-      signalSource: a.source, signalSourceReady: a.source_ready,
-      currentSignal: publication.plan,
+      riskLevel: websiteMode?'CAUTION':a.risk, reasons: websiteMode?['التنفيذ من توصيات نبض؛ حالة الدخول وسبب المنع في قسم الصفقات.',website?.analysis?.reason].filter(Boolean):[publicationReasons[publication.reason], ...a.reasons], checks: websiteMode?website?.analysis?.checks||[]:a.checks,
+      timeframes: a.frames, zones: a.zones, strategy: websiteMode?website?.analysis?.strategy:a.strategy,
+      signalSource: websiteMode?'NABD_WEBSITE':a.source, signalSourceReady: a.source_ready,
+      currentSignal: websiteMode?websitePlan||null:publication.plan,
       suspendedSignal: !available ? active?.id ?? null : null,
       bot: snapshot?.ea ? {heartbeat_at: snapshot.ea.heartbeat_at, checked_at: snapshot.ea.checked_at,
         emergency_stop: snapshot.ea.emergency_stop, settings: snapshot.ea.settings} : null,
@@ -228,6 +247,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       historyCount: db.prepare('SELECT COUNT(*) AS n FROM signals').get().n,
       publicBaseUrl: publicBase || null, accountDataShared: Boolean(snapshot?.account),
       serverTime: clock(), demoExecution: (() => {const {plan, ...status} = demoExecutionReview(); return status;})(),
+      websiteExecution: (() => {const {plan,...status}=websiteExecutionReview();return status;})(),
       controlsConfigured: dashboardToken.length >= 32 && ingestToken.length >= 32};
   }
   function broadcast() {
@@ -379,6 +399,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         const riskSizing = automaticRiskSizing(snapshot, localPlan || recentGold, now);
         return send(req, res, 200, {account: snapshot?.account ?? null, positions: snapshot?.positions ?? [],
           riskSizing,
+          websiteEntries: snapshot && commandJournal?.websiteEntries ? await commandJournal.websiteEntries(entrySourceKey(snapshot)) : [],
           deals: db.prepare('SELECT data FROM deals ORDER BY time DESC LIMIT 1000').all().map(x => JSON.parse(x.data)),
           commands: commandJournal ? await commandJournal.list(clock()) : db.prepare('SELECT * FROM commands ORDER BY id DESC LIMIT 100').all(),
           lastUpdate: snapshot?.received_at ?? null});
@@ -421,8 +442,33 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         audit('COMMAND_QUEUED', {id: Number(id), action, ticket});
         return send(req, res, 202, {id: Number(id), status: 'QUEUED', message: 'الأمر في الانتظار؛ التنفيذ يحتاج تأكيد MT5.'});
       }
+      if (['/api/bridge/website-recommendation','/api/bridge/website-result'].includes(path) && req.method === 'POST') {
+        if (!bridge(req)) return send(req,res,401,{error:'Invalid bridge token'});
+        const b=await body(req,2000);
+        if (!snapshot || b.account_ref!==snapshot.account_ref || b.broker!==snapshot.broker ||
+            b.symbol!==snapshot.symbol || b.magic!==snapshot.execution.managed_magic)
+          return send(req,res,409,{error:'Website recommendation source mismatch'});
+        const source=entrySourceKey(snapshot);
+        if (path==='/api/bridge/website-result') {
+          if (!commandJournal?.websiteResult || !Number.isSafeInteger(b.id) || b.id<=0 ||
+              !['SUBMITTED','REJECTED'].includes(b.status)) return send(req,res,400,{error:'Invalid website result'});
+          await commandJournal.websiteResult(source,b.id,b.status,clock());
+          return send(req,res,200,{ok:true});
+        }
+        const decision=websiteExecutionReview(),p=decision.plan;
+        if (!decision.ready || !p) return send(req,res,200,'','text/plain; charset=utf-8');
+        const record=await commandJournal.claimWebsite(source,p,clock());
+        if (!record) return send(req,res,200,'','text/plain; charset=utf-8');
+        const id=Number(record.id);
+        if (!Number.isSafeInteger(id) || id<=0) throw new Error('Invalid website approval identifier');
+        const fields=['NBWEB1',snapshot.account_ref,snapshot.symbol,snapshot.execution.managed_magic,
+          p.side,p.entry,p.sl,p.tp,Math.floor(p.issued_at),Math.floor(p.expires_at),p.bar_time,id];
+        if(fields.some(v=>/[|\r\n]/.test(String(v))))throw new Error('Invalid website approval identity');
+        return send(req,res,200,fields.join('|'),'text/plain; charset=utf-8');
+      }
       if (path === '/api/bridge/demo-recommendation' && req.method === 'POST') {
         if (!bridge(req)) return send(req, res, 401, {error: 'Invalid bridge token'});
+        if (snapshot?.execution.website_recommendations) return send(req,res,200,'','text/plain; charset=utf-8');
         const b = await body(req, 2000);
         if (!snapshot || b.account_ref !== snapshot.account_ref || b.broker !== snapshot.broker ||
             b.symbol !== snapshot.symbol || b.magic !== snapshot.execution.managed_magic)

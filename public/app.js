@@ -190,6 +190,7 @@ function renderAutomaticRisk(){
     const cell=e('div');cell.append(e('small','',label),e('strong','number',value));summary.append(cell);
   }
   const parts=[summary],p=r.plan,s=r.estimate;
+  if(state?.execution?.website_recommendations)parts.push(e('p','control-explanation','التنفيذ من توصيات نبض مباشرة على Demo؛ الهدف المستخدم هو الهدف الأول.'));
   if(p&&s){
     parts.push(e('p','subtle',`${p.expired?'تقدير آخر فرصة منتهية؛ لا يُرسل للتنفيذ':'تقدير الفرصة الحالية؛ لا يؤكد اعتمادها أو تنفيذها'} · ${sides[p.side]} · ${time(p.issued_at,true)} · دخول ${price(p.entry)} · وقف ${price(p.sl)}`));
     parts.push(e('p',s.volume>0?'control-explanation':'error-text',s.volume>0?`اللوت المحسوب ${num(s.volume,8)} · خسارة الستوب المقدّرة ${num(s.loss,4)} ${currency}.`:`${s.reason} خسارة أقل لوت لهذه الفرصة ${num(s.minimumLoss,4)} ${currency} مقابل سقف ${num(s.budget,4)} ${currency}.`));
@@ -197,6 +198,14 @@ function renderAutomaticRisk(){
   parts.push(e('p','subtle',`مسافة الستوب القصوى لأقل لوت ضمن السقف الحالي: ${num(r.maxStopDistance,4)} من وحدات سعر الذهب، قبل التكاليف. لا يغيّر النظام وقف الاستراتيجية ليُجبر الصفقة على الدخول.`));
   if(!privateData?.lastUpdate||now()-privateData.lastUpdate>10)parts.push(e('p','error-text','بيانات الحساب قديمة؛ هذا تقدير محفوظ ويحتاج تحديث MT5.'));
   box.replaceChildren(...parts);
+  const entries=privateData?.websiteEntries||[];
+  if(entries.length){box.append(e('h3','','إرسال توصيات نبض إلى MT5'));
+    for(const record of entries.slice(0,8)){
+      const row=e('p','subtle'),p=record.plan;
+      const status=record.status==='SUBMITTED'?'أرسل MT5 طلب التنفيذ؛ راجع Trade/History':record.status==='REJECTED'?'منع MT5 التنفيذ؛ راجع Experts':now()>record.expires?'لم يصل تأكيد التنفيذ خلال المهلة؛ لن نكرر الإرسال':'أُرسلت إلى الجسر؛ بانتظار رد MT5';
+      row.textContent=`${time(record.time,true)} · ${sides[p.side]} · دخول ${price(p.entry)} · وقف ${price(p.sl)} · هدف ${price(p.tp)} · ${status}`;box.append(row);
+    }
+  }
 }
 function activeCommandBusy(){return commandSending || commandTracker.busy() ||
   (privateData?.commands||[]).some(c=>c.status==='QUEUED');}
@@ -228,7 +237,7 @@ function renderExecution(){
   const x=state?.execution;
   put('control-connection-summary',!mainFresh()?'حالة MT5 غير حديثة؛ ننتظر تحديث البوت.':x?.paused?'دخول صفقات جديدة موقوف':x?.enabled?'الدخول التلقائي مسموح عند اكتمال الشروط':'التنفيذ غير مفعّل داخل MT5');
   put('demo-execution-status',demoExecutionMessage(state));
-  $('control-download-mt5').hidden=x?.demo_recommendations===true;
+  $('control-download-mt5').hidden=state?.websiteExecution?x?.website_recommendations===true:x?.demo_recommendations===true;
   renderCommandProgress();
   put('execution-badge',!mainFresh()?'حالة البوت غير متاحة':x?.enabled?(x.demo?'حساب تجريبي':'حساب حقيقي'):'التنفيذ المحلي غير مفعّل');
   $('execution-badge').className='pill '+(x?.enabled?'warn':'neutral');

@@ -69,12 +69,14 @@ export function demoExecutionMessage(state) {
   const x = state?.execution, r = state?.demoExecution;
   if (!x) return 'ننتظر وصول بيانات البوت من MT5.';
   if (!x.demo) return 'تنفيذ توصيات الموقع المضاف مخصّص لحساب JustMarkets Demo.';
+  if (state.websiteExecution && !x.website_recommendations)
+    return 'لتنفيذ توصيات نبض مباشرة يلزم البوت 1.15 والجسر 3.06، وتفعيل وضع توصيات الموقع. حمّل تحديث MT5 أدناه.';
   if (r?.reason === 'DISABLED') return 'خدمة تنفيذ التوصيات التجريبية موقوفة من إعدادات الموقع.';
   if (r?.reason === 'MT5_UPDATE_REQUIRED' || !x.demo_recommendations)
     return 'يلزم تحديث البوت والجسر في MT5 وتفعيل وضع توصيات Demo داخل البوت.';
   if (x.paused) return 'الدخول موقوف. شغّل الدخول التلقائي للسماح بالتنفيذ عند اكتمال الشروط.';
-  if (x.demo_result === 'SUBMITTED') return 'أرسل البوت آخر طلب تنفيذ. تأكيد الصفقة يظهر في سجل عمليات MT5.';
-  if (x.demo_result === 'BLOCKED') return 'منع MT5 آخر محاولة تنفيذ. راجع سبب المنع في تبويب Experts.';
+  if (!x.website_recommendations && x.demo_result === 'SUBMITTED') return 'أرسل البوت آخر طلب تنفيذ. تأكيد الصفقة يظهر في سجل عمليات MT5.';
+  if (!x.website_recommendations && x.demo_result === 'BLOCKED') return 'منع MT5 آخر محاولة تنفيذ. راجع سبب المنع في تبويب Experts.';
   if (r?.ready) return 'توصية ذهب معتمدة بانتظار فحص MT5 النهائي.';
   const reasons = {
     STALE_MT5: 'ننتظر بيانات حديثة من البوت قبل السماح بدخول جديد.',
@@ -86,7 +88,13 @@ export function demoExecutionMessage(state) {
     BELOW_MINIMUM_VOLUME: 'تعذّر الدخول: أقل لوت عند البروكر يتجاوز سقف مخاطرة حسابك. تفاصيل الحساب في بطاقة حجم الصفقة التلقائي.',
     INSUFFICIENT_MARGIN: 'تعذّر الدخول: الهامش المتاح لا يكفي لحجم الصفقة المحسوب.',
     INVALID_RISK_SETTINGS: 'ننتظر نسبة مخاطرة صالحة من إعدادات MT5.',
-    INVALID_CONTRACT: 'مواصفات اللوت وقيمة التيك غير مكتملة؛ حساب الحجم معلّق.'
+    INVALID_CONTRACT: 'مواصفات اللوت وقيمة التيك غير مكتملة؛ حساب الحجم معلّق.',
+    WAITING_WEBSITE_PLAN: 'وضع توصيات نبض مفعّل؛ ننتظر توصية ذهب جديدة من بيانات حسابك.',
+    WAITING_NEW_WEBSITE_PLAN: 'ننتظر توصية تصدر بعد تشغيل وضع الموقع؛ لن ندخل توصية سابقة.',
+    WEBSITE_SOURCE_MISMATCH: 'مصدر التوصية لا يطابق حساب الذهب المرتبط؛ التنفيذ موقوف لهذه الخطة.',
+    WEBSITE_PLAN_CHANGED: 'تغيّر تكوين التوصية؛ ننتظر شمعة وفرصة جديدة.',
+    WAITING_COSTS: 'تكاليف حساب البروكر غير مؤكدة أو السبريد تجاوز الحد.',
+    DURABLE_ENTRY_JOURNAL_REQUIRED: 'سجل إرسال الصفقات الدائم غير متاح؛ لا نرسل أمرًا قد يتكرر.'
   };
   return reasons[r?.reason] || 'ننتظر اكتمال شروط توصية الذهب المعتمدة.';
 }

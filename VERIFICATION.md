@@ -1,5 +1,13 @@
 # Verification — NABD Gold Pulse v3.3.3
 
+## Direct website-to-MT5 Demo entries (23 October 2026)
+
+- The opt-in website mode uses the frozen XAUUSD opportunity from the same account's MT5 broker feed, without requiring a second local EA strategy signal. It preserves the original stop and uses TP1. Main EA 1.15 / bridge 3.06 and `InpNABDWebsiteRecommendations=true` are required; old terminals keep the old protocol and the website shows an update notice.
+- New entries require JustMarkets Demo, fresh quotes/main heartbeat, matching source/contract, a plan issued after mode activation, recent closed M5 confirmation, acknowledged costs and affordable risk-based volume. MT5 separately checks trading permissions, schedule, news, daily risk, margin, cooldown and current price/stop distances. Website mode does not generate local strategy entries.
+- A unique PostgreSQL `(source_key,plan_id)` dispatch claim is written before returning the short-lived NBWEB1 payload. Unconfirmed dispatches are not retried after a lost response or deploy. MT5 additionally claims the approval and entry bar before order submission. Terminal results remain SUBMITTED/REJECTED; fills must be verified from Trade/History, not inferred from a dispatch.
+- Tests cover concurrent polling, durable claims across reopening, account isolation, pre-activation plans, real-account rejection, stale quotes, news, affordability, preservation of entry/stop/TP1 and the actual pure MQL price/expiry guard compiled under C++. The local full suite passed 169 tests on Node 24.19.0; focused entry/UI tests passed 13 tests. This is not a MetaEditor compilation or a terminal execution test.
+- The source/setup ZIP contains eight files with no credentials. Compile both MQ5 files in MetaEditor and re-migrate VPS Experts/settings before expecting this mode to activate. No production trade request or synthetic telemetry is used during deployment checks.
+
 ## Automatic account sizing and broker minimum diagnostics (23 October 2026)
 
 - Size estimates use current account equity, the risk percentage reported by MT5, original entry/stop levels, and the exact broker contract's loss tick value and volume step. The linked account currently reports 0.5%; no risk settings, stops, execution switches, or trading filters are changed by this release.

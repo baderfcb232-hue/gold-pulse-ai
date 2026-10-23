@@ -1,5 +1,5 @@
 #property strict
-#property version   "1.14"
+#property version   "1.15"
 #property description "NABD JustMarkets MT5 gold EA: EMA/RSI signals, protected risk and estimated net small-profit cycles."
 
 #include <Trade/Trade.mqh>
@@ -85,6 +85,7 @@ input group "NABD dashboard coordination (optional)"
 input bool            InpEnableNABDLink          = false; // Share runtime settings with a separate bridge EA
 input bool            InpNABDAllowRemoteControl  = false; // Accept pause/resume and managed-position controls
 input bool            InpNABDDemoRecommendations = false; // JustMarkets Demo: wait for approved dashboard recommendation
+input bool            InpNABDWebsiteRecommendations = false; // Demo: execute website gold plans instead of generating entries locally
 void NABDOnTimer();
 void NABDOnDeinit();
 bool NABDRemotePaused();
@@ -128,6 +129,7 @@ bool     g_cycle_closing = false;
 double   g_cycle_net = 0.0;
 bool     g_cycle_net_valid = false;
 datetime g_last_claimed_bar = 0;
+datetime g_website_enabled_at = 0;
 
 //--- function declarations
 bool   CreateIndicatorHandles();
@@ -242,6 +244,9 @@ double SPVolumePerLeg(const double total_volume,const int legs,const double mini
 //+------------------------------------------------------------------+
 int OnInit()
   {
+   if(InpNABDWebsiteRecommendations && (!InpNABDDemoRecommendations || InpEntryTimeframe!=PERIOD_M5))
+     {Print("Website mode requires Demo recommendations and the M5 entry timeframe.");return INIT_PARAMETERS_INCORRECT;}
+   g_website_enabled_at=InpNABDWebsiteRecommendations?TimeGMT():0;
    if(InpNABDDemoRecommendations && (AccountInfoInteger(ACCOUNT_TRADE_MODE)!=ACCOUNT_TRADE_MODE_DEMO || !InpEnableNABDLink || !InpNABDAllowRemoteControl))
      {Print("Recommendation execution requires a Demo account, NABD link and remote control.");return INIT_PARAMETERS_INCORRECT;}
    if(!IsJustMarketsAccount())
@@ -333,6 +338,9 @@ void OnTick()
      }
 
    ManageOpenPositions();
+
+   if(InpNABDWebsiteRecommendations)
+     {NABDClearSignal();NABDCheckComplete();UpdateChartPanel();return;}
 
    if(g_cycle_closing || (InpUseSmallProfit && g_last_cycle_end>0 &&
       ServerNow()-g_last_cycle_end<InpCycleCooldownSeconds))
