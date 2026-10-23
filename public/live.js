@@ -100,6 +100,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     const reward = value => num(Math.abs(value - p.entry) / p.risk_distance, 2);
     for (const [label, value] of [[confirmed ? 'دخول ثابت' : 'مستوى المراقبة', p.entry], ['وقف الخسارة', p.sl], [`الهدف الأول · ${reward(p.tp1)}R`, p.tp1], [`الهدف الثاني · ${reward(p.tp2)}R`, p.tp2]]) {
       const cell = node('div', 'value-cell'); cell.append(node('small', '', label), node('strong', 'number', fmt(value))); values.append(cell);}
+    if(m.execution_mode==='DEMO_WEBSITE')box.append(node('p','control-explanation','ترتبط هذه التوصية بالتنفيذ التلقائي على Demo. يفحص MT5 السعر والمخاطرة قبل الدخول؛ التأكيد في قسم الصفقات.'));
     box.append(values, node('p', 'source-caption', `${p.source || m.source} · ${p.broker_symbol || m.symbol} · ${p.sampled ? 'شموع من عينات المصدر' : 'شموع المصدر'}`),
       node('p', 'subtle', confirmed ? `صدرت ${time(p.issued_at)} · متبقي ${Math.max(0, Math.ceil(p.expires_at - now()))} ثانية` : 'مراقبة فقط؛ لا تُعامل كإشارة دخول مؤكدة.'));
     $('scalp-plan').replaceChildren(box);

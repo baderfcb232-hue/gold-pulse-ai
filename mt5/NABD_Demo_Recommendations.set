@@ -57,3 +57,4 @@ InpShowChartPanel=true
 InpEnableNABDLink=true
 InpNABDAllowRemoteControl=true
 InpNABDDemoRecommendations=true
+InpNABDWebsiteRecommendations=true

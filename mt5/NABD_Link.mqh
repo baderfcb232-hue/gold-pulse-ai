@@ -28,6 +28,7 @@ void NABDPublishSignal(const SignalData &signal)
 // The bridge never submits entries. Approval is consumed by the main EA on its own timer.
 void NABDProcessDemoApproval()
   {
+   if(InpNABDWebsiteRecommendations)return;
    if(!InpNABDDemoRecommendations || AccountInfoInteger(ACCOUNT_TRADE_MODE)!=ACCOUNT_TRADE_MODE_DEMO ||
       !IsJustMarketsAccount() || !TradingExecutionEnabled() || !InpNABDAllowRemoteControl ||
       NABDRemotePaused() || IsEmergencyStopActive())return;
@@ -63,9 +64,68 @@ void NABDProcessDemoApproval()
    GlobalVariableSet(NABDKey("DR"),accepted?2.0:3.0);
    LogEvent(accepted?"DEMO_SUBMITTED":"DEMO_BLOCKED","approved recommendation; inspect order/deal retcodes for actual execution");
   }
+// BEGIN WEBSITE_PLAN_GUARD
+bool NABDWebsitePlanValid(const double now,const double since,const double issued,const double expiry,
+ const double bar,const double closed_bar,const int direction,const double entry,const double sl,const double tp,
+ const double bid,const double ask,const double point,const double max_spread,const double stop_distance)
+  {
+   if(!MathIsValidNumber(entry) || !MathIsValidNumber(sl) || !MathIsValidNumber(tp) ||
+      !MathIsValidNumber(bid) || !MathIsValidNumber(ask) || !MathIsValidNumber(point) ||
+      entry<=0 || sl<=0 || tp<=0 || bid<=0 || ask<bid || point<=0 || since<=0 || issued<since ||
+      issued>now+5 || now-issued>75 || expiry<=now || expiry>now+20 || bar<=0 || bar!=closed_bar ||
+      (direction!=1 && direction!=-1) || (ask-bid)/point>max_spread)return false;
+   if(direction>0 ? !(sl<entry && entry<tp && bid>sl && bid<tp && bid-sl>stop_distance && tp-bid>stop_distance)
+                  : !(tp<entry && entry<sl && ask<sl && ask>tp && sl-ask>stop_distance && ask-tp>stop_distance))return false;
+   return MathAbs((direction>0?ask:bid)-entry)<=MathAbs(entry-sl)*0.15;
+  }
+// END WEBSITE_PLAN_GUARD
+void NABDWebsiteBlocked(const double id,const string reason)
+  {
+   GlobalVariableSet(NABDKey("WR"),1.0);GlobalVariableSet(NABDKey("WI"),id);GlobalVariablesFlush();
+   LogEvent("WEBSITE_BLOCKED",reason);
+  }
+void NABDProcessWebsiteApproval()
+  {
+   if(!InpNABDWebsiteRecommendations || !InpNABDDemoRecommendations ||
+      AccountInfoInteger(ACCOUNT_TRADE_MODE)!=ACCOUNT_TRADE_MODE_DEMO || !IsJustMarketsAccount())return;
+   double id=GlobalVariableCheck(NABDKey("WA"))?GlobalVariableGet(NABDKey("WA")):0;
+   double previous=GlobalVariableGet(NABDKey("WC"));
+   if(id<=0 || id<=previous || id!=MathFloor(id) || id>9007199254740991.0)return;
+   if(!GlobalVariableSetOnCondition(NABDKey("WC"),id,previous))return;
+   GlobalVariablesFlush(); // Claim BEFORE validation/order; never retry an uncertain entry.
+   GlobalVariableSet(NABDKey("WI"),0.0); // Result identifier is published LAST after validation/submission.
+   if(!TradingExecutionEnabled() || !ExecutionPermissionsAvailable() || !InpNABDAllowRemoteControl ||
+      NABDRemotePaused() || IsEmergencyStopActive() || HasOwnPosition() || HasOwnPendingOrder() ||
+      HasForeignNettingExposure() || g_cycle_closing || !IsWithinTradingHours() ||
+      (InpUseSmallProfit && g_last_cycle_end>0 && ServerNow()-g_last_cycle_end<InpCycleCooldownSeconds))
+     {NABDWebsiteBlocked(id,"permissions, position, schedule or cooldown blocked entry");return;}
+   string reason="";
+   if(DailyRiskLimitReached(reason) || IsHighImpactNewsWindow(reason))
+     {NABDWebsiteBlocked(id,reason);return;}
+   int direction=(int)GlobalVariableGet(NABDKey("WD"));
+   double entry=GlobalVariableGet(NABDKey("WE")),sl=GlobalVariableGet(NABDKey("WL")),tp=GlobalVariableGet(NABDKey("WP"));
+   MqlTick tick;
+   if(!SymbolInfoTick(g_symbol,tick) || ServerNow()-tick.time>10 || tick.time>ServerNow()+2 ||
+      !NABDWebsitePlanValid((double)TimeGMT(),(double)g_website_enabled_at,
+       GlobalVariableGet(NABDKey("WF")),GlobalVariableGet(NABDKey("WX")),GlobalVariableGet(NABDKey("WB")),
+       (double)iTime(g_symbol,PERIOD_M5,1),direction,entry,sl,tp,tick.bid,tick.ask,g_point,
+       (double)InpMaxSpreadPoints,MinimumStopDistance()))
+     {NABDWebsiteBlocked(id,"expired plan, changed candle, price, spread or stop distance");return;}
+   SignalData signal;ZeroMemory(signal);
+   signal.direction=direction;signal.entry=entry;signal.stop_loss=sl;signal.take_profit=tp;
+   if(!ReadIndicatorValue(g_entry_atr_handle,1,signal.atr) || signal.atr<=0)
+     {NABDWebsiteBlocked(id,"ATR not ready for position management");return;}
+   signal.reason="NABD website gold recommendation";
+   g_last_entry_bar=iTime(g_symbol,PERIOD_M5,0);
+   bool accepted=PlaceSignal(signal);
+   GlobalVariableSet(NABDKey("WR"),accepted?2.0:1.0);GlobalVariableSet(NABDKey("WI"),id);GlobalVariablesFlush();
+   LogEvent(accepted?"WEBSITE_SUBMITTED":"WEBSITE_BLOCKED",
+     StringFormat("approval=%I64d; inspect Trade/History and order retcodes",(long)id));
+  }
 void NABDOnTimer()
   {
    if(!InpEnableNABDLink || MQLInfoInteger(MQL_TESTER))return;
+   if(!GlobalVariableCheck(NABDKey("WC")))GlobalVariableSet(NABDKey("WC"),0.0);
    GlobalVariableSet(NABDKey("L"),TradingExecutionEnabled()?1.0:0.0);
    GlobalVariableSet(NABDKey("R"),InpNABDAllowRemoteControl?1.0:0.0);
    GlobalVariableSet(NABDKey("TP"),InpUseSmallProfit?InpBasketProfitTarget:0.0);
@@ -83,7 +143,10 @@ void NABDOnTimer()
    GlobalVariableSet(NABDKey("NP"),(double)InpNewsMinutesBefore);
    GlobalVariableSet(NABDKey("NA"),(double)InpNewsMinutesAfter);
    GlobalVariableSet(NABDKey("DM"),InpNABDDemoRecommendations?1.0:0.0);
+   GlobalVariableSet(NABDKey("WM"),InpNABDWebsiteRecommendations?1.0:0.0);
+   GlobalVariableSet(NABDKey("WT"),(double)g_website_enabled_at);
    GlobalVariableSet(NABDKey("HB"),(double)TimeGMT());
+   NABDProcessWebsiteApproval();
    NABDProcessDemoApproval();
   }
 void NABDOnDeinit()

@@ -128,6 +128,9 @@ export function cleanSnapshot(raw, now = Date.now() / 1000) {
     execution: {enabled: raw.execution?.enabled === true, main_connected: raw.execution?.main_connected === true,
       remote_control: raw.execution?.remote_control === true,
       demo_recommendations: raw.execution?.demo_recommendations === true,
+      website_recommendations: raw.execution?.website_recommendations === true,
+      website_since: typeof raw.execution?.website_since === 'number' && Number.isFinite(raw.execution.website_since)
+        && raw.execution.website_since > 0 && raw.execution.website_since <= now + 5 ? raw.execution.website_since : null,
       demo_result: ['WAITING','SUBMITTED','BLOCKED'].includes(raw.execution?.demo_result) ? raw.execution.demo_result : null,
       demo: raw.execution?.demo === true, paused: raw.execution?.paused === true,
       managed_magic: text(raw.execution?.managed_magic, 30),
