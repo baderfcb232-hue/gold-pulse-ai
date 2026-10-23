@@ -19,6 +19,7 @@ import {createAccounts} from './auth.mjs';
 import {createRuntimeBackup} from './runtime-backup.mjs';
 import {createCommandJournal} from './command-journal.mjs';
 import {demoTradeDecision} from './demo-trade.mjs';
+import {automaticRiskSizing} from './automatic-risk.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PUBLIC = resolve(ROOT, 'public');
@@ -373,7 +374,11 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       }
       if (path === '/api/account' && req.method === 'GET') {
         if (!operator(req)) return send(req, res, 401, {error: 'تسجيل دخول المشغّل مطلوب.'});
+        const now = clock(), localPlan = sourceAnalysis(snapshot, now, cfg).plan;
+        const recentGold = marketFeed.history('XAUUSD').find(p => p.broker_symbol === snapshot?.symbol && p.source === `MT5 · ${snapshot?.broker}`);
+        const riskSizing = automaticRiskSizing(snapshot, localPlan || recentGold, now);
         return send(req, res, 200, {account: snapshot?.account ?? null, positions: snapshot?.positions ?? [],
+          riskSizing,
           deals: db.prepare('SELECT data FROM deals ORDER BY time DESC LIMIT 1000').all().map(x => JSON.parse(x.data)),
           commands: commandJournal ? await commandJournal.list(clock()) : db.prepare('SELECT * FROM commands ORDER BY id DESC LIMIT 100').all(),
           lastUpdate: snapshot?.received_at ?? null});

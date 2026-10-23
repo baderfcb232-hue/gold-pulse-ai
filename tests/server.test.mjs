@@ -23,6 +23,28 @@ test('authenticated snapshots isolate account data from public state, SSE and si
   const actual=await (await fetch(base+'/api/account',{headers:{Authorization:'Bearer '+ADMIN}})).json();assert.equal(actual.account.balance,1234.56);assert.equal(actual.positions[0].ticket,'901');
   const res=await fetch(base+'/api/events'),reader=res.body.getReader();const {value}=await reader.read();const event=new TextDecoder().decode(value);assert.ok(event.includes('event: state'));assert.ok(!event.includes('TEST_ACCOUNT_ONLY'));assert.ok(!event.includes('1234.56'));await reader.cancel();
 });
+test('automatic account sizing is private, follows fresh equity, and explains the last broker opportunity without reviving it',async t=>{
+  const {base,app}=await setup(t,{config:{signalSource:'EA'}});
+  const raw=eaFixture();raw.symbol='XAUUSD.m';raw.ea.signal=null;
+  raw.account={currency:'USD',balance:200,equity:200,free_margin:200,floating:0};
+  raw.spec={...raw.spec,point:.01,tick_size:.01,tick_value_loss:1};
+  await post(base,'/api/mt5',raw,INGEST);
+  const p={id:'last-gold-opportunity',source:'MT5 · JustMarkets-Demo',symbol:'XAUUSD',broker_symbol:'XAUUSD.m',
+    side:'SELL',entry:4000.36,sl:4008.04,issued_at:NOW-2400,expires_at:NOW-2200,status:'EXPIRED'};
+  app.db.prepare('INSERT INTO market_signals VALUES(?,?,?)').run(p.id,p.issued_at,JSON.stringify(p));
+  const read=async()=> (await fetch(base+'/api/account',{headers:{Authorization:'Bearer '+ADMIN}})).json();
+  let data=await read();assert.equal(data.riskSizing.budget,1);assert.equal(data.riskSizing.estimate.volume,0);
+  assert.ok(Math.abs(data.riskSizing.estimate.minimumLoss-7.68)<1e-8);
+  assert.equal(data.riskSizing.plan.expired,true);assert.equal(data.riskSizing.plan.id,p.id);
+  raw.account.equity=10000;raw.account.free_margin=10000;await post(base,'/api/mt5',raw,INGEST);
+  data=await read();assert.equal(data.riskSizing.budget,50);assert.equal(data.riskSizing.estimate.volume,.06);
+  assert.equal((await fetch(base+'/api/account')).status,401);
+  for(const path of ['/api/state','/api/market','/healthz']){
+    const pub=await (await fetch(base+path)).text();
+    assert.equal(pub.includes('riskSizing'),false);assert.equal(pub.includes('minimumEquity'),false);
+  }
+  assert.equal(app.publicState().demoExecution.ready,false);
+});
 test('source mismatch and replayed quotes are rejected',async t=>{
   const {base}=await setup(t);await post(base,'/api/mt5',fixture(),INGEST);let raw=fixture();raw.account_ref='DIFFERENT_ACCOUNT';assert.equal((await post(base,'/api/mt5',raw,INGEST)).status,400);
   raw=fixture();raw.quote_at=NOW-1;assert.equal((await post(base,'/api/mt5',raw,INGEST)).status,400);
