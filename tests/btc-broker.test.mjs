@@ -88,7 +88,7 @@ test('BTC demo recommendation endpoint accepts only its own MT5 source and dispa
   store.exec(`CREATE TABLE nabd_website_entries(id INTEGER PRIMARY KEY AUTOINCREMENT,
     source_key TEXT,plan_id TEXT,time REAL,expires REAL,status TEXT,plan TEXT,reported_at REAL,UNIQUE(source_key,plan_id))`);
   const pool={async query(sql,params=[]){
-    const values=[],adapted=sql.replace(/\\$(\\d+)/g,(_,n)=>{values.push(params[Number(n)-1]);return '?';});
+    const values=[],adapted=sql.replace(/\$(\d+)/g,(_,n)=>{values.push(params[Number(n)-1]);return '?';});
     return {rows:store.prepare(adapted).all(...values)};
   }};
   const journal=websiteEntryJournal(pool);
@@ -108,7 +108,7 @@ test('BTC demo recommendation endpoint accepts only its own MT5 source and dispa
   const first=await post(source);
   assert.equal(first.status,200);
   const wire=await first.text();
-  assert.match(wire,/^NBWEB1\\|TEST_ACCOUNT_ONLY\\|BTCUSD\\.m\\|26092302\\|BUY\\|/);
+  assert.match(wire,/^NBWEB1\|TEST_ACCOUNT_ONLY\|BTCUSD\.m\|26092302\|BUY\|/);
   assert.equal(await (await post(source)).text(),'');
   const wrong=await post({...source,symbol:'XAUUSD.m'});
   assert.equal(wrong.status,409);
