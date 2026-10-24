@@ -91,7 +91,7 @@ test('BTC demo recommendation endpoint accepts only its own MT5 source and dispa
     const values=[],adapted=sql.replace(/\$(\d+)/g,(_,n)=>{values.push(params[Number(n)-1]);return '?';});
     return {rows:store.prepare(adapted).all(...values)};
   }};
-  const journal=websiteEntryJournal(pool);
+  const journal={...websiteEntryJournal(pool),close:async()=>{}};
   const raw=btcRaw(),cost={spreadBps:.2,slippageBps:.01,commissionBps:.01,carryBpsPerDay:.01,acknowledged:true};
   const app=createApplication({dataDir:dir,clock:()=>NOW,commandJournal:journal,
     ingestToken:'btc-dispatch-ingest-xxxxxxxxxxxxxxxxx',
