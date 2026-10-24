@@ -1,0 +1,13 @@
+; BTC CFD Demo bridge. Fill the shared ingest token in MT5 after loading.
+; Use the same BTCUSD broker chart symbol as the BTC trading EA, but a separate BTC chart.
+InpSymbol=
+InpMagicNumber=26092302
+InpDeviationPoints=30
+InpEnableNABDLink=true
+InpNABDUrl=https://gold-pulse-ai.onrender.com
+InpNABDToken=
+InpNABDRefreshSeconds=3
+InpNABDRequestTimeoutMs=10000
+InpNABDSendAccount=true
+InpNABDAllowRemoteControl=true
+InpNABDServerUtcOffsetMinutes=2147483647

@@ -4,15 +4,17 @@ import {automaticRiskSizing} from './automatic-risk.mjs';
 export const entrySourceKey = s => createHash('sha256').update(JSON.stringify([
   s.account_ref, s.broker, s.symbol, s.execution.managed_magic])).digest('hex');
 
-// Only the website's frozen plan on this account's MT5 gold feed is eligible.
-// No local EA strategy signal is required. This is still Demo-only and opt-in.
+// A website plan can execute only against its own account's MT5 broker feed.
+// Gold and BTC never share a quote source. Demo-only, explicitly opted-in.
 export function websiteTradeDecision({enabled, snapshot: s, market: m, analysisPlan: a, costs, durable, now}) {
   const no = reason => ({ready: false, reason, plan: null});
   if (!enabled) return no('DISABLED');
   if (!s?.execution?.website_recommendations) return no('MT5_WEBSITE_UPDATE_REQUIRED');
   if (!durable) return no('DURABLE_ENTRY_JOURNAL_REQUIRED');
   if (!s.account) return no('ACCOUNT_NOT_SHARED');
-  if (!s.execution.demo || !/just.?markets/i.test(s.broker || '') || !/^XAUUSD(?:[._#-][a-zA-Z0-9._#-]*)?$/i.test(s.symbol || ''))
+  const canonical = /^XAUUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(s.symbol || '') ? 'XAUUSD'
+    : /^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(s.symbol || '') ? 'BTCUSD' : null;
+  if (!s.execution.demo || !/just.?markets/i.test(s.broker || '') || !canonical)
     return no('NOT_JUSTMARKETS_DEMO');
   if (!s.execution.demo_recommendations || !s.execution.enabled || !s.execution.main_connected ||
       !s.execution.remote_control || s.execution.paused || s.ea?.emergency_stop || !s.terminal_connected)
@@ -24,7 +26,7 @@ export function websiteTradeDecision({enabled, snapshot: s, market: m, analysisP
   const p = m?.currentSignal;
   if (!p || m.connection !== 'LIVE' || m.analysis?.status !== 'READY') return no('WAITING_WEBSITE_PLAN');
   if (m.broker_symbol !== s.symbol || m.source !== `MT5 · ${s.broker}` || !m.source_id?.startsWith('MT5:') ||
-      p.source_id !== m.source_id || p.source !== m.source || p.broker_symbol !== s.symbol || p.symbol !== 'XAUUSD')
+      p.source_id !== m.source_id || p.source !== m.source || p.broker_symbol !== s.symbol || p.symbol !== canonical || m.symbol !== canonical)
     return no('WEBSITE_SOURCE_MISMATCH');
   if (!a || a.bar_time !== p.bar_time || a.side !== p.side) return no('WEBSITE_PLAN_CHANGED');
   if (!Number.isFinite(s.execution.website_since) || s.execution.website_since <= 0 ||
@@ -38,8 +40,10 @@ export function websiteTradeDecision({enabled, snapshot: s, market: m, analysisP
       p.expires_at <= now || p.bar_time > now || now - (p.bar_time + 300) > 300 || p.bar_time + 300 > now + 5)
     return no('INVALID_PLAN');
   const price = buy ? s.ask : s.bid, exit = buy ? s.bid : s.ask, risk = Math.abs(p.entry - p.sl);
+  const maxSpread = canonical === 'BTCUSD'
+    ? Math.max(1, Math.floor((s.ask + s.bid) / 2 * .001 / s.spec.point)) : 80;
   if (!Number.isFinite(s.spec?.point) || s.spec.point <= 0 ||
-      Math.abs(price - p.entry) > risk * .15 || (s.ask - s.bid) / s.spec.point > Math.min(80, s.ea?.settings?.max_spread_points || 80) ||
+      Math.abs(price - p.entry) > risk * .15 || (s.ask - s.bid) / s.spec.point > Math.min(maxSpread, s.ea?.settings?.max_spread_points || maxSpread) ||
       (buy ? exit <= p.sl || exit >= tp : exit >= p.sl || exit <= tp)) return no('PRICE_OR_SPREAD_MOVED');
   if (!costs?.ready) return no('WAITING_COSTS');
   const sizing = automaticRiskSizing(s, p, now);

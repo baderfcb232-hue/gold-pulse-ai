@@ -1,0 +1,21 @@
+name: NABD BTC Demo safety tests
+on:
+  push:
+    branches:
+      - feature/btc-mt5-demo-20261024
+  pull_request:
+    branches:
+      - main
+jobs:
+  node-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test

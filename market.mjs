@@ -1,6 +1,6 @@
 import {scalpAnalysis, aggregateCandles, MARKET_TF, trackReferencePlan} from './scalp.mjs';
 import {readFeed, cacheSeconds, retrySeconds} from './feed-http.mjs';
-import {brokerGoldMarket} from './broker-market.mjs';
+import {brokerGoldMarket, brokerBtcMarket} from './broker-market.mjs';
 
 export const MARKET_CONFIG = Object.freeze({
   XAUUSD: {symbol: 'XAUUSD', name: 'الذهب', source: 'Gold API', sourceUrl: 'https://gold-api.com/docs',
@@ -35,7 +35,7 @@ export function parseCoinbaseCandles(raw, now) {
 }
 
 export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher = fetch,
-  WebSocketImpl = globalThis.WebSocket, calendar = () => null, brokerSnapshot = () => null, onChange = () => {}}) {
+  WebSocketImpl = globalThis.WebSocket, calendar = () => null, brokerSnapshot = () => null, brokerSnapshotBTC = () => null, onChange = () => {}}) {
   db.exec(`CREATE TABLE IF NOT EXISTS market_cache (symbol TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS market_signals (id TEXT PRIMARY KEY, issued_at REAL NOT NULL, data TEXT NOT NULL);`);
   const markets = {};
@@ -52,7 +52,8 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
   const history = symbol => db.prepare('SELECT data FROM market_signals ORDER BY issued_at DESC LIMIT 400').all()
     .map(x => JSON.parse(x.data)).filter(p => !symbol || p.symbol === symbol).slice(0, 100);
   const marketFor = symbol => symbol === 'XAUUSD'
-    ? brokerGoldMarket(brokerSnapshot(), clock()) || markets[symbol] : markets[symbol];
+    ? brokerGoldMarket(brokerSnapshot(), clock()) || markets[symbol]
+    : symbol === 'BTCUSD' ? brokerBtcMarket(brokerSnapshotBTC(), clock()) || markets[symbol] : markets[symbol];
   const sameSource = (plan, market) => (plan.source_id || 'REFERENCE') === (market.source_id || 'REFERENCE');
   const persist = symbol => {const m = markets[symbol]; db.prepare('INSERT INTO market_cache VALUES(?,?) ON CONFLICT(symbol) DO UPDATE SET data=excluded.data')
     .run(symbol, JSON.stringify({quote: m.quote, received_at: m.received_at, candles: m.candles.slice(-1500)}));};

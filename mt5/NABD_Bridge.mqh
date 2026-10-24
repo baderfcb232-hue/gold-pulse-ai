@@ -391,5 +391,11 @@ void NABDOnTimer()
    NBStatus(first?"First quote accepted. History/calendar will load on the next update.":
      NBMainFresh()?"Update accepted by dashboard. Main bot link present.":"Update accepted by dashboard. Waiting for the main bot link.");
    if(InpNABDAllowRemoteControl && InpNABDSendAccount)
-     {NBProcessCommand();NBProcessWebsiteRecommendation();NBProcessDemoRecommendation();}
+     {
+      // Legacy commands belong to the gold bridge. BTC must not consume them.
+      string instrument=g_symbol;StringToUpper(instrument);
+      if(StringFind(instrument,"BTCUSD")!=0) NBProcessCommand();
+      NBProcessWebsiteRecommendation();
+      NBProcessDemoRecommendation();
+     }
   }
