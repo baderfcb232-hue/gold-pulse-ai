@@ -17,6 +17,10 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+      - name: Rebuild NodeMailer-only lock entry for security review
+        run: |
+          npm install --package-lock-only --ignore-scripts --no-audit --save-exact nodemailer@10.2.1
+          node -e "console.log('NODEMAILER_LOCK_ENTRY '+JSON.stringify(require('./package-lock.json').packages['node_modules/nodemailer']))"
       - name: Install locked dependencies safely
         run: npm ci --ignore-scripts
       - name: Audit production dependencies
