@@ -58,7 +58,7 @@ test('website execution rejects unsafe account, stale source, old plans, foreign
   for(const [reason,change] of [
     ['DISABLED',f=>f.enabled=false],['MT5_WEBSITE_UPDATE_REQUIRED',f=>f.snapshot.execution.website_recommendations=false],
     ['DURABLE_ENTRY_JOURNAL_REQUIRED',f=>f.durable=false],['NOT_JUSTMARKETS_DEMO',f=>f.snapshot.execution.demo=false],
-    ['NOT_JUSTMARKETS_DEMO',f=>f.snapshot.broker='Other-Demo'],['NOT_JUSTMARKETS_DEMO',f=>f.snapshot.symbol='BTCUSD'],
+    ['NOT_JUSTMARKETS_DEMO',f=>f.snapshot.broker='Other-Demo'],['NOT_JUSTMARKETS_DEMO',f=>f.snapshot.symbol='ETHUSD'],
     ['MT5_EXECUTION_NOT_READY',f=>f.snapshot.execution.paused=true],['MT5_EXECUTION_NOT_READY',f=>f.snapshot.ea.emergency_stop=true],
     ['STALE_MT5',f=>f.snapshot.received_at=NOW-6],['STALE_MT5',f=>f.snapshot.ea.heartbeat_at=NOW+6],
     ['POSITION_ALREADY_OPEN',f=>f.snapshot.positions=[{}]],['WAITING_WEBSITE_PLAN',f=>f.market.currentSignal=null],
