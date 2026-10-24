@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
+import {DatabaseSync} from 'node:sqlite';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {entryFixture, eaFixture, NOW} from './fixtures.mjs';
 import {cleanSnapshot} from '../engine.mjs';
 import {brokerGoldMarket,brokerBtcMarket} from '../broker-market.mjs';
-import {websiteTradeDecision} from '../website-entry.mjs';
+import {websiteTradeDecision,websiteEntryJournal} from '../website-entry.mjs';
 import {createApplication} from '../server.mjs';
 
 function btcRaw(){
@@ -79,4 +80,38 @@ test('gold and BTC bridges store distinct snapshots and broker candles',async t=
   assert.deepEqual(btcCandles.candles,btcRaw().candles.M5);
   const mistaken=btcRaw();mistaken.symbol='BTCUSD-other';
   assert.equal((await post(mistaken)).status,400);
+});
+
+test('BTC demo recommendation endpoint accepts only its own MT5 source and dispatches once',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'nabd-btc-dispatch-'));
+  const store=new DatabaseSync(':memory:');
+  store.exec(`CREATE TABLE nabd_website_entries(id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_key TEXT,plan_id TEXT,time REAL,expires REAL,status TEXT,plan TEXT,reported_at REAL,UNIQUE(source_key,plan_id))`);
+  const pool={async query(sql,params=[]){
+    const values=[],adapted=sql.replace(/\\$(\\d+)/g,(_,n)=>{values.push(params[Number(n)-1]);return '?';});
+    return {rows:store.prepare(adapted).all(...values)};
+  }};
+  const journal=websiteEntryJournal(pool);
+  const raw=btcRaw(),cost={spreadBps:.2,slippageBps:.01,commissionBps:.01,carryBpsPerDay:.01,acknowledged:true};
+  const app=createApplication({dataDir:dir,clock:()=>NOW,commandJournal:journal,
+    ingestToken:'btc-dispatch-ingest-xxxxxxxxxxxxxxxxx',
+    config:{publicationEnabled:true,demoRecommendationExecution:true,
+      brokerCostProfiles:[{accountRef:raw.account_ref,broker:raw.broker,symbol:raw.symbol,
+        magic:raw.execution.managed_magic,verifiedAt:NOW,evidence:'SYNTHETIC BTC TEST',costs:cost}]}});
+  t.after(async()=>{await app.close();store.close();rmSync(dir,{recursive:true,force:true});});
+  await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));app.ingest(raw);
+  const url='http://127.0.0.1:'+app.server.address().port+'/api/bridge/website-recommendation';
+  const headers={'Content-Type':'application/json',Authorization:'Bearer btc-dispatch-ingest-xxxxxxxxxxxxxxxxx'};
+  const source={account_ref:raw.account_ref,broker:raw.broker,symbol:raw.symbol,
+    magic:raw.execution.managed_magic};
+  const post=async src=>fetch(url,{method:'POST',headers,body:JSON.stringify(src)});
+  const first=await post(source);
+  assert.equal(first.status,200);
+  const wire=await first.text();
+  assert.match(wire,/^NBWEB1\\|TEST_ACCOUNT_ONLY\\|BTCUSD\\.m\\|26092302\\|BUY\\|/);
+  assert.equal(await (await post(source)).text(),'');
+  const wrong=await post({...source,symbol:'XAUUSD.m'});
+  assert.equal(wrong.status,409);
+  assert.equal(await (await fetch(url,{method:'POST',
+    headers:{...headers,Authorization:'Bearer incorrect-token'},body:JSON.stringify(source)})).status,401);
 });
