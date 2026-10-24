@@ -3,12 +3,18 @@ import {analyze, TF_SECONDS, defaults} from './engine.mjs';
 
 // Reuse the existing website strategy with the broker's closed OHLC bars.
 // Account data and the EA's execution controls never enter the public market.
-export function brokerGoldMarket(snapshot, now) {
-  if (!snapshot || !/^XAUUSD(?:[._#]?[A-Za-z0-9._#-]+)?$/i.test(snapshot.symbol)) return null;
+export function brokerInstrumentMarket(snapshot, now) {
+  const gold = /^XAUUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(snapshot?.symbol || '');
+  const btc = /^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(snapshot?.symbol || '');
+  if (!gold && !btc) return null;
+  const canonical = gold ? 'XAUUSD' : 'BTCUSD';
+  // BTC analysis uses a broker-derived maximum 10 bps spread; EA also checks its local limit.
+  const mid = (snapshot.bid + snapshot.ask) / 2;
+  const btcSpreadPoints = Math.floor(mid * .001 / snapshot.spec.point);
   const sourceId = 'MT5:' + createHash('sha256')
     .update(JSON.stringify([snapshot.account_ref, snapshot.broker, snapshot.symbol])).digest('hex').slice(0, 24);
   const source = 'MT5 · ' + snapshot.broker;
-  const a = analyze(snapshot, now);
+  const a = analyze(snapshot, now, btc ? {maxSpreadPoints: Math.max(1, btcSpreadPoints)} : undefined);
   const incomplete = Object.values(a.frames).some(f => f.direction === 'UNKNOWN');
   const oldBars = Object.entries(TF_SECONDS).some(([tf, step]) => {
     const last = snapshot.candles[tf].at(-1);
@@ -19,10 +25,10 @@ export function brokerGoldMarket(snapshot, now) {
   const status = a.connection !== 'LIVE' ? 'STALE' : incomplete ? 'WARMING'
     : oldBars ? 'GAP' : !calendarAvailable || a.news_block ? 'NEWS_BLOCK'
     : a.risk === 'BLOCKED' ? 'BLOCKED' : a.plan ? 'READY' : 'SCANNING';
-  const plan = a.plan ? {...a.plan, symbol: 'XAUUSD', broker_symbol: snapshot.symbol,
+  const plan = a.plan ? {...a.plan, symbol: canonical, broker_symbol: snapshot.symbol,
     source, source_id: sourceId, quote_time: snapshot.quote_at, reference_only: true, sampled: false} : null;
   return {
-    symbol: 'XAUUSD', name: 'الذهب', source, source_id: sourceId,
+    symbol: canonical, name: gold ? 'الذهب' : 'بيتكوين', source, source_id: sourceId,
     sourceUrl: null, broker_symbol: snapshot.symbol, broker_mode: true,
     tickSize: snapshot.spec.tick_size, quoteTtl: defaults.quoteTtl,
     cadence_seconds: 3, candle_kind: 'BROKER_OHLC', transport: 'MT5 Bridge',
@@ -31,7 +37,7 @@ export function brokerGoldMarket(snapshot, now) {
     connection: a.connection, candles: snapshot.candles.M5, bars: snapshot.candles,
     revision: snapshot.received_at, history_revision: snapshot.candles.M5.at(-1)?.time || 0,
     default_tf: 'M5', chart_tfs: Object.keys(TF_SECONDS),
-    market_hours: 'جلسات الذهب لدى البروكر؛ إصدار الخطط يحتاج سعرًا حديثًا وشموعًا مغلقة',
+    market_hours: gold ? 'جلسات الذهب لدى البروكر؛ إصدار الخطط يحتاج سعرًا حديثًا وشموعًا مغلقة' : 'جلسات بيتكوين لدى البروكر؛ إصدار الخطط يتطلب شموع MT5 حديثة',
     feed_error: null,
     analysis: {strategy: a.strategy, decision: a.decision, status, frames: a.frames,
       checks: a.checks, score: a.score, setup: null, plan,
@@ -41,3 +47,9 @@ export function brokerGoldMarket(snapshot, now) {
       entry_tf: 'M5', trend_tfs: ['M15', 'H1', 'H4']}
   };
 }
+
+// Maintain gold-only behavior for existing callers; BTC has a separate feed.
+export const brokerGoldMarket = (snapshot, now) => /^XAUUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(snapshot?.symbol || '')
+  ? brokerInstrumentMarket(snapshot, now) : null;
+export const brokerBtcMarket = (snapshot, now) => /^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(snapshot?.symbol || '')
+  ? brokerInstrumentMarket(snapshot, now) : null;
