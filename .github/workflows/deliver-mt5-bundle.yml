@@ -1,0 +1,41 @@
+name: Package NABD MT5 link for download
+on:
+  push:
+    branches:
+      - delivery/nabd-mt5-link-20261024
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create ZIP from pinned repository sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p delivery/NABD
+          for file in \
+            XAUUSD_Technical_Bot_NABD_v3.mq5 \
+            NABD_Link.mqh \
+            NABD_Bridge_EA.mq5 \
+            NABD_Bridge.mqh \
+            NABD_Main_Monitor.set \
+            NABD_Demo_Recommendations.set \
+            NABD_Bridge_Monitor.set \
+            NABD_BTC_Demo_Recommendations.set \
+            NABD_BTC_Bridge_Demo.set \
+            INSTALL_AR.md; do
+              test -s "mt5/$file"
+              cp "mt5/$file" "delivery/NABD/$file"
+          done
+          (cd delivery && zip -r -q NABD_MT5_Link.zip NABD)
+          unzip -l delivery/NABD_MT5_Link.zip
+          sha256sum delivery/NABD_MT5_Link.zip
+      - name: Upload downloadable file
+        uses: actions/upload-artifact@v4
+        with:
+          name: NABD_MT5_Link_20261024
+          path: delivery/NABD_MT5_Link.zip
+          if-no-files-found: error
+          retention-days: 30
