@@ -22,6 +22,12 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   function applyMarket(next) {
     if (data && next.serverTime < data.serverTime) return;
     data = next; lastServerSeen = Date.now();
+    if (!data.markets[symbol]) symbol = 'XAUUSD';
+    $('market-symbols').querySelectorAll('button').forEach(b => {
+      b.hidden = !data.markets[b.dataset.symbol];
+      b.classList.toggle('active', b.dataset.symbol === symbol);
+      b.setAttribute('aria-pressed', String(b.dataset.symbol === symbol));
+    });
     configureChart();
     const m = market(), current = activePlan();
     if (current && initialized && !seenSignals.has(current.id) && $('signal-notifications').checked)

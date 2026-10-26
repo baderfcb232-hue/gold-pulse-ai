@@ -35,11 +35,13 @@ export function parseCoinbaseCandles(raw, now) {
 }
 
 export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher = fetch,
-  WebSocketImpl = globalThis.WebSocket, calendar = () => null, brokerSnapshot = () => null, brokerSnapshotBTC = () => null, onChange = () => {}}) {
+  WebSocketImpl = globalThis.WebSocket, calendar = () => null, brokerSnapshot = () => null, brokerSnapshotBTC = () => null,
+  enabledSymbols = Object.keys(MARKET_CONFIG), onChange = () => {}}) {
   db.exec(`CREATE TABLE IF NOT EXISTS market_cache (symbol TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS market_signals (id TEXT PRIMARY KEY, issued_at REAL NOT NULL, data TEXT NOT NULL);`);
   const markets = {};
   for (const [symbol, config] of Object.entries(MARKET_CONFIG)) {
+    if (!enabledSymbols.includes(symbol)) continue;
     let saved = {};
     try {saved = JSON.parse(db.prepare('SELECT data FROM market_cache WHERE symbol=?').get(symbol)?.data || '{}');} catch {}
     markets[symbol] = {...config, quote: saved.quote || null, received_at: saved.received_at || 0,
@@ -50,8 +52,8 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
   let revision = 0, nextGold = 0, nextBtc = 0, nextHistory = 0, nextSocket = 0, socketFailures = 0;
   let historyFailures = 0, goldFailures = 0, btcFailures = 0;
   const history = symbol => db.prepare('SELECT data FROM market_signals ORDER BY issued_at DESC LIMIT 400').all()
-    .map(x => JSON.parse(x.data)).filter(p => !symbol || p.symbol === symbol).slice(0, 100);
-  const marketFor = symbol => symbol === 'XAUUSD'
+    .map(x => JSON.parse(x.data)).filter(p => enabledSymbols.includes(p.symbol) && (!symbol || p.symbol === symbol)).slice(0, 100);
+  const marketFor = symbol => !markets[symbol] ? null : symbol === 'XAUUSD'
     ? brokerGoldMarket(brokerSnapshot(), clock()) || markets[symbol]
     : symbol === 'BTCUSD' ? brokerBtcMarket(brokerSnapshotBTC(), clock()) || markets[symbol] : markets[symbol];
   const sameSource = (plan, market) => (plan.source_id || 'REFERENCE') === (market.source_id || 'REFERENCE');
@@ -94,6 +96,7 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
     return true;
   }
   function acceptHistory(raw) {
+    if (!markets.BTCUSD) return false;
     const incoming = parseCoinbaseCandles(raw, clock()), m = markets.BTCUSD;
     const merged = new Map(m.candles.map(c => [c.time, c]));
     for (const c of incoming) merged.set(c.time, c);
@@ -210,11 +213,11 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
   function tick() {
     if (stopped) return;
     const now = clock();
-    if (!brokerGoldMarket(brokerSnapshot(), now) && now >= nextGold) job('gold', gold);
-    if (!socket || now - socketMessage > 15) {markets.BTCUSD.transport = 'REST'; if (now >= nextBtc) job('btc', btc);}
-    if (now >= nextHistory) job('history', bootstrap);
+    if (markets.XAUUSD && !brokerGoldMarket(brokerSnapshot(), now) && now >= nextGold) job('gold', gold);
+    if (markets.BTCUSD && (!socket || now - socketMessage > 15)) {markets.BTCUSD.transport = 'REST'; if (now >= nextBtc) job('btc', btc);}
+    if (markets.BTCUSD && now >= nextHistory) job('history', bootstrap);
     if (socket && now - Math.max(socketHeartbeat, socketOpened) > 20) socket.close();
-    if (!socket && now >= nextSocket) connect();
+    if (markets.BTCUSD && !socket && now >= nextSocket) connect();
     for (const symbol of Object.keys(markets)) {
       const active = history(symbol).find(p => p.status === 'TRACKING');
       if (active && active.expires_at <= now) savePlan({...active, status: 'EXPIRED', resolved_at: now});

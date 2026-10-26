@@ -59,3 +59,15 @@ test('known MT5 rejection reasons are readable in Arabic and unknown details are
   assert.equal(commandResultMessage('Broker retcode 10030'),'Broker retcode 10030');
   assert.match(commandResultMessage('RESUME'),/عند تحقق الشروط/);
 });
+
+test('website execution shows the actual polling channel and never treats a submitted request as a confirmed fill',()=>{
+  const s={execution:{demo:true,demo_recommendations:true,website_recommendations:true},
+    websiteExecution:{reason:'WAITING_WEBSITE_PLAN'},demoExecution:{reason:'WAITING_WEBSITE_PLAN'},
+    reasons:['website mode','الاتجاه غير متوافق'],websiteBridge:{connection:'LIVE',lastResult:'SUBMITTED'}};
+  assert.match(demoExecutionMessage(s),/يطلب توصيات الموقع فعليًا/);
+  assert.match(demoExecutionMessage(s),/الاتجاه غير متوافق/);
+  assert.match(demoExecutionMessage(s),/تأكيد الصفقة من Trade\/History/);
+  s.websiteBridge={connection:'STALE',lastResult:'REJECTED'};
+  assert.match(demoExecutionMessage(s),/توقف طلب التوصيات/);
+  assert.match(demoExecutionMessage(s),/منع MT5/);
+});
