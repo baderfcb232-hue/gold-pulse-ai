@@ -60,10 +60,12 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   let lastSourceBTC = btcSnapshot ? `${btcSnapshot.account_ref}|${btcSnapshot.broker}|${btcSnapshot.symbol}|${btcSnapshot.execution.managed_magic}` : null;
   let lastSource = snapshot ? `${snapshot.account_ref}|${snapshot.broker}|${snapshot.symbol}|${snapshot.execution.managed_magic}` : null;
   const cfg = {...defaults, signalSource: process.env.SIGNAL_SOURCE || 'EA',
+    goldOnly: process.env.NABD_GOLD_ONLY === 'true',
     publicationEnabled: process.env.SIGNAL_PUBLICATION_ENABLED === 'true',
     demoRecommendationExecution: process.env.DEMO_RECOMMENDATION_EXECUTION === 'true', ...config};
   if (!['EA','DASHBOARD'].includes(cfg.signalSource)) throw new Error('SIGNAL_SOURCE must be EA or DASHBOARD');
   if (typeof cfg.publicationEnabled !== 'boolean') throw new Error('publicationEnabled must be a boolean');
+  if (typeof cfg.goldOnly !== 'boolean') throw new Error('goldOnly must be a boolean');
   // Restore the original Telegram candidate sources without relaxing order controls.
   const telegramPolicy = config.telegramPolicy ?? process.env.TELEGRAM_SIGNAL_POLICY ?? 'LEGACY';
   if (!['LEGACY', 'STRICT'].includes(telegramPolicy)) throw new Error('Invalid TELEGRAM_SIGNAL_POLICY');
@@ -101,7 +103,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     }
   };
   const marketFeed = createMarketFeed({db, clock, ...feedOptions, calendar: () => snapshot?.calendar || null,
-    brokerSnapshot: () => snapshot, brokerSnapshotBTC: () => btcSnapshot,
+    enabledSymbols: cfg.goldOnly ? ['XAUUSD'] : undefined,
+    brokerSnapshot: () => snapshot, brokerSnapshotBTC: () => cfg.goldOnly ? null : btcSnapshot,
     onChange: () => {researchWorker.reviewCandidates(); emit('market', marketState);}});
   const newsFeed = createNewsFeed({db, clock, ...feedOptions, onChange: () => emit('news', newsFeed.publicState)});
   const telegram = createTelegramPublisher({db, clock, ...telegramOptions, enabled: cfg.publicationEnabled,
@@ -111,6 +114,36 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   let revision = 0;
   const audit = (event, data) => db.prepare('INSERT INTO audit(time,event,data) VALUES(?,?,?)').run(clock(), event, JSON.stringify(data));
   const signalRows = () => db.prepare('SELECT data FROM signals ORDER BY issued_at DESC LIMIT 200').all().map(x => JSON.parse(x.data));
+  const websiteActivity = Object.fromEntries(['XAUUSD','BTCUSD'].map(symbol => [symbol,
+    {lastPollAt:null,lastDispatchAt:null,lastReportAt:null,lastResult:null,journalState:'NOT_CHECKED',readAt:null,source:null}]));
+  function rememberWebsiteActivity(symbol, record) {
+    if (!record || !['DISPATCHED','SUBMITTED','REJECTED'].includes(record.status)) return;
+    const activity = websiteActivity[symbol], time = Number(record.time);
+    if (!Number.isFinite(time) || time < (activity.lastDispatchAt ?? 0)) return;
+    if (time === activity.lastDispatchAt && activity.lastResult !== 'DISPATCHED' && record.status === 'DISPATCHED') return;
+    activity.lastDispatchAt = time;
+    activity.lastReportAt = Number(record.reported_at) || null;
+    activity.lastResult = record.status;
+  }
+  async function refreshWebsiteActivity(symbol, source, force = false) {
+    const activity = websiteActivity[symbol];
+    if (activity.source !== source) {
+      activity.source = source; activity.readAt = null;
+      activity.lastDispatchAt = activity.lastReportAt = activity.lastResult = null;
+    }
+    if (!commandJournal?.websiteEntries) {activity.journalState = 'UNAVAILABLE'; return;}
+    if (!force && activity.readAt != null && clock() - activity.readAt < 30) return;
+    activity.readAt = clock();
+    try {
+      const rows = await commandJournal.websiteEntries(source);
+      rememberWebsiteActivity(symbol, rows[0]); activity.journalState = 'READY';
+    } catch {activity.journalState = 'ERROR';}
+  }
+  function websiteBridgeState(symbol) {
+    const {lastPollAt,lastDispatchAt,lastReportAt,lastResult,journalState} = websiteActivity[symbol];
+    return {connection:lastPollAt == null ? 'NOT_OBSERVED' : clock()-lastPollAt <= 15 ? 'LIVE' : 'STALE',
+      lastPollAt,lastDispatchAt,lastReportAt,lastResult,journalState};
+  }
   function telegramCandidates() {
     if (!cfg.publicationEnabled) return [];
     if (snapshot?.execution.website_recommendations || btcSnapshot?.execution.website_recommendations) {
@@ -128,7 +161,10 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   function telegramReadiness() {
     const candidates = telegramCandidates();
     const ready = candidates.some(p => p.status === 'TRACKING' && p.expires_at > clock());
-    return {policy: telegramPolicy, ready, reason: !cfg.publicationEnabled ? 'PAUSED' :
+    const websiteMode = !!snapshot?.execution.website_recommendations;
+    return {policy: telegramPolicy, source: websiteMode ? 'NABD_WEBSITE' : 'BROKER', ready,
+      detail: websiteMode ? marketFeed.publicState().markets.XAUUSD?.analysis.reason : null,
+      reason: !cfg.publicationEnabled ? 'PAUSED' : websiteMode ? ready ? 'READY' : 'WAITING_WEBSITE_PLAN' :
       telegramPolicy === 'STRICT' ? publicationReview().reason : ready ? 'READY' : 'WAITING_SETUP'};
   }
   function publicationReview(a = sourceAnalysis(snapshot, clock(), cfg)) {
@@ -219,6 +255,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     if (!cfg.demoRecommendationExecution || !cfg.publicationEnabled) return {ready:false,reason:'DISABLED',plan:null};
     if (!selected?.execution.website_recommendations) return {ready:false,reason:'MT5_WEBSITE_UPDATE_REQUIRED',plan:null};
     const btc = /^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(selected.symbol);
+    if (btc && cfg.goldOnly) return {ready:false,reason:'GOLD_ONLY',plan:null};
     const market = marketFeed.publicState().markets[btc ? 'BTCUSD' : 'XAUUSD'];
     const analysisPlan = btc ? brokerBtcMarket(selected,clock())?.analysis.plan : brokerGoldMarket(selected,clock())?.analysis.plan;
     return websiteTradeDecision({enabled: cfg.demoRecommendationExecution && cfg.publicationEnabled,
@@ -258,12 +295,17 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       publicBaseUrl: publicBase || null, accountDataShared: Boolean(snapshot?.account),
       serverTime: clock(), demoExecution: (() => {const {plan, ...status} = demoExecutionReview(); return status;})(),
       websiteExecution: (() => {const {plan,...status}=websiteExecutionReview();return status;})(),
+      websiteBridge: websiteBridgeState('XAUUSD'), goldOnly: cfg.goldOnly,
       controlsConfigured: dashboardToken.length >= 32 && ingestToken.length >= 32};
   }
   function broadcast() {
     emit('state', publicState);
   }
   function ingest(raw) {
+    // A disabled feed is explicitly ignored, never rebound to another account.
+    // Existing positions remain managed locally by MT5; no close command is sent.
+    if (cfg.goldOnly && /^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(raw?.symbol || ''))
+      return {ignored: true, reason: 'GOLD_ONLY'};
     const next = cleanSnapshot(raw, clock());
     if (/^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(next.symbol)) {
       const sourceBTC = `${next.account_ref}|${next.broker}|${next.symbol}|${next.execution.managed_magic}`;
@@ -304,13 +346,15 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       if (accountResponse) return send(req, res, accountResponse.status, accountResponse.data, 'application/json; charset=utf-8', accountResponse.headers);
       if (path === '/healthz' && req.method === 'GET') {
         const state = publicState(), sources = marketFeed.publicState().markets, messaging = telegram.status();
-        const publication = publicationReview();
+        const publication = snapshot?.execution.website_recommendations ? telegramReadiness() : publicationReview();
         return send(req, res, 200, {ok: true, version: '3.4.0', storage: storagePersistent ? 'persistent' : 'ephemeral', runtimeCheckpoint: runtimeBackup?.status() || {state: 'NOT_CONFIGURED'}, accounts: accounts.status(),
           publication: {enabled: cfg.publicationEnabled, ready: publication.ready && messaging.verification.canPost,
+            detail: publication.detail || publicationReasons[publication.reason] || null,
             reason: !cfg.publicationEnabled ? 'PAUSED' : !messaging.configured ? 'TELEGRAM_NOT_CONFIGURED'
               : !messaging.verification.canPost ? 'TELEGRAM_NOT_VERIFIED' : publication.reason,
             costs: costStatus().status, prerequisites: state.publicationReadiness, telegram: {...telegramReadiness(), faultAlerts: messaging.faultAlerts, configured: messaging.configured,
               mode: messaging.mode, verification: messaging.verification, testDelivery: messaging.testDelivery}},
+          goldOnly: cfg.goldOnly, websiteBridge: state.websiteBridge,
           mt5: {connection: state.connection, signalSourceReady: state.signalSourceReady,
             quoteAgeSeconds: state.quoteAge, lastQuoteAt: state.lastUpdate, lastIngestAt: snapshot?.received_at ?? null},
           markets: Object.fromEntries(Object.entries(sources).map(([symbol, source]) => [symbol, {
@@ -377,7 +421,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         const raw = await body(req);
         if (path === '/api/update' && (!raw.spec || !raw.candles || !raw.account_ref))
           return send(req, res, 426, {error: 'صيغة الربط القديمة لا تحتوي على الشموع ومواصفات البروكر. استخدم جسر NABD المحدّث.', endpoint: '/api/mt5'});
-        ingest(raw); return send(req, res, 200, {ok: true, status: 'success', received_at: clock()});
+        const result = ingest(raw); return send(req, res, 200, {ok: true, status: result?.ignored ? 'ignored' : 'success', ...result, received_at: clock()});
       }
       if (path === '/api/risk-settings' && req.method === 'POST') {
         if (!operator(req)) return send(req, res, 401, {error: 'تسجيل دخول المشغّل مطلوب.'});
@@ -421,7 +465,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         return send(req, res, 200, {account: snapshot?.account ?? null, positions: snapshot?.positions ?? [],
           riskSizing,
           websiteEntries: snapshot && commandJournal?.websiteEntries ? await commandJournal.websiteEntries(entrySourceKey(snapshot)) : [],
-          btc: btcSnapshot ? {account:btcSnapshot.account,positions:btcSnapshot.positions,lastUpdate:btcSnapshot.received_at,
+          btc: !cfg.goldOnly && btcSnapshot ? {account:btcSnapshot.account,positions:btcSnapshot.positions,lastUpdate:btcSnapshot.received_at,
             riskSizing: automaticRiskSizing(btcSnapshot, marketFeed.publicState().markets.BTCUSD?.currentSignal, now),
             websiteEntries:commandJournal?.websiteEntries ? await commandJournal.websiteEntries(entrySourceKey(btcSnapshot)) : []} : null,
           deals: db.prepare('SELECT data FROM deals ORDER BY time DESC LIMIT 1000').all().map(x => JSON.parse(x.data)),
@@ -469,23 +513,31 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       if (['/api/bridge/website-recommendation','/api/bridge/website-result'].includes(path) && req.method === 'POST') {
         if (!bridge(req)) return send(req,res,401,{error:'Invalid bridge token'});
         const b=await body(req,2000);
+        if (cfg.goldOnly && /^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(b?.symbol || ''))
+          return send(req,res,200,'','text/plain; charset=utf-8');
         const chosen = b?.symbol === btcSnapshot?.symbol ? btcSnapshot : snapshot;
         if (!chosen || b.account_ref!==chosen.account_ref || b.broker!==chosen.broker ||
             b.symbol!==chosen.symbol || b.magic!==chosen.execution.managed_magic)
           return send(req,res,409,{error:'Website recommendation source mismatch'});
         const source=entrySourceKey(chosen);
+        const symbol = /^BTCUSD/i.test(chosen.symbol) ? 'BTCUSD' : 'XAUUSD';
+        const activity = websiteActivity[symbol];
         if (path==='/api/bridge/website-result') {
           if (!commandJournal?.websiteResult || !Number.isSafeInteger(b.id) || b.id<=0 ||
               !['SUBMITTED','REJECTED'].includes(b.status)) return send(req,res,400,{error:'Invalid website result'});
           await commandJournal.websiteResult(source,b.id,b.status,clock());
+          await refreshWebsiteActivity(symbol, source, true);
           return send(req,res,200,{ok:true});
         }
+        activity.lastPollAt = clock();
+        await refreshWebsiteActivity(symbol, source);
         const decision=websiteExecutionReview(chosen),p=decision.plan;
         if (!decision.ready || !p) return send(req,res,200,'','text/plain; charset=utf-8');
         const record=await commandJournal.claimWebsite(source,p,clock());
         if (!record) return send(req,res,200,'','text/plain; charset=utf-8');
         const id=Number(record.id);
         if (!Number.isSafeInteger(id) || id<=0) throw new Error('Invalid website approval identifier');
+        rememberWebsiteActivity(symbol, record);
         const fields=['NBWEB1',chosen.account_ref,chosen.symbol,chosen.execution.managed_magic,
           p.side,p.entry,p.sl,p.tp,Math.floor(p.issued_at),Math.floor(p.expires_at),p.bar_time,id];
         if(fields.some(v=>/[|\r\n]/.test(String(v))))throw new Error('Invalid website approval identity');

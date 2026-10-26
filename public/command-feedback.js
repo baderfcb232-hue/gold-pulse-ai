@@ -96,5 +96,17 @@ export function demoExecutionMessage(state) {
     WAITING_COSTS: 'تكاليف حساب البروكر غير مؤكدة أو السبريد تجاوز الحد.',
     DURABLE_ENTRY_JOURNAL_REQUIRED: 'سجل إرسال الصفقات الدائم غير متاح؛ لا نرسل أمرًا قد يتكرر.'
   };
-  return reasons[r?.reason] || 'ننتظر اكتمال شروط توصية الذهب المعتمدة.';
+  const details = [reasons[r?.reason] || 'ننتظر اكتمال شروط توصية الذهب المعتمدة.'];
+  if (x.website_recommendations) {
+    const b = state.websiteBridge;
+    if (r?.reason === 'WAITING_WEBSITE_PLAN' && state.reasons?.[1]) details.push(state.reasons[1]);
+    if (b?.connection === 'LIVE') details.push('جسر MT5 يطلب توصيات الموقع فعليًا.');
+    else if (b?.connection === 'STALE') details.push('توقف طلب التوصيات من جسر MT5؛ وصول السعر وحده لا يكفي للتنفيذ.');
+    else details.push('لم نرصد طلب توصيات من جسر MT5 بعد؛ راجع الجسر إذا استمرت هذه الحالة.');
+    if (b?.lastResult === 'SUBMITTED') details.push('آخر محاولة: أبلغ MT5 عن إرسال طلب التنفيذ؛ تأكيد الصفقة من Trade/History.');
+    if (b?.lastResult === 'REJECTED') details.push('آخر محاولة: منع MT5 التنفيذ؛ سبب الرفض في Experts.');
+    if (b?.lastResult === 'DISPATCHED') details.push('آخر محاولة أُرسلت للجسر ولم يصل رد MT5 بعد؛ لا نكرر إرسالها.');
+    if (b?.journalState === 'ERROR') details.push('تعذر قراءة سجل التنفيذ الدائم.');
+  }
+  return details.join(' ');
 }

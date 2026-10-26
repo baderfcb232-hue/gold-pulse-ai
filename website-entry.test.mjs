@@ -9,7 +9,7 @@ import {createApplication} from './server.mjs';
 import {entryFixture,eaFixture,NOW} from './tests/fixtures.mjs';
 import {cleanSnapshot} from './engine.mjs';
 import {brokerGoldMarket} from './broker-market.mjs';
-import {websiteTradeDecision,websiteEntryJournal} from './website-entry.mjs';
+import {websiteTradeDecision,websiteEntryJournal,entrySourceKey} from './website-entry.mjs';
 const INGEST='website-test-ingest-xxxxxxxxxxxxxxxxxxxxxx',ADMIN='website-test-admin-yyyyyyyyyyyyyyyyyyyyyy';
 function rawSnapshot() {
   const raw=entryFixture();raw.symbol='XAUUSD.m';raw.ea=eaFixture().ea;raw.ea.signal=null;
@@ -74,12 +74,16 @@ test('website execution rejects unsafe account, stale source, old plans, foreign
 });
 test('authenticated website bridge dispatches a plan once under simultaneous polling and exposes only an unconfirmed submission',async t=>{
   const {app,base,post,source}=await setup(t);
+  assert.equal(app.publicState().websiteBridge.connection,'NOT_OBSERVED');
   assert.equal(app.publicState().websiteExecution.ready,true);
   assert.equal(app.publicState().signalSource,'NABD_WEBSITE');
   assert.equal((await post(undefined,source,'wrong')).status,401);
   assert.equal((await post(undefined,{...source,symbol:'OTHER'})).status,409);
+  assert.equal(app.publicState().websiteBridge.lastPollAt,null);
   const responses=await Promise.all(Array.from({length:6},async()=> (await post()).text()));
   assert.equal(responses.filter(Boolean).length,1);
+  assert.equal(app.publicState().websiteBridge.connection,'LIVE');
+  assert.equal(app.publicState().websiteBridge.lastResult,'DISPATCHED');
   const wire=responses.find(Boolean).split('|');assert.equal(wire.length,12);assert.equal(wire[0],'NBWEB1');
   const frozen=app.marketFeed.history('XAUUSD')[0];
   assert.equal(app.publicState().currentSignal.id,frozen.id);
@@ -93,11 +97,34 @@ test('authenticated website bridge dispatches a plan once under simultaneous pol
   assert.equal((await post('/api/bridge/website-result',{...source,id,status:'SUBMITTED'})).status,200);
   account=await (await fetch(base+'/api/account',{headers:{Authorization:'Bearer '+ADMIN}})).json();
   assert.equal(account.websiteEntries[0].status,'SUBMITTED');
+  assert.equal(app.publicState().websiteBridge.lastResult,'SUBMITTED');
+  assert.equal(app.publicState().websiteBridge.lastReportAt,NOW);
   const market=await (await fetch(base+'/api/market',{headers:{Authorization:'Bearer '+ADMIN}})).json();
   assert.equal(market.markets.XAUUSD.currentSignal.id,frozen.id);assert.equal(market.markets.XAUUSD.execution_mode,'DEMO_WEBSITE');
   assert.equal((await fetch(base+'/api/account')).status,401);
   const publicText=await (await fetch(base+'/api/state')).text();assert.ok(!publicText.includes('websiteEntries'));
   assert.ok(!publicText.includes(source.account_ref));assert.equal(app.db.prepare('SELECT count(*) n FROM commands').get().n,0);
+});
+test('bridge diagnostics restore the durable result and expire polling freshness without claiming a fill',async t=>{
+  const journal=sqliteJournal(), raw=rawSnapshot();
+  const snapshot=cleanSnapshot(raw,NOW),source=entrySourceKey(snapshot);
+  const record=await journal.claimWebsite(source,{...decisionFixture().market.currentSignal,expires_at:NOW-50},NOW-100);
+  await journal.websiteResult(source,Number(record.id),'REJECTED',NOW-99);
+  raw.execution.paused=true;
+  const {app,post,setNow}=await setup(t,{journal,raw});
+  await post();
+  const restored=app.publicState().websiteBridge;
+  assert.equal(restored.journalState,'READY');assert.equal(restored.connection,'LIVE');
+  assert.equal(restored.lastResult,'REJECTED');assert.equal(restored.lastReportAt,NOW-99);
+  setNow(NOW+16);assert.equal(app.publicState().websiteBridge.connection,'STALE');
+});
+test('website publication health follows the active website plan instead of the absent legacy EA plan',async t=>{
+  const {app,base}=await setup(t);
+  assert.equal(app.publicState().currentSignal.source,'MT5 · JustMarkets-Demo');
+  const health=await (await fetch(base+'/healthz')).json();
+  assert.equal(health.publication.telegram.source,'NABD_WEBSITE');
+  assert.equal(health.publication.telegram.reason,'READY');
+  assert.notEqual(health.publication.detail,'ننتظر خطة جديدة مكتملة من مصدر التداول.');
 });
 test('durable plan claims survive journal reopening and a result from a different account cannot modify them',async t=>{
   const dir=mkdtempSync(join(tmpdir(),'nabd-entry-journal-')),file=join(dir,'journal.sqlite');
