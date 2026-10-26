@@ -592,8 +592,31 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     }
   });
   server.requestTimeout = 15000; server.headersTimeout = 10000;
+  let lastRecommendationDiagnosticAt = -Infinity;
   const timer = setInterval(() => {
     try {
+      // Operational diagnostics only: no credentials, account identifiers, orders or price levels.
+      // This does not change publication, risk gates, market snapshots or execution.
+      if (clock() - lastRecommendationDiagnosticAt >= 300) {
+        const state = publicState(), telegramState = telegram.status();
+        const gold = marketFeed.publicState().markets.XAUUSD;
+        console.info('NABD recommendation health:', JSON.stringify({
+          brokerConnection: state.connection,
+          quoteAgeSeconds: state.quoteAge,
+          signalSourceReady: state.signalSourceReady,
+          publicationEnabled: cfg.publicationEnabled,
+          publicationReason: telegramReadiness().reason,
+          publicationPolicy: telegramPolicy,
+          websiteMode: Boolean(snapshot?.execution.website_recommendations),
+          websiteAnalysisStatus: gold?.analysis?.status ?? null,
+          websiteAnalysisReason: gold?.analysis?.reason ?? null,
+          telegramVerification: telegramState.verification.state,
+          telegramCanPost: telegramState.verification.canPost,
+          telegramLastError: telegramState.lastError,
+          blockers: state.publicationReadiness.filter(check => !check.ready).map(check => check.id)
+        }));
+        lastRecommendationDiagnosticAt = clock();
+      }
       db.prepare("UPDATE commands SET status='EXPIRED' WHERE status='QUEUED' AND expires<?").run(clock());
       for (const p of signalRows().filter(p => p.status === 'TRACKING' && p.expires_at <= clock())) {
         const change = trackPlan(p, snapshot, clock());
