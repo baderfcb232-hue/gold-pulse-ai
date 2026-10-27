@@ -1,0 +1,17 @@
+name: NABD Demo execution readiness public probe
+on:
+  push:
+    branches: [diagnostic/demo-execution-readiness-20261028]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  read-only-probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check deployed live broker and order readiness without accessing secrets or placing trades
+        run: node scripts/demo-execution-readiness.mjs
