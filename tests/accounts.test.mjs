@@ -217,3 +217,18 @@ test('S3-compatible backups require HTTPS, sign the payload and report destinati
   assert.match(request.options.headers.Authorization, /AWS4-HMAC-SHA256/); assert.match(request.options.headers.Authorization, /SignedHeaders=host;x-amz-content-sha256;x-amz-date/);
   assert.equal(request.options.body, 'ciphertext'); assert.throws(() => backupStorage({endpoint: 'http://storage.example', bucket: 'n', accessKey: 'a', secretKey: 'b'}));
 });
+
+test('accounts health check fails closed and recovers without losing logins after database outage', async t => {
+  const h=await setup(t);
+  const original=h.store.query.bind(h.store);
+  let offline=false;
+  h.store.query=async (...args)=> {if(offline) throw new Error('SIMULATED_DATABASE_OUTAGE'); return original(...args);};
+  const initial=await h.request('/api/auth/status'); assert.equal(initial.body.ready,true);
+  offline=true;
+  const down=await h.request('/api/auth/status');
+  assert.equal(down.body.ready,false); assert.equal(down.body.database,'UNAVAILABLE');
+  assert.equal((await h.request('/api/auth/login',{email:'member@example.test',password:PASSWORD})).status,503);
+  offline=false;
+  const restored=await h.request('/api/auth/status');
+  assert.equal(restored.body.ready,true);assert.equal(restored.body.database,'CONNECTED');
+});
