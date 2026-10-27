@@ -214,7 +214,9 @@ void NBProcessWebsiteRecommendation()
    double result_id=NBMainValue("WI"),result=NBMainValue("WR");string response;
    if(result_id>reported_id && result_id==NBMainValue("WI") && (result==1 || result==2))
       if(NBRequest("POST","/api/bridge/website-result","{"+source+",\"id\":"+NBD(result_id,0)+
-       ",\"status\":"+NBQ(result==2?"SUBMITTED":"REJECTED")+"}",response)==200)reported_id=result_id;
+       ",\"status\":"+NBQ(result==2?"SUBMITTED":"REJECTED")+
+       ",\"reason_code\":"+NBD(NBMainValue("WRC"),0)+
+       ",\"mt5_retcode\":"+NBD(NBMainValue("WRT"),0)+"}",response)==200)reported_id=result_id;
    if(NABDRemotePaused())return;
    if(NBRequest("POST","/api/bridge/website-recommendation","{"+source+"}",response)!=200 || StringLen(response)==0)return;
    string parts[];if(StringSplit(response,'|',parts)!=12 || parts[0]!="NBWEB1" ||

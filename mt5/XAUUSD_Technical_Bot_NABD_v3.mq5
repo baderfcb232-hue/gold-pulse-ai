@@ -1,5 +1,5 @@
 #property strict
-#property version   "1.15"
+#property version   "1.16"
 #property description "NABD JustMarkets MT5 gold EA: EMA/RSI signals, protected risk and estimated net small-profit cycles."
 
 #include <Trade/Trade.mqh>
@@ -130,6 +130,9 @@ double   g_cycle_net = 0.0;
 bool     g_cycle_net_valid = false;
 datetime g_last_claimed_bar = 0;
 datetime g_website_enabled_at = 0;
+// Diagnostics for the *current* website entry attempt only, never reused as a trade signal.
+int      g_website_attempt_code = 0;
+uint     g_website_attempt_retcode = 0;
 
 //--- function declarations
 bool   CreateIndicatorHandles();
@@ -709,9 +712,10 @@ bool BuildSignal(SignalData &signal)
 //+------------------------------------------------------------------+
 bool PlaceSignal(const SignalData &signal)
   {
+   g_website_attempt_code=0;g_website_attempt_retcode=0;
    if(!ExecutionPermissionsAvailable() || HasOwnPosition() || HasOwnPendingOrder() ||
       HasForeignNettingExposure() || g_cycle_closing)
-      return(false);
+     {g_website_attempt_code=116;return(false);}
 
    ENUM_ORDER_TYPE order_type=(signal.direction>0 ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
    double total_volume=CalculateVolume(order_type,signal.entry,signal.stop_loss);
@@ -726,6 +730,7 @@ bool PlaceSignal(const SignalData &signal)
      {
       Print("Order skipped: calculated volume is below broker minimum or invalid.");
       LogEvent("ORDER_BLOCKED","volume calculation failed");
+      g_website_attempt_code=117;
       return(false);
      }
 
@@ -739,14 +744,14 @@ bool PlaceSignal(const SignalData &signal)
    double actual_volume=0.0;
    int accepted=0;
    if(!ClaimEntryBar())
-      return(false);
+     {g_website_attempt_code=118;return(false);}
    for(int leg=0;leg<legs;leg++)
      {
       MqlTick tick;
       if(!SymbolInfoTick(g_symbol,tick) || tick.ask<=0.0 || tick.bid<=0.0 ||
          tick.ask<tick.bid || ServerNow()-tick.time>10 || tick.time>ServerNow()+2 ||
          (tick.ask-tick.bid)/g_point>InpMaxSpreadPoints || IsEmergencyStopActive())
-         break;
+        {g_website_attempt_code=119;break;}
       double price=signal.direction>0 ? tick.ask : tick.bid;
       double distance=signal.direction>0 ? tick.bid-signal.stop_loss : signal.stop_loss-tick.ask;
       double profit=0.0;
@@ -756,6 +761,7 @@ bool PlaceSignal(const SignalData &signal)
          !MarginIsAcceptable(order_type,price,volume))
         {
          LogEvent("ORDER_BLOCKED","fresh price, stop risk, or combined margin check failed");
+         g_website_attempt_code=120;
          break;
         }
       datetime started=ServerNow();
@@ -763,7 +769,9 @@ bool PlaceSignal(const SignalData &signal)
          g_trade.Buy(volume,g_symbol,0.0,signal.stop_loss,signal.take_profit,comment) :
          g_trade.Sell(volume,g_symbol,0.0,signal.stop_loss,signal.take_profit,comment);
       uint retcode=g_trade.ResultRetcode();
+      g_website_attempt_retcode=retcode;
       bool ok=request_ok && IsSuccessfulRetcode(retcode);
+      if(!ok)g_website_attempt_code=121;
       string result_text=StringFormat("side=%s,leg=%d/%d,volume=%.4f,retcode=%u,%s",
                                       side,leg+1,legs,volume,retcode,g_trade.ResultRetcodeDescription());
       LogEvent(ok ? "ORDER_ACCEPTED" : "ORDER_REJECTED",result_text);

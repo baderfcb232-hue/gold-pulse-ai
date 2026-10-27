@@ -78,9 +78,19 @@ export function websiteEntryJournal(pool) {
       (source_key,plan_id,time,expires,status,plan) VALUES($1,$2,$3,$4,'DISPATCHED',$5)
       ON CONFLICT(source_key,plan_id) DO NOTHING RETURNING *`,
       [source,p.id,now,p.expires_at,JSON.stringify(p)])).rows[0] || null,
-    websiteResult: async (source,id,status,now) => {await pool.query(`UPDATE nabd_website_entries
-      SET status=$3,reported_at=$4 WHERE source_key=$1 AND id=$2 AND status='DISPATCHED'`,[source,id,status,now]);},
-    websiteEntries: async source => (await pool.query(`SELECT id,time,expires,status,plan,reported_at
+    websiteResult: async (source,id,status,now,details={}) => {
+      // A submitted request is never promoted to a confirmed position by this ACK.
+      // Only accepted, source-bound responses may annotate a previously dispatched id.
+      const reason=Number.isInteger(details.reason_code)&&details.reason_code>=0&&details.reason_code<=999
+        ?details.reason_code:null;
+      const retcode=Number.isInteger(details.mt5_retcode)&&details.mt5_retcode>=0&&details.mt5_retcode<=999999
+        ?details.mt5_retcode:null;
+      await pool.query(`UPDATE nabd_website_entries SET status=$3,reported_at=$4,
+        reason_code=$5,mt5_retcode=$6
+        WHERE source_key=$1 AND id=$2 AND status='DISPATCHED'`,
+        [source,id,status,now,reason,retcode]);
+    },
+    websiteEntries: async source => (await pool.query(`SELECT id,time,expires,status,plan,reported_at,reason_code,mt5_retcode
       FROM nabd_website_entries WHERE source_key=$1 ORDER BY id DESC LIMIT 30`,[source])).rows
       .map(r => ({...r,id:Number(r.id),plan:JSON.parse(r.plan)}))
   };
