@@ -47,7 +47,8 @@ test('automatic account sizing is private, follows fresh equity, and explains th
 });
 test('source mismatch and replayed quotes are rejected',async t=>{
   const {base}=await setup(t);await post(base,'/api/mt5',fixture(),INGEST);let raw=fixture();raw.account_ref='DIFFERENT_ACCOUNT';assert.equal((await post(base,'/api/mt5',raw,INGEST)).status,400);
-  raw=fixture();raw.quote_at=NOW-1;assert.equal((await post(base,'/api/mt5',raw,INGEST)).status,400);
+  raw=fixture();raw.quote_at=NOW-1;const late=await post(base,'/api/mt5',raw,INGEST);
+  assert.equal(late.status,200);assert.equal((await late.json()).reason,'STALE_QUOTE');
 });
 test('public diagnostics separate bridge receipt, main heartbeat and old broker quotes',async t=>{
   const {base}=await setup(t,{config:{signalSource:'EA'}});

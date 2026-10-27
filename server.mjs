@@ -311,7 +311,11 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       const sourceBTC = `${next.account_ref}|${next.broker}|${next.symbol}|${next.execution.managed_magic}`;
       if (lastSourceBTC && sourceBTC !== lastSourceBTC)
         throw new Error('BTC source mismatch. Use a separate MT5 account/source configuration.');
-      if (btcSnapshot && next.quote_at < btcSnapshot.quote_at) throw new Error('Out-of-order BTC quote');
+      // A late MT5 request must never roll the stored broker price or trading state backwards.
+      // It is not malformed: acknowledge it as ignored so the bridge continues normally.
+      // Keep the previous received_at unchanged, so stale prices cannot look fresh.
+      if (btcSnapshot && next.quote_at < btcSnapshot.quote_at)
+        return {ignored: true, reason: 'STALE_BTC_QUOTE', accepted_quote_at: btcSnapshot.quote_at};
       btcSnapshot = next; lastSourceBTC = sourceBTC; revision++;
       db.prepare('INSERT INTO btc_snapshot(id,data) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data')
         .run(JSON.stringify(next));
@@ -320,7 +324,10 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     }
     const source = `${next.account_ref}|${next.broker}|${next.symbol}|${next.execution.managed_magic}`;
     if (lastSource && source !== lastSource) throw new Error('Source mismatch. Use a separate DATA_DIR for a different account, symbol or EA magic.');
-    if (snapshot && next.quote_at < snapshot.quote_at) throw new Error('Out-of-order quote');
+    // Network/bridge requests may arrive out of order. Do not overwrite a newer
+    // quote, its positions, or execution flags with an older snapshot.
+    if (snapshot && next.quote_at < snapshot.quote_at)
+      return {ignored: true, reason: 'STALE_QUOTE', accepted_quote_at: snapshot.quote_at};
     snapshot = next; lastSource = source; revision++;
     db.prepare('INSERT INTO snapshot(id,data) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data').run(JSON.stringify(snapshot));
     for (const d of next.deals) db.prepare('INSERT OR IGNORE INTO deals(ticket,time,data) VALUES(?,?,?)').run(d.ticket, d.time, JSON.stringify(d));
