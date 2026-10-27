@@ -1,0 +1,17 @@
+name: Diagnose broker candle freshness (read only)
+on:
+  push:
+    branches: [fix/gold-scalp-candle-gaps]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  read-only-diagnosis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Inspect broker candle timings and market liveness
+        run: node scripts/diagnose-broker-bars.mjs
