@@ -7,6 +7,20 @@ const aligned=(price,spec,mode='nearest')=>{
   return Number((calc(price/spec.tick_size)*spec.tick_size).toFixed(spec.digits));
 };
 const isBuy=x=>x==='BUY';
+// Single source of truth for both scalping entry validation and website status.
+// A broker can supply a fresh tick before a new closed OHLC bar is published.
+// Only the closed M5/M15 entry frames and H4 bias frame are freshness-critical;
+// H1 is displayed as context, but is not an entry prerequisite.
+export function goldScalpBarFreshness(snapshot,now){
+  const age=tf=>{
+    const last=snapshot?.candles?.[tf]?.at(-1);
+    return last && Number.isFinite(last.time) ? now-(last.time+TF_SECONDS[tf]) : Infinity;
+  };
+  const ages={M5:age('M5'),M15:age('M15'),H4:age('H4')};
+  const staleEntry=ages.M5>TF_SECONDS.M5+120 || ages.M15>TF_SECONDS.M15+120;
+  const staleContext=ages.H4>TF_SECONDS.H4+120;
+  return {fresh:!staleEntry&&!staleContext,staleEntry,staleContext,ages};
+}
 export function analyzeGoldScalp(snapshot,now=Date.now()/1000,settings=defaults){
   const cfg={...defaults,...settings},legacy=analyze(snapshot,now,cfg);
   const state={...legacy,strategy:GOLD_SCALP_STRATEGY,decision:'WAIT',checks:[],score:null,
@@ -16,15 +30,9 @@ export function analyzeGoldScalp(snapshot,now=Date.now()/1000,settings=defaults)
   const frames=legacy.frames;
   if(Object.values(frames).some(f=>f.direction==='UNKNOWN'))
     return {...state,reasons:['بانتظار 220 شمعة مغلقة لكل فريم.']};
-  // Broker sessions and thin-liquidity periods can leave the last *closed*
-  // timeframe candle one timeframe behind while actual bid/ask is LIVE.
-  // Require recent M5/M15 entry candles; H4 is context, not a scalp trigger.
-  // Never construct a candle from a quote or treat a stale quote as fresh.
-  const barAge = tf => now-(snapshot.candles[tf].at(-1).time+TF_SECONDS[tf]);
-  const ageM5=barAge('M5'),ageM15=barAge('M15'),ageH4=barAge('H4');
-  const staleEntry=ageM5>TF_SECONDS.M5+120||ageM15>TF_SECONDS.M15+120;
-  const staleContext=ageH4>TF_SECONDS.H4+120;
-  if(staleEntry||staleContext)return {...state,reasons:[staleEntry?
+  // The public market status must use this exact same broker OHLC freshness gate.
+  const barFreshness=goldScalpBarFreshness(snapshot,now);
+  if(!barFreshness.fresh)return {...state,reasons:[barFreshness.staleEntry?
     'شموع الدخول M5 أو M15 أقدم من فريم مغلق واحد؛ ننتظر تحديث MT5.' :
     'شموع السياق H4 أقدم من فريم مغلق واحد؛ ننتظر تحديث MT5.']};
   const spread=(snapshot.ask-snapshot.bid)/snapshot.spec.point;

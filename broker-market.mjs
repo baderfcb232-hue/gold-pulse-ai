@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {analyze, TF_SECONDS, defaults} from './engine.mjs';
-import {analyzeGoldScalp} from './strategies/gold-scalping.mjs';
+import {analyzeGoldScalp,goldScalpBarFreshness} from './strategies/gold-scalping.mjs';
 
 // Reuse the existing website strategy with the broker's closed OHLC bars.
 // Account data and the EA's execution controls never enter the public market.
@@ -18,10 +18,14 @@ export function brokerInstrumentMarket(snapshot, now, {goldStrategy = 'EMA_LEGAC
   const a = gold && goldStrategy === 'SCALP' ? analyzeGoldScalp(snapshot,now) :
     analyze(snapshot, now, btc ? {maxSpreadPoints: Math.max(1, btcSpreadPoints)} : undefined);
   const incomplete = Object.values(a.frames).some(f => f.direction === 'UNKNOWN');
-  const oldBars = Object.entries(TF_SECONDS).some(([tf, step]) => {
-    const last = snapshot.candles[tf].at(-1);
-    return last && now - (last.time + step) > step + 120;
-  });
+  // For gold scalp status, use the same closed-candle rules as the scalp
+  // analyzer itself. Legacy and BTC retain their original timeframe policy.
+  const oldBars = gold && goldStrategy === 'SCALP'
+    ? !goldScalpBarFreshness(snapshot,now).fresh
+    : Object.entries(TF_SECONDS).some(([tf, step]) => {
+      const last = snapshot.candles[tf].at(-1);
+      return last && now - (last.time + step) > step + 120;
+    });
   const calendarAvailable = snapshot.calendar.status === 'ok' && snapshot.calendar.updated_at > 0
     && now - snapshot.calendar.updated_at <= defaults.calendarTtl;
   const status = a.connection !== 'LIVE' ? 'STALE' : incomplete ? 'WARMING'

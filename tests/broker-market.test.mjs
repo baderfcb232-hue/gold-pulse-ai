@@ -149,3 +149,27 @@ test('health reports market readiness separately from HTTP liveness', async t =>
   assert.equal(response.status, 200); assert.equal(health.ok, true);
   assert.equal(health.mt5.connection, 'STALE'); assert.equal(health.markets.XAUUSD.connection, 'STALE');
 });
+
+test('live gold scalp does not falsely label valid one-bar M5/M15 lag or H1 lag as GAP',()=>{
+  const raw=monitorQuote();
+  raw.candles.M5.forEach(c=>{c.time-=300;});
+  raw.candles.M15.forEach(c=>{c.time-=900;});
+  raw.candles.H1.forEach(c=>{c.time-=7200;});
+  const s=cleanSnapshot(raw,NOW);
+  const market=brokerGoldMarket(s,NOW,{goldStrategy:'SCALP'});
+  assert.equal(market.connection,'LIVE');
+  assert.notEqual(market.analysis.status,'GAP');
+  assert.match(market.analysis.strategy,/GOLD-SCALP/);
+  assert.equal(market.analysis.plan?.strategy||market.analysis.strategy,market.analysis.strategy);
+  assert.equal(brokerGoldMarket(s,NOW).analysis.status,'GAP',
+    'legacy analyzer status is intentionally unchanged');
+});
+test('scalp market status keeps a real gap in entry or H4 context as GAP',()=>{
+  for(const [tf,shift] of [['M5',900],['M15',1800],['H4',28800]]){
+    const raw=monitorQuote();
+    raw.candles[tf].forEach(c=>{c.time-=shift;});
+    const m=brokerGoldMarket(cleanSnapshot(raw,NOW),NOW,{goldStrategy:'SCALP'});
+    assert.equal(m.analysis.status,'GAP',tf);
+    assert.equal(m.analysis.plan,null);
+  }
+});
