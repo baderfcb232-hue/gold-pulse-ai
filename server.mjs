@@ -620,6 +620,17 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           telegramVerification: telegramState.verification.state,
           telegramCanPost: telegramState.verification.canPost,
           telegramLastError: telegramState.lastError,
+          // Read-only Demo execution diagnostics: no credentials, trade tickets or account IDs.
+          demoAccount: state.execution?.demo === true,
+          mt5MainConnected: state.execution?.main_connected === true,
+          mt5ExecutionEnabled: state.execution?.enabled === true,
+          mt5Paused: state.execution?.paused === true,
+          websiteRecommendations: state.execution?.website_recommendations === true,
+          websiteExecutionReady: state.websiteExecution.ready,
+          websiteExecutionReason: state.websiteExecution.reason,
+          websiteBridgeConnection: state.websiteBridge.connection,
+          websiteBridgeJournal: state.websiteBridge.journalState,
+          websiteLastResult: state.websiteBridge.lastResult,
           blockers: state.publicationReadiness.filter(check => !check.ready).map(check => check.id)
         }));
         lastRecommendationDiagnosticAt = clock();
