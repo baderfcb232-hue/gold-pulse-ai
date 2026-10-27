@@ -16,10 +16,17 @@ export function analyzeGoldScalp(snapshot,now=Date.now()/1000,settings=defaults)
   const frames=legacy.frames;
   if(Object.values(frames).some(f=>f.direction==='UNKNOWN'))
     return {...state,reasons:['بانتظار 220 شمعة مغلقة لكل فريم.']};
-  if(Object.entries(TF_SECONDS).some(([tf,step])=>{
-    const last=snapshot.candles[tf].at(-1);
-    return !last||now-(last.time+step)>step+120;
-  })) return {...state,reasons:['بيانات الشموع متأخرة؛ لن نصدر إشارة سكالبينغ.']};
+  // Broker sessions and thin-liquidity periods can leave the last *closed*
+  // timeframe candle one timeframe behind while actual bid/ask is LIVE.
+  // Require recent M5/M15 entry candles; H4 is context, not a scalp trigger.
+  // Never construct a candle from a quote or treat a stale quote as fresh.
+  const barAge = tf => now-(snapshot.candles[tf].at(-1).time+TF_SECONDS[tf]);
+  const ageM5=barAge('M5'),ageM15=barAge('M15'),ageH4=barAge('H4');
+  const staleEntry=ageM5>TF_SECONDS.M5+120||ageM15>TF_SECONDS.M15+120;
+  const staleContext=ageH4>TF_SECONDS.H4+120;
+  if(staleEntry||staleContext)return {...state,reasons:[staleEntry?
+    'شموع الدخول M5 أو M15 أقدم من فريم مغلق واحد؛ ننتظر تحديث MT5.' :
+    'شموع السياق H4 أقدم من فريم مغلق واحد؛ ننتظر تحديث MT5.']};
   const spread=(snapshot.ask-snapshot.bid)/snapshot.spec.point;
   if(!Number.isFinite(spread)||spread>cfg.maxSpreadPoints)
     return {...state,risk:'BLOCKED',reasons:['السبريد أعلى من الحد المسموح.']};

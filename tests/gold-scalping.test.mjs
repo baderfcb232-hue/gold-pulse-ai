@@ -95,3 +95,31 @@ test('enabling Demo scalp execution removes only the scalp gate, not the old str
 test('execution switch accepts only booleans',()=>{
   assert.throws(()=>createApplication({config:{scalpDemoAutoExecution:'true'}}),/Invalid NABD_SCALP_DEMO_AUTOTRADE/);
 });
+
+test('gold scalp accepts valid broker timeframes across delayed H1 and one lagging closed entry candle',()=>{
+  // These are genuine closed bar times as supplied from the broker. Do not
+  // synthesize a replacement candle or relax the actual quote freshness gate.
+  const s=sample('BUY');
+  const oldH1=s.candles.H1.at(-1).time;
+  s.candles.H1.forEach(c=>{c.time-=3600;});
+  const oldM5=s.candles.M5.at(-1).time;
+  s.candles.M5.forEach(c=>{c.time-=300;});
+  const oldM15=s.candles.M15.at(-1).time;
+  s.candles.M15.forEach(c=>{c.time-=900;});
+  const parsed=cleanSnapshot(s,NOW);
+  const outcome=analyzeGoldScalp(parsed,NOW);
+  assert.equal(outcome.strategy,GOLD_SCALP_STRATEGY);
+  assert.equal(outcome.connection,'LIVE');
+  assert.ok(!outcome.reasons.some(x=>x.includes('شموع الدخول')||x.includes('شموع السياق')));
+  assert.equal(parsed.candles.M5.at(-1).time,oldM5-300);
+  assert.equal(parsed.candles.M15.at(-1).time,oldM15-900);
+  assert.equal(parsed.candles.H1.at(-1).time,oldH1-3600);
+});
+test('M5/M15 beyond one missing close or H4 stale still fail closed',()=>{
+  for(const [tf,shift] of [['M5',900],['M15',1800],['H4',28800]]){
+    const raw=sample();raw.candles[tf].forEach(c=>{c.time-=shift;});
+    const out=analyzeGoldScalp(cleanSnapshot(raw,NOW),NOW);
+    assert.equal(out.plan,null);
+    assert.match(out.reasons.join(' '),/شموع/);
+  }
+});
