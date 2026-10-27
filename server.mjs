@@ -490,6 +490,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         return send(req, res, 200, {account: snapshot?.account ?? null, positions: snapshot?.positions ?? [],
           riskSizing,
           websiteEntries: snapshot && commandJournal?.websiteEntries ? await commandJournal.websiteEntries(entrySourceKey(snapshot)) : [],
+          websiteDecisions: snapshot && commandJournal?.websiteDecisions ? await commandJournal.websiteDecisions(entrySourceKey(snapshot)) : [],
           btc: !cfg.goldOnly && btcSnapshot ? {account:btcSnapshot.account,positions:btcSnapshot.positions,lastUpdate:btcSnapshot.received_at,
             riskSizing: automaticRiskSizing(btcSnapshot, marketFeed.publicState().markets.BTCUSD?.currentSignal, now),
             websiteEntries:commandJournal?.websiteEntries ? await commandJournal.websiteEntries(entrySourceKey(btcSnapshot)) : []} : null,
@@ -557,6 +558,16 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         activity.lastPollAt = clock();
         await refreshWebsiteActivity(symbol, source);
         const decision=websiteExecutionReview(chosen),p=decision.plan;
+        const candidate=marketFeed.publicState().markets[symbol]?.currentSignal;
+        if (candidate && commandJournal?.recordWebsiteDecision) {
+          try {
+            await commandJournal.recordWebsiteDecision(source,candidate,
+              decision.ready?'WEBSITE_READY':decision.reason,
+              decision.ready?'ELIGIBLE':'BLOCKED',clock());
+          } catch (e) {
+            console.warn('Website decision audit unavailable:',e.message);
+          }
+        }
         if (!decision.ready || !p) return send(req,res,200,'','text/plain; charset=utf-8');
         const record=await commandJournal.claimWebsite(source,p,clock());
         if (!record) return send(req,res,200,'','text/plain; charset=utf-8');

@@ -61,6 +61,19 @@ export function websiteTradeDecision({enabled, snapshot: s, market: m, analysisP
 // response is never retried, including across deploys or a second terminal.
 export function websiteEntryJournal(pool) {
   return {
+    recordWebsiteDecision: async (source,plan,reason,status,now) => {
+      if (!source || !plan?.id || !['BLOCKED','ELIGIBLE'].includes(status) ||
+          typeof reason !== 'string' || !/^[A-Z_]{2,64}$/.test(reason)) return null;
+      await pool.query(`INSERT INTO nabd_website_decisions
+        (source_key,plan_id,time,reason,status,updated_at) VALUES($1,$2,$3,$4,$5,$6)
+        ON CONFLICT (source_key,plan_id) DO UPDATE SET
+        reason=excluded.reason,status=excluded.status,updated_at=excluded.updated_at
+        WHERE nabd_website_decisions.reason<>excluded.reason OR nabd_website_decisions.status<>excluded.status`,
+        [source,plan.id,plan.issued_at,reason,status,now]);
+    },
+    websiteDecisions: async source => (await pool.query(
+      'SELECT plan_id,time,reason,status,updated_at FROM nabd_website_decisions WHERE source_key=$1 ORDER BY updated_at DESC LIMIT 50',
+      [source])).rows,
     claimWebsite: async (source, p, now) => (await pool.query(`INSERT INTO nabd_website_entries
       (source_key,plan_id,time,expires,status,plan) VALUES($1,$2,$3,$4,'DISPATCHED',$5)
       ON CONFLICT(source_key,plan_id) DO NOTHING RETURNING *`,
