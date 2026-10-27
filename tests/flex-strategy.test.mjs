@@ -4,12 +4,17 @@ import {analyze,cleanSnapshot,previewFlexibleAnalysis,STRATEGY,FLEX_STRATEGY} fr
 import {backtest,compareFlex} from '../backtest.mjs';
 import {entryFixture,fixture,NOW} from './fixtures.mjs';
 
-// Synthetic consolidation, not fabricated live market data.
+// Synthetic trend with a short counter-trend pullback: unlike flat candles,
+// EMA8/EMA21 have a stable numerical ordering, while EMA200 holds the H1 side.
 function neutralM15(raw) {
-  const price=raw.candles.M15.at(-1).close;
-  for(const c of raw.candles.M15) {
-    c.open=c.close=price;c.high=price+.15;c.low=price-.15;
-  }
+  const side=raw.candles.H1.at(-1).close >= raw.candles.H1[0].close ? 1 : -1;
+  const base=raw.candles.M15.at(-1).close - side * 3.19;
+  raw.candles.M15.forEach((c,i)=>{
+    const trend=side*(i*.01 - Math.max(0,i-309)*.035);
+    const price=base+trend;
+    c.open=price-side*.01;c.close=price;
+    c.high=Math.max(c.open,c.close)+.15;c.low=Math.min(c.open,c.close)-.15;
+  });
   return raw;
 }
 test('strict strategy still blocks neutral M15; flex shadow can detect BUY',()=>{
