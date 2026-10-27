@@ -11,6 +11,10 @@ export async function createCommandJournal(connectionString) {
         id bigint PRIMARY KEY DEFAULT nextval('nabd_command_id'), time double precision NOT NULL,
         expires double precision NOT NULL, action text NOT NULL, ticket text NOT NULL,
         fraction double precision NOT NULL, status text NOT NULL, result text);
+      CREATE TABLE IF NOT EXISTS nabd_website_decisions (
+        source_key text NOT NULL, plan_id text NOT NULL, time double precision NOT NULL,
+        reason text NOT NULL, status text NOT NULL, updated_at double precision NOT NULL,
+        PRIMARY KEY (source_key,plan_id));
       CREATE TABLE IF NOT EXISTS nabd_website_entries (
         id bigint PRIMARY KEY DEFAULT nextval('nabd_command_id'), source_key text NOT NULL,
         plan_id text NOT NULL, time double precision NOT NULL, expires double precision NOT NULL,
