@@ -1,6 +1,7 @@
 // Deterministic analysis. Scores count conditions; they are not success probabilities.
 export const STRATEGY = 'EMA-PULLBACK-1';
 export const FLEX_STRATEGY = 'EMA-PULLBACK-FLEX-1';
+export const H4_NEUTRAL_STRATEGY = 'EMA-H4-H1-NEUTRAL-1';
 export const EA_STRATEGY = 'JUSTMARKETS-EA';
 export const TF_SECONDS = {M5: 300, M15: 900, H1: 3600, H4: 14400};
 // Allow one 10-second WebRequest plus the 3-second bridge interval in monitoring.
@@ -230,7 +231,9 @@ export function analyze(snapshot, now = Date.now() / 1000, settings = defaults, 
   const cfg = {...defaults, ...settings};
   // Explicit research-only opt-in. Existing three-argument live calls stay STRICT.
   const experimental = options.timeframePolicy === 'FLEX_NEUTRAL';
-  const empty = {strategy: experimental ? FLEX_STRATEGY : STRATEGY, decision: 'WAIT', score: null, risk: 'UNKNOWN',
+  const h4Alternate = options.timeframePolicy === 'H4_H1_NEUTRAL';
+  // Experiments are invoked only by a fourth, explicit research-only argument.
+  const empty = {strategy: h4Alternate ? H4_NEUTRAL_STRATEGY : experimental ? FLEX_STRATEGY : STRATEGY, decision: 'WAIT', score: null, risk: 'UNKNOWN',
     reasons: [], checks: [], frames: {}, zones: {demand: null, supply: null}, plan: null};
   if (!snapshot) return {...empty, connection: 'NO_DATA', quote_age: null,
     reasons: ['لم تصل بيانات الأسعار من MT5 بعد.']};
@@ -265,14 +268,29 @@ export function analyze(snapshot, now = Date.now() / 1000, settings = defaults, 
     ['BUY', 'SELL'].includes(h1.direction) && m15.atr14 > 0 &&
     Math.abs(m15.close - m15.ema21) <= m15.atr14 &&
     (h1.direction === 'BUY' ? m15.close >= m15.ema200 : m15.close <= m15.ema200);
-  const side = aligned || neutralPullback ? h1.direction : 'NEUTRAL';
+  // Research path: when H1 is neutral (NOT opposite), derive bias from H4.
+  // Require M15 and M5 agreement and only a shallow H1 correction.
+  const h4 = frames.H4, h1Atr = h1.atr14;
+  const h4NeutralEntry = h4Alternate &&
+    h1.direction === 'NEUTRAL' && ['BUY','SELL'].includes(h4.direction) &&
+    m15.direction === h4.direction && f.direction === h4.direction &&
+    h1Atr > 0 && Number.isFinite(h1Atr) &&
+    Math.abs(h1.ema8 - h1.ema21) <= h1Atr * .25 &&
+    Math.abs(h1.close - h1.ema200) <= h1Atr * .9 &&
+    (h4.direction === 'BUY' ? h1.close >= h1.ema200 - h1Atr * .25 :
+      h1.close <= h1.ema200 + h1Atr * .25);
+  // Normal H1/M15 alignment is preserved for apples-to-apples comparison.
+  const side = aligned || neutralPullback ? h1.direction :
+    h4NeutralEntry ? h4.direction : 'NEUTRAL';
   if (!['BUY', 'SELL'].includes(side)) return {...result, risk: 'CAUTION',
-    reasons: [experimental ? 'M15 يعاكس H1 أو تصحيحه المحايد قرب EMA21 لم يتأكد.' :
+    reasons: [h4Alternate ? 'H1 محايد دون تأكيد H4 وM15 وM5 أو تصحيح H1 غير آمن.' :
+      experimental ? 'M15 يعاكس H1 أو تصحيحه المحايد قرب EMA21 لم يتأكد.' :
       'اتجاه فريم 15 دقيقة والساعة غير متوافق.']};
   const buy = side === 'BUY', v = f.atr14;
   if (!(v > 0)) return {...result, reasons: ['التذبذب غير قابل للحساب.']};
   const checks = [
-    {name: neutralPullback ? 'تصحيح محايد M15 قرب EMA21 باتجاه H1' :
+    {name: h4NeutralEntry ? 'H4 يؤكد اتجاه M15 مع H1 محايد وتصحيح محدود' :
+      neutralPullback ? 'تصحيح محايد M15 قرب EMA21 باتجاه H1' :
       'توافق فريم 15 دقيقة والساعة', pass: true, weight: 25},
     {name: 'الفريم الأكبر لا يعاكس الاتجاه', pass: frames.H4.direction !== (buy ? 'SELL' : 'BUY'), weight: 15},
     {name: 'اتجاه 5 دقائق يؤكد الدخول', pass: f.direction === side, weight: 15},
@@ -298,8 +316,9 @@ export function analyze(snapshot, now = Date.now() / 1000, settings = defaults, 
     bar_time: last.time, issued_at: Math.floor(now), expires_at: Math.floor(now + cfg.signalTtl),
     entry, sl, tp1: alignPrice(entry + sign * riskDistance * cfg.reward1, snapshot.spec),
     tp2: alignPrice(entry + sign * riskDistance * cfg.reward2, snapshot.spec),
-    risk_distance: riskDistance, score, reason: neutralPullback ?
-      'تصحيح M15 محايد باتجاه H1 + إعادة اختبار EMA21 وتأكيد M5' :
+    risk_distance: riskDistance, score, reason: h4NeutralEntry ?
+      'تحليل تجريبي: H4 مع M15 وM5 وH1 محايد' :
+      neutralPullback ? 'تصحيح M15 محايد باتجاه H1 + إعادة اختبار EMA21 وتأكيد M5' :
       'توافق الاتجاه + إعادة اختبار EMA21 + شمعة تأكيد',
     tracking: 'VIRTUAL', tp1_hit: false, status: 'TRACKING'};
   return {...checked, decision: side, reasons: [plan.reason], plan};
@@ -308,6 +327,10 @@ export function analyze(snapshot, now = Date.now() / 1000, settings = defaults, 
 // Research-only preview: never route this plan to publication or order approval.
 export function previewFlexibleAnalysis(snapshot, now = Date.now() / 1000, settings = defaults) {
   return analyze(snapshot, now, settings, {timeframePolicy: 'FLEX_NEUTRAL'});
+}
+// Shadow-only alternative. Nothing in production publication imports this helper.
+export function previewH4NeutralAnalysis(snapshot, now = Date.now() / 1000, settings = defaults) {
+  return analyze(snapshot, now, settings, {timeframePolicy: 'H4_H1_NEUTRAL'});
 }
 
 // EA mode uses the locally generated plan unchanged. Website analysis stays available as context.

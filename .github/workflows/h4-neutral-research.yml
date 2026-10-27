@@ -1,0 +1,20 @@
+name: NABD alternate H4 path research validation
+on:
+  push:
+    branches: [feature/h4-neutral-backtest]
+  workflow_dispatch:
+jobs:
+  isolated-tests-and-data-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node --test tests/h4-neutral-path.test.mjs tests/flex-strategy.test.mjs tests/engine.test.mjs tests/backtest.test.mjs
+      - name: Inspect amount of actual available JustMarkets candle history
+        run: node scripts/check-gold-history.mjs
