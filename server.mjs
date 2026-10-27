@@ -4,7 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {resolve, dirname} from 'node:path';
 import {randomBytes, timingSafeEqual, createHash} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
-import {analyze, sourceAnalysis, cleanSnapshot, trackPlan, positionSize, text, defaults, botHeartbeatFresh, BOT_CONTROL_TTL} from './engine.mjs';
+import {analyze, previewFlexibleAnalysis, sourceAnalysis, cleanSnapshot, trackPlan, positionSize, text, defaults, botHeartbeatFresh, BOT_CONTROL_TTL} from './engine.mjs';
 import {mt5Archive} from './archive.mjs';
 import {createMarketFeed} from './market.mjs';
 import {createNewsFeed} from './news.mjs';
@@ -607,6 +607,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       if (clock() - lastRecommendationDiagnosticAt >= 300) {
         const state = publicState(), telegramState = telegram.status();
         const gold = marketFeed.publicState().markets.XAUUSD;
+        // Shadow-only research; no Telegram, strategy switch or execution impact.
+        const flex = snapshot ? previewFlexibleAnalysis(snapshot, clock()) : null;
         console.info('NABD recommendation health:', JSON.stringify({
           brokerConnection: state.connection,
           quoteAgeSeconds: state.quoteAge,
@@ -617,6 +619,10 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           websiteMode: Boolean(snapshot?.execution.website_recommendations),
           websiteAnalysisStatus: gold?.analysis?.status ?? null,
           websiteAnalysisReason: gold?.analysis?.reason ?? null,
+          flexShadow: flex ? {strategy: flex.strategy, planReady: Boolean(flex.plan),
+            decision: flex.decision, m15: flex.frames?.M15?.direction ?? null,
+            h1: flex.frames?.H1?.direction ?? null,
+            reason: flex.reasons?.join(' ').slice(0, 180) ?? null} : null,
           telegramVerification: telegramState.verification.state,
           telegramCanPost: telegramState.verification.canPost,
           telegramLastError: telegramState.lastError,

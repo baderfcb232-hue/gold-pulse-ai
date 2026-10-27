@@ -1,5 +1,6 @@
 // Deterministic analysis. Scores count conditions; they are not success probabilities.
 export const STRATEGY = 'EMA-PULLBACK-1';
+export const FLEX_STRATEGY = 'EMA-PULLBACK-FLEX-1';
 export const EA_STRATEGY = 'JUSTMARKETS-EA';
 export const TF_SECONDS = {M5: 300, M15: 900, H1: 3600, H4: 14400};
 // Allow one 10-second WebRequest plus the 3-second bridge interval in monitoring.
@@ -225,9 +226,11 @@ function alignPrice(p, spec, direction = 'nearest') {
   return Number((round(p / spec.tick_size) * spec.tick_size).toFixed(spec.digits));
 }
 
-export function analyze(snapshot, now = Date.now() / 1000, settings = defaults) {
+export function analyze(snapshot, now = Date.now() / 1000, settings = defaults, options = {}) {
   const cfg = {...defaults, ...settings};
-  const empty = {strategy: STRATEGY, decision: 'WAIT', score: null, risk: 'UNKNOWN',
+  // Explicit research-only opt-in. Existing three-argument live calls stay STRICT.
+  const experimental = options.timeframePolicy === 'FLEX_NEUTRAL';
+  const empty = {strategy: experimental ? FLEX_STRATEGY : STRATEGY, decision: 'WAIT', score: null, risk: 'UNKNOWN',
     reasons: [], checks: [], frames: {}, zones: {demand: null, supply: null}, plan: null};
   if (!snapshot) return {...empty, connection: 'NO_DATA', quote_age: null,
     reasons: ['لم تصل بيانات الأسعار من MT5 بعد.']};
@@ -254,13 +257,23 @@ export function analyze(snapshot, now = Date.now() / 1000, settings = defaults) 
   if (news) return {...result, risk: 'BLOCKED', news_block: news,
     reasons: [`الدخول متوقف حول خبر مرتفع الأهمية: ${news.name}`]};
   const f = frames.M5, rows = snapshot.candles.M5, last = rows.at(-1), prev = rows.at(-2);
-  const side = frames.M15.direction === frames.H1.direction ? frames.H1.direction : 'NEUTRAL';
+  const m15 = frames.M15, h1 = frames.H1;
+  const aligned = m15.direction === h1.direction && ['BUY', 'SELL'].includes(h1.direction);
+  // Treat neutral M15 as a possible pullback, NEVER as an opposite trend.
+  // All inputs come from real closed candles; no inferred or overwritten direction.
+  const neutralPullback = experimental && m15.direction === 'NEUTRAL' &&
+    ['BUY', 'SELL'].includes(h1.direction) && m15.atr14 > 0 &&
+    Math.abs(m15.close - m15.ema21) <= m15.atr14 &&
+    (h1.direction === 'BUY' ? m15.close >= m15.ema200 : m15.close <= m15.ema200);
+  const side = aligned || neutralPullback ? h1.direction : 'NEUTRAL';
   if (!['BUY', 'SELL'].includes(side)) return {...result, risk: 'CAUTION',
-    reasons: ['اتجاه فريم 15 دقيقة والساعة غير متوافق.']};
+    reasons: [experimental ? 'M15 يعاكس H1 أو تصحيحه المحايد قرب EMA21 لم يتأكد.' :
+      'اتجاه فريم 15 دقيقة والساعة غير متوافق.']};
   const buy = side === 'BUY', v = f.atr14;
   if (!(v > 0)) return {...result, reasons: ['التذبذب غير قابل للحساب.']};
   const checks = [
-    {name: 'توافق فريم 15 دقيقة والساعة', pass: true, weight: 25},
+    {name: neutralPullback ? 'تصحيح محايد M15 قرب EMA21 باتجاه H1' :
+      'توافق فريم 15 دقيقة والساعة', pass: true, weight: 25},
     {name: 'الفريم الأكبر لا يعاكس الاتجاه', pass: frames.H4.direction !== (buy ? 'SELL' : 'BUY'), weight: 15},
     {name: 'اتجاه 5 دقائق يؤكد الدخول', pass: f.direction === side, weight: 15},
     {name: 'الزخم ضمن نطاق الاستراتيجية', pass: buy ? f.rsi14 >= 50 && f.rsi14 <= 70 : f.rsi14 >= 30 && f.rsi14 <= 50, weight: 15},
@@ -285,9 +298,16 @@ export function analyze(snapshot, now = Date.now() / 1000, settings = defaults) 
     bar_time: last.time, issued_at: Math.floor(now), expires_at: Math.floor(now + cfg.signalTtl),
     entry, sl, tp1: alignPrice(entry + sign * riskDistance * cfg.reward1, snapshot.spec),
     tp2: alignPrice(entry + sign * riskDistance * cfg.reward2, snapshot.spec),
-    risk_distance: riskDistance, score, reason: 'توافق الاتجاه + إعادة اختبار EMA21 + شمعة تأكيد',
+    risk_distance: riskDistance, score, reason: neutralPullback ?
+      'تصحيح M15 محايد باتجاه H1 + إعادة اختبار EMA21 وتأكيد M5' :
+      'توافق الاتجاه + إعادة اختبار EMA21 + شمعة تأكيد',
     tracking: 'VIRTUAL', tp1_hit: false, status: 'TRACKING'};
   return {...checked, decision: side, reasons: [plan.reason], plan};
+}
+
+// Research-only preview: never route this plan to publication or order approval.
+export function previewFlexibleAnalysis(snapshot, now = Date.now() / 1000, settings = defaults) {
+  return analyze(snapshot, now, settings, {timeframePolicy: 'FLEX_NEUTRAL'});
 }
 
 // EA mode uses the locally generated plan unchanged. Website analysis stays available as context.
