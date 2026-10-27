@@ -41,25 +41,53 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
   if (!owner || !owner.includes('@')) needs.push('ADMIN_EMAIL');
   if (!base || (!secure && !injectedStore)) needs.push('HTTPS_URL');
   const status = () => ({ready: online && healthy, status: online && healthy ? 'READY' : needs.length ? 'SETUP_REQUIRED' : 'UNAVAILABLE',
-    missing: [...needs], database: databaseReady ? 'CONNECTED' : needs.includes('DATABASE') ? 'NOT_CONFIGURED' : 'UNAVAILABLE',
+    missing: [...needs], database: databaseReady && healthy ? 'CONNECTED' : needs.includes('DATABASE') ? 'NOT_CONFIGURED' : 'UNAVAILABLE',
     persistence: databaseReady && store.kind === 'postgres' ? 'postgres' : injectedStore ? 'test-only' : 'unavailable',
     email: mailConfigured ? 'CONFIGURED' : 'NOT_CONFIGURED', backups: {state: backupState, last_success: lastBackup},
     note: online ? null : 'التسجيل بانتظار تهيئة الحفظ الدائم والبريد من مسؤول الموقع.'});
-  const ready = (async () => {
-    if (!store && !env.AUTH_DATABASE_URL) return;
+  // PostgreSQL may replace its idle connections during a Render plan upgrade.
+  // A successful SELECT 1 is the only proof of recovery, not the pool error event.
+  async function probeDatabase() {
+    if (!online || closed) return false;
     try {
-      store ||= await postgresAuthStore(env.AUTH_DATABASE_URL); await store.initialize();
-      databaseReady = true;
-      if (needs.length) return;
-      if (!injectedBackup) backup = backupConfig(env);
-      backupState = backup.key && backup.storage ? 'READY' : 'NOT_CONFIGURED';
-      const last = (await store.query("SELECT value FROM nabd_auth_settings WHERE key='last_backup'")).rows[0];
-      lastBackup = last ? Number(last.value) : null;
-      online = true;
-      timer = setInterval(() => maintenance().catch(() => {}), 60000); timer.unref();
-      await maintenance().catch(() => {});
-    } catch {online = false; console.warn('NABD accounts setup unavailable; registration remains closed');}
-  })();
+      await store.query('SELECT 1');
+      if (!healthy) console.info('NABD accounts database connection recovered');
+      healthy = true; return true;
+    } catch {
+      if (healthy) console.warn('NABD accounts database health check failed');
+      healthy = false; return false;
+    }
+  }
+  let attemptPromise = null;
+  async function ensureOnline() {
+    if (online || closed || (!store && !env.AUTH_DATABASE_URL) || (databaseReady && needs.length)) return;
+    if (attemptPromise) return attemptPromise;
+    attemptPromise = (async () => {
+      try {
+        store ||= await postgresAuthStore(env.AUTH_DATABASE_URL);
+        await store.initialize();
+        databaseReady = true;
+        if (needs.length) return;
+        if (!injectedBackup) backup = backupConfig(env);
+        backupState = backup.key && backup.storage ? 'READY' : 'NOT_CONFIGURED';
+        const last = (await store.query("SELECT value FROM nabd_auth_settings WHERE key='last_backup'")).rows[0];
+        lastBackup = last ? Number(last.value) : null;
+        online = true; healthy = true;
+        await maintenance().catch(() => {});
+        console.info('NABD accounts database initialized and reachable');
+      } catch {
+        online = false; healthy = false;
+        console.warn('NABD accounts setup unavailable; will retry without changing accounts');
+      }
+    })();
+    try {await attemptPromise;} finally {attemptPromise = null;}
+  }
+  const ready = ensureOnline();
+  // Retry failed initializations without restarting the trading engine.
+  if (store || env.AUTH_DATABASE_URL) {
+    timer = setInterval(() => (online ? maintenance() : ensureOnline()).catch(() => {}), 60000);
+    timer.unref();
+  }
   const audit = (q, actor, event, subject = null) => q('INSERT INTO nabd_auth_audit(id,time,actor,event,subject) VALUES(?,?,?,?,?)', [randomUUID(), clock(), actor, event, subject]);
   const cookie = (name, value, seconds) => `${name}=${value}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${seconds}${secure ? '; Secure' : ''}`;
   const clearCookies = () => [cookie('nabd_member', '', 0), cookie('nabd_challenge', '', 0)];
@@ -119,7 +147,7 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
     try {await mailer(payload);} catch {fail(503, 'تعذّر إرسال البريد الآن؛ حاول مجددًا بعد قليل.');}
   }
   async function maintenance() {
-    if (!online || closed) return;
+    if (!online || closed || !await probeDatabase()) return;
     await store.query('DELETE FROM nabd_tokens WHERE expires_at<?', [clock()]);
     await store.query('DELETE FROM nabd_sessions WHERE expires_at<?', [clock()]);
     await store.query('DELETE FROM nabd_auth_limits WHERE expires_at<?', [clock()]);
@@ -142,10 +170,14 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
     if (!path.startsWith('/api/auth/') && !path.startsWith('/api/admin/')) return null;
     await ready;
     if (path === '/api/auth/status' && req.method === 'GET') {
-      if (online) {try {await store.query('SELECT 1'); healthy = true;} catch {healthy = false;}}
+      if (!online) await ensureOnline();
+      if (online) await probeDatabase();
       return result(status());
     }
-    if (!online) return result({error: status().note || 'خدمة الحسابات غير متاحة مؤقتًا.', ...status()}, 503);
+    if (!online) await ensureOnline();
+    if (online && !healthy) await probeDatabase();
+    if (!online || !healthy)
+      return result({error: 'خدمة الحسابات غير متاحة مؤقتًا؛ جارٍ إعادة الاتصال بقاعدة البيانات.', ...status()}, 503);
     if (req.method === 'POST' && req.headers.origin !== new URL(base).origin) return result({error: 'Origin rejected'}, 403);
     try {
       const adminPrincipal = path.startsWith('/api/admin/') ? await authenticated(req, req.method === 'POST', true) : null;
