@@ -26,3 +26,19 @@ const months=m5?.daysOfCoverage/30||0;
 const qualifies=Boolean(m5?.valid&&months>=3&&info.M15?.valid&&info.H1?.valid&&info.H4?.valid);
 console.log('PRODUCTION_SWITCH_ELIGIBLE '+qualifies);
 if(!qualifies)console.log('HISTORICAL_DATA_INSUFFICIENT: Keep existing Demo strategy unchanged.');
+
+
+// Inspect current indicator directions without creating an order.
+try {
+  const response=await fetch(base+'/api/market',{signal:AbortSignal.timeout(15000)});
+  const data=await response.json();
+  const market=data.markets?.XAUUSD;
+  const frames=market?.analysis?.frames||{};
+  const trends=Object.fromEntries(Object.entries(frames).map(([tf,f])=>[tf,{
+    direction:f.direction,ema8:f.ema8,ema21:f.ema21,ema200:f.ema200,atr14:f.atr14,close:f.close
+  }]));
+  console.log('CURRENT_MARKET_TRENDS '+JSON.stringify({
+    connection:market?.connection,status:market?.analysis?.status,
+    reason:market?.analysis?.reason,frames:trends
+  }));
+} catch(error){console.log('CURRENT_MARKET_TRENDS_UNAVAILABLE '+String(error?.message||error));}
