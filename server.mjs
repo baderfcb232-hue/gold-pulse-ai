@@ -63,11 +63,13 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     goldOnly: process.env.NABD_GOLD_ONLY === 'true',
     publicationEnabled: process.env.SIGNAL_PUBLICATION_ENABLED === 'true',
     demoRecommendationExecution: process.env.DEMO_RECOMMENDATION_EXECUTION === 'true',
-    goldSignalStrategy: process.env.NABD_GOLD_SIGNAL_STRATEGY || 'EMA_LEGACY', ...config};
+    goldSignalStrategy: process.env.NABD_GOLD_SIGNAL_STRATEGY || 'EMA_LEGACY',
+    scalpDemoAutoExecution: process.env.NABD_SCALP_DEMO_AUTOTRADE === 'true', ...config};
   if (!['EA','DASHBOARD'].includes(cfg.signalSource)) throw new Error('SIGNAL_SOURCE must be EA or DASHBOARD');
   if (typeof cfg.publicationEnabled !== 'boolean') throw new Error('publicationEnabled must be a boolean');
   if (typeof cfg.goldOnly !== 'boolean') throw new Error('goldOnly must be a boolean');
   if (!['EMA_LEGACY','SCALP'].includes(cfg.goldSignalStrategy)) throw new Error('Invalid NABD_GOLD_SIGNAL_STRATEGY');
+  if (typeof cfg.scalpDemoAutoExecution !== 'boolean') throw new Error('Invalid NABD_SCALP_DEMO_AUTOTRADE');
   // Restore the original Telegram candidate sources without relaxing order controls.
   const telegramPolicy = config.telegramPolicy ?? process.env.TELEGRAM_SIGNAL_POLICY ?? 'LEGACY';
   if (!['LEGACY', 'STRICT'].includes(telegramPolicy)) throw new Error('Invalid TELEGRAM_SIGNAL_POLICY');
@@ -259,13 +261,23 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     if (!selected?.execution.website_recommendations) return {ready:false,reason:'MT5_WEBSITE_UPDATE_REQUIRED',plan:null};
     const btc = /^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(selected.symbol);
     if (btc && cfg.goldOnly) return {ready:false,reason:'GOLD_ONLY',plan:null};
-    // A signal-only scalping rollout must never reach automated Demo order approval.
-    if (!btc && cfg.goldSignalStrategy === 'SCALP')
+    const scalpGold = !btc && cfg.goldSignalStrategy === 'SCALP';
+    // Explicit Demo-only opt-in; the gold scalp mode cannot inherit old live order permissions.
+    if (scalpGold && !cfg.scalpDemoAutoExecution)
       return {ready:false,reason:'SCALP_RECOMMENDATIONS_ONLY',plan:null};
+    // Independent server cap, in addition to MT5's local 3-entries/day and risk limit.
+    // Never rely on a stale or missing risk configuration to authorize an order.
+    if (scalpGold && !(selected?.execution?.risk_percent > 0 &&
+      selected.execution.risk_percent <= 0.5 && selected.execution.max_daily_loss_percent > 0 &&
+      selected.execution.max_daily_loss_percent <= 2 &&
+      selected.execution.news_filter === true))
+      return {ready:false,reason:'SCALP_RISK_LIMITS_NOT_CONFIRMED',plan:null};
     const market = marketFeed.publicState().markets[btc ? 'BTCUSD' : 'XAUUSD'];
-    const analysisPlan = btc ? brokerBtcMarket(selected,clock())?.analysis.plan : brokerGoldMarket(selected,clock())?.analysis.plan;
+    const analysisPlan = btc ? brokerBtcMarket(selected,clock())?.analysis.plan :
+      brokerGoldMarket(selected,clock(),{goldStrategy:cfg.goldSignalStrategy})?.analysis.plan;
     return websiteTradeDecision({enabled: cfg.demoRecommendationExecution && cfg.publicationEnabled,
       snapshot: selected, market, analysisPlan, costs: costStatus(selected),
+      requiredStrategy:scalpGold ? 'NABD-GOLD-SCALP-M5M15-V1' : null,
       durable: typeof commandJournal?.claimWebsite === 'function', now: clock()});
   }
   function publicState() {
@@ -624,6 +636,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           publicationPolicy: telegramPolicy,
           websiteMode: Boolean(snapshot?.execution.website_recommendations),
           goldSignalStrategy: cfg.goldSignalStrategy,
+          scalpDemoAutoExecution: cfg.scalpDemoAutoExecution,
           websiteAnalysisStatus: gold?.analysis?.status ?? null,
           websiteAnalysisReason: gold?.analysis?.reason ?? null,
           flexShadow: flex ? {strategy: flex.strategy, planReady: Boolean(flex.plan),
