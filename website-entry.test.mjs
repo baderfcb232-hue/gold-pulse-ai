@@ -26,7 +26,10 @@ function decisionFixture(){
 function sqliteJournal(file=':memory:'){
   const db=new DatabaseSync(file);
   db.exec(`CREATE TABLE IF NOT EXISTS nabd_website_entries(id INTEGER PRIMARY KEY AUTOINCREMENT,
-    source_key TEXT,plan_id TEXT,time REAL,expires REAL,status TEXT,plan TEXT,reported_at REAL,UNIQUE(source_key,plan_id))`);
+    source_key TEXT,plan_id TEXT,time REAL,expires REAL,status TEXT,plan TEXT,reported_at REAL,UNIQUE(source_key,plan_id));
+    CREATE TABLE IF NOT EXISTS nabd_website_decisions(
+      source_key TEXT,plan_id TEXT,time REAL,reason TEXT,status TEXT,updated_at REAL,
+      PRIMARY KEY(source_key,plan_id))`);
   const pool={async query(sql,params=[]){
     const values=[];const adapted=sql.replace(/\$(\d+)/g,(_,index)=>{values.push(params[Number(index)-1]);return '?';});
     return {rows:db.prepare(adapted).all(...values)};
