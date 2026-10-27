@@ -42,7 +42,7 @@ test('closed source, stale candle, news, spread and invalid calendar never issue
   const spread=sample();spread.ask=spread.bid+.5;
   assert.equal(analyzeGoldScalp(cleanSnapshot(spread,NOW),NOW).plan,null);
 });
-test('scalp rollout is signals-only; live MT5 gold execution cannot be dispatched',async t=>{
+test('scalp rollout without explicit demo auto-execution opt-in never dispatches',async t=>{
   const dir=mkdtempSync(join(tmpdir(),'nabd-scalp-'));
   const app=createApplication({dataDir:dir,clock:()=>NOW,
     config:{goldSignalStrategy:'SCALP',demoRecommendationExecution:true,publicationEnabled:true},
@@ -66,4 +66,32 @@ test('roll back flag restores the old strategy at same source and preserves stor
   const m=app.marketFeed.publicState().markets.XAUUSD;
   assert.equal(m.analysis.strategy,STRATEGY);
   assert.equal(m.currentSignal?.strategy,STRATEGY);
+});
+
+test('enabling Demo scalp execution removes only the scalp gate, not the old strategy, news, or price gates',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'nabd-scalp-demo-auto-'));
+  const app=createApplication({dataDir:dir,clock:()=>NOW,
+    config:{goldSignalStrategy:'SCALP',scalpDemoAutoExecution:true,
+      demoRecommendationExecution:true,publicationEnabled:true},
+    ingestToken:'gold-scalp-auto-safety-xxxxxxxxxxx'});
+  t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
+  const raw=sample('BUY');raw.ea=null;raw.account.equity=1000;
+  app.ingest(raw);
+  const m=app.marketFeed.publicState().markets.XAUUSD;
+  assert.equal(m.analysis.strategy,GOLD_SCALP_STRATEGY);
+  assert.notEqual(app.publicState().websiteExecution.reason,'SCALP_RECOMMENDATIONS_ONLY');
+  assert.equal(app.publicState().websiteExecution.ready,false,
+    'Missing fresh EA heartbeat and cost profile must still block entry');
+  raw.execution.risk_percent=0.75;
+  app.ingest(raw);
+  assert.equal(app.publicState().websiteExecution.reason,'SCALP_RISK_LIMITS_NOT_CONFIRMED');
+  raw.execution.risk_percent=0.5;raw.execution.max_daily_loss_percent=3;
+  app.ingest(raw);
+  assert.equal(app.publicState().websiteExecution.reason,'SCALP_RISK_LIMITS_NOT_CONFIRMED');
+  raw.execution.max_daily_loss_percent=2;raw.execution.news_filter=false;
+  app.ingest(raw);
+  assert.equal(app.publicState().websiteExecution.reason,'SCALP_RISK_LIMITS_NOT_CONFIRMED');
+});
+test('execution switch accepts only booleans',()=>{
+  assert.throws(()=>createApplication({config:{scalpDemoAutoExecution:'true'}}),/Invalid NABD_SCALP_DEMO_AUTOTRADE/);
 });

@@ -6,7 +6,7 @@ export const entrySourceKey = s => createHash('sha256').update(JSON.stringify([
 
 // A website plan can execute only against its own account's MT5 broker feed.
 // Gold and BTC never share a quote source. Demo-only, explicitly opted-in.
-export function websiteTradeDecision({enabled, snapshot: s, market: m, analysisPlan: a, costs, durable, now}) {
+export function websiteTradeDecision({enabled, snapshot: s, market: m, analysisPlan: a, costs, durable, now, requiredStrategy = null}) {
   const no = reason => ({ready: false, reason, plan: null});
   if (!enabled) return no('DISABLED');
   if (!s?.execution?.website_recommendations) return no('MT5_WEBSITE_UPDATE_REQUIRED');
@@ -25,6 +25,11 @@ export function websiteTradeDecision({enabled, snapshot: s, market: m, analysisP
     return no('STALE_MT5');
   const p = m?.currentSignal;
   if (!p || m.connection !== 'LIVE' || m.analysis?.status !== 'READY') return no('WAITING_WEBSITE_PLAN');
+  // A posted legacy signal must never be traded after switching to scalping (and vice versa).
+  // All three strategy identities must match the current live broker-derived analysis.
+  if (!a || a.strategy !== p.strategy || m.analysis.strategy !== p.strategy ||
+      (requiredStrategy && p.strategy !== requiredStrategy))
+    return no('WEBSITE_STRATEGY_MISMATCH');
   if (m.broker_symbol !== s.symbol || m.source !== `MT5 · ${s.broker}` || !m.source_id?.startsWith('MT5:') ||
       p.source_id !== m.source_id || p.source !== m.source || p.broker_symbol !== s.symbol || p.symbol !== canonical || m.symbol !== canonical)
     return no('WEBSITE_SOURCE_MISMATCH');
