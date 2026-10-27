@@ -36,7 +36,7 @@ export function parseCoinbaseCandles(raw, now) {
 
 export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher = fetch,
   WebSocketImpl = globalThis.WebSocket, calendar = () => null, brokerSnapshot = () => null, brokerSnapshotBTC = () => null,
-  enabledSymbols = Object.keys(MARKET_CONFIG), onChange = () => {}}) {
+  enabledSymbols = Object.keys(MARKET_CONFIG), goldSignalStrategy = 'EMA_LEGACY', onChange = () => {}}) {
   db.exec(`CREATE TABLE IF NOT EXISTS market_cache (symbol TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS market_signals (id TEXT PRIMARY KEY, issued_at REAL NOT NULL, data TEXT NOT NULL);`);
   const markets = {};
@@ -54,7 +54,7 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
   const history = symbol => db.prepare('SELECT data FROM market_signals ORDER BY issued_at DESC LIMIT 400').all()
     .map(x => JSON.parse(x.data)).filter(p => enabledSymbols.includes(p.symbol) && (!symbol || p.symbol === symbol)).slice(0, 100);
   const marketFor = symbol => !markets[symbol] ? null : symbol === 'XAUUSD'
-    ? brokerGoldMarket(brokerSnapshot(), clock()) || markets[symbol]
+    ? brokerGoldMarket(brokerSnapshot(), clock(), {goldStrategy: goldSignalStrategy}) || markets[symbol]
     : symbol === 'BTCUSD' ? brokerBtcMarket(brokerSnapshotBTC(), clock()) || markets[symbol] : markets[symbol];
   const sameSource = (plan, market) => (plan.source_id || 'REFERENCE') === (market.source_id || 'REFERENCE');
   const persist = symbol => {const m = markets[symbol]; db.prepare('INSERT INTO market_cache VALUES(?,?) ON CONFLICT(symbol) DO UPDATE SET data=excluded.data')
@@ -68,7 +68,7 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
       if (change) savePlan({...p, ...change});
     }
     const a = m.broker_mode ? m.analysis : scalpAnalysis(m, now, calendar()); m.analysis = a;
-    if (a.plan && !history(symbol).some(p => p.status === 'TRACKING' && sameSource(p, m))) {
+    if (a.plan && !history(symbol).some(p => p.status === 'TRACKING' && sameSource(p, m) && p.strategy === a.plan.strategy)) {
       const p = a.plan, id = `${p.strategy}:${symbol}:${p.source_id ? p.source_id + ':' : ''}${p.bar_time}:${p.side}`;
       db.prepare('INSERT OR IGNORE INTO market_signals VALUES(?,?,?)').run(id, p.issued_at, JSON.stringify({...p, id}));
       db.prepare('DELETE FROM market_signals WHERE id NOT IN (SELECT id FROM market_signals ORDER BY issued_at DESC LIMIT 400)').run();
@@ -113,8 +113,8 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
     if (!fresh && m.quote) a = {...a, decision: 'WAIT', status: 'STALE', plan: null, setup: null,
       reason: 'السعر متأخر أو المصدر مغلق؛ الشارت محفوظ وإصدار فرص جديدة متوقف.'};
     const plans = history(symbol).filter(p => sameSource(p, m));
-    const active = plans.find(p => p.status === 'TRACKING' && p.expires_at > now) || null;
-    if (a.plan && !active && plans.some(p => p.bar_time === a.plan.bar_time && p.side === a.plan.side))
+    const active = plans.find(p => p.status === 'TRACKING' && p.expires_at > now && p.strategy === a.strategy) || null;
+    if (a.plan && !active && plans.some(p => p.strategy === a.plan.strategy && p.bar_time === a.plan.bar_time && p.side === a.plan.side))
       a = {...a, decision: 'WAIT', status: 'SCANNING', setup: null, reason: 'انتهت متابعة هذا التكوين؛ ننتظر تأكيدًا من شمعة جديدة.'};
     const available = fresh && !['NEWS_BLOCK', 'WARMING', 'GAP', 'BLOCKED'].includes(a.status);
     if (!available) a = {...a, setup: null};

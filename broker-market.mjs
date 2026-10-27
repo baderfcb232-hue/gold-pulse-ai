@@ -1,9 +1,10 @@
 import {createHash} from 'node:crypto';
 import {analyze, TF_SECONDS, defaults} from './engine.mjs';
+import {analyzeGoldScalp} from './strategies/gold-scalping.mjs';
 
 // Reuse the existing website strategy with the broker's closed OHLC bars.
 // Account data and the EA's execution controls never enter the public market.
-export function brokerInstrumentMarket(snapshot, now) {
+export function brokerInstrumentMarket(snapshot, now, {goldStrategy = 'EMA_LEGACY'} = {}) {
   const gold = /^XAUUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(snapshot?.symbol || '');
   const btc = /^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(snapshot?.symbol || '');
   if (!gold && !btc) return null;
@@ -14,7 +15,8 @@ export function brokerInstrumentMarket(snapshot, now) {
   const sourceId = 'MT5:' + createHash('sha256')
     .update(JSON.stringify([snapshot.account_ref, snapshot.broker, snapshot.symbol])).digest('hex').slice(0, 24);
   const source = 'MT5 · ' + snapshot.broker;
-  const a = analyze(snapshot, now, btc ? {maxSpreadPoints: Math.max(1, btcSpreadPoints)} : undefined);
+  const a = gold && goldStrategy === 'SCALP' ? analyzeGoldScalp(snapshot,now) :
+    analyze(snapshot, now, btc ? {maxSpreadPoints: Math.max(1, btcSpreadPoints)} : undefined);
   const incomplete = Object.values(a.frames).some(f => f.direction === 'UNKNOWN');
   const oldBars = Object.entries(TF_SECONDS).some(([tf, step]) => {
     const last = snapshot.candles[tf].at(-1);
@@ -49,7 +51,7 @@ export function brokerInstrumentMarket(snapshot, now) {
 }
 
 // Maintain gold-only behavior for existing callers; BTC has a separate feed.
-export const brokerGoldMarket = (snapshot, now) => /^XAUUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(snapshot?.symbol || '')
-  ? brokerInstrumentMarket(snapshot, now) : null;
+export const brokerGoldMarket = (snapshot, now, options = {}) => /^XAUUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(snapshot?.symbol || '')
+  ? brokerInstrumentMarket(snapshot, now, options) : null;
 export const brokerBtcMarket = (snapshot, now) => /^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(snapshot?.symbol || '')
   ? brokerInstrumentMarket(snapshot, now) : null;
