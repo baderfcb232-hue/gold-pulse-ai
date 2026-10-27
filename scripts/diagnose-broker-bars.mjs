@@ -21,3 +21,5 @@ for(const path of ['/healthz','/api/market']){
   }
  }catch(e){console.log('GOLD_ERROR',path,String(e))}
 }
+
+console.log('ENTRY_BAR_AGE_THRESHOLD_SECONDS',JSON.stringify({M5:420,M15:1020,H4:14520}));
