@@ -26,7 +26,8 @@ function decisionFixture(){
 function sqliteJournal(file=':memory:'){
   const db=new DatabaseSync(file);
   db.exec(`CREATE TABLE IF NOT EXISTS nabd_website_entries(id INTEGER PRIMARY KEY AUTOINCREMENT,
-    source_key TEXT,plan_id TEXT,time REAL,expires REAL,status TEXT,plan TEXT,reported_at REAL,UNIQUE(source_key,plan_id));
+    source_key TEXT,plan_id TEXT,time REAL,expires REAL,status TEXT,plan TEXT,reported_at REAL,
+    reason_code INTEGER,mt5_retcode INTEGER,UNIQUE(source_key,plan_id));
     CREATE TABLE IF NOT EXISTS nabd_website_decisions(
       source_key TEXT,plan_id TEXT,time REAL,reason TEXT,status TEXT,updated_at REAL,
       PRIMARY KEY(source_key,plan_id))`);
@@ -100,6 +101,7 @@ test('authenticated website bridge dispatches a plan once under simultaneous pol
   assert.equal((await post('/api/bridge/website-result',{...source,id,status:'SUBMITTED'})).status,200);
   account=await (await fetch(base+'/api/account',{headers:{Authorization:'Bearer '+ADMIN}})).json();
   assert.equal(account.websiteEntries[0].status,'SUBMITTED');
+  assert.equal(account.websiteEntries[0].mt5_retcode,null,'legacy bridge has no broker retcode');
   assert.equal(app.publicState().websiteBridge.lastResult,'SUBMITTED');
   assert.equal(app.publicState().websiteBridge.lastReportAt,NOW);
   const market=await (await fetch(base+'/api/market',{headers:{Authorization:'Bearer '+ADMIN}})).json();
@@ -169,4 +171,37 @@ test('the actual MQL website guard passes both directions and rejects stale, mov
     }`);
     execFileSync('g++',['-std=c++17','-Wall','-Werror',join(dir,'guard.cpp'),'-o',join(dir,'guard')]);execFileSync(join(dir,'guard'));
   }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
+test('MT5 EA rejection code and broker retcode are source-bound, durable, and never mean a fill',async t=>{
+  const {app,post,base,source}=await setup(t);
+  const response=await post(),wire=(await response.text()).split('|'),id=Number(wire[11]);
+  assert.ok(Number.isSafeInteger(id));
+  const result=await post('/api/bridge/website-result',
+    {...source,id,status:'REJECTED',reason_code:112,mt5_retcode:10016});
+  assert.equal(result.status,200);
+  let responseAccount=await fetch(base+'/api/account',{headers:{Authorization:'Bearer '+ADMIN}});
+  const account=await responseAccount.json();
+  assert.equal(account.websiteEntries[0].status,'REJECTED');
+  assert.equal(account.websiteEntries[0].reason_code,112);
+  assert.equal(account.websiteEntries[0].mt5_retcode,10016);
+  assert.equal(app.publicState().websiteBridge.lastResult,'REJECTED');
+  // Duplicate/stale terminal responses must never turn REJECTED into SUBMITTED.
+  await post('/api/bridge/website-result',{...source,id,status:'SUBMITTED',reason_code:0,mt5_retcode:10009});
+  responseAccount=await fetch(base+'/api/account',{headers:{Authorization:'Bearer '+ADMIN}});
+  const unchanged=await responseAccount.json();
+  assert.equal(unchanged.websiteEntries[0].status,'REJECTED');
+  assert.equal(unchanged.websiteEntries[0].mt5_retcode,10016);
+  assert.equal((await post('/api/bridge/website-result',
+    {...source,id,status:'REJECTED',reason_code:'112'})).status,400);
+  assert.equal((await fetch(base+'/api/account')).status,401);
+});
+test('MT5 diagnostic wire is sent by bridge and written by main EA prior to result id',()=>{
+  const bridge=readFileSync(new URL('./mt5/NABD_Bridge.mqh',import.meta.url),'utf8');
+  const main=readFileSync(new URL('./mt5/NABD_Link.mqh',import.meta.url),'utf8');
+  assert.match(bridge,/reason_code\\/);
+  assert.match(bridge,/mt5_retcode\\/);
+  const section=main.split('void NABDWebsiteBlocked')[1].split('void NABDProcessWebsiteApproval')[0];
+  assert.ok(section.indexOf('NABDKey("WRC")') < section.indexOf('NABDKey("WI")'));
+  assert.ok(section.indexOf('NABDKey("WRT")') < section.indexOf('NABDKey("WI")'));
 });

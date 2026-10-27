@@ -79,10 +79,15 @@ bool NABDWebsitePlanValid(const double now,const double since,const double issue
    return MathAbs((direction>0?ask:bid)-entry)<=MathAbs(entry-sl)*0.15;
   }
 // END WEBSITE_PLAN_GUARD
-void NABDWebsiteBlocked(const double id,const string reason)
+void NABDWebsiteBlocked(const double id,const string reason,const int code,const uint retcode=0)
   {
+   // Publish all rejection details BEFORE the result id so the bridge never
+   // associates an earlier order's MT5 retcode with a later recommendation.
+   GlobalVariableSet(NABDKey("WRC"),(double)code);
+   GlobalVariableSet(NABDKey("WRT"),(double)retcode);
    GlobalVariableSet(NABDKey("WR"),1.0);GlobalVariableSet(NABDKey("WI"),id);GlobalVariablesFlush();
-   LogEvent("WEBSITE_BLOCKED",reason);
+   LogEvent("WEBSITE_BLOCKED",StringFormat("approval=%.0f,reason_code=%d,retcode=%u,%s",
+     id,code,retcode,reason));
   }
 void NABDProcessWebsiteApproval()
   {
@@ -94,33 +99,50 @@ void NABDProcessWebsiteApproval()
    if(!GlobalVariableSetOnCondition(NABDKey("WC"),id,previous))return;
    GlobalVariablesFlush(); // Claim BEFORE validation/order; never retry an uncertain entry.
    GlobalVariableSet(NABDKey("WI"),0.0); // Result identifier is published LAST after validation/submission.
-   if(!TradingExecutionEnabled() || !ExecutionPermissionsAvailable() || !InpNABDAllowRemoteControl ||
-      NABDRemotePaused() || IsEmergencyStopActive() || HasOwnPosition() || HasOwnPendingOrder() ||
-      HasForeignNettingExposure() || g_cycle_closing || !IsWithinTradingHours() ||
-      (InpUseSmallProfit && g_last_cycle_end>0 && ServerNow()-g_last_cycle_end<InpCycleCooldownSeconds))
-     {NABDWebsiteBlocked(id,"permissions, position, schedule or cooldown blocked entry");return;}
+   GlobalVariableSet(NABDKey("WRC"),0.0);GlobalVariableSet(NABDKey("WRT"),0.0);
+   if(!TradingExecutionEnabled()){NABDWebsiteBlocked(id,"trading execution switch is off",101);return;}
+   if(!ExecutionPermissionsAvailable()){NABDWebsiteBlocked(id,"terminal/account trade permissions unavailable",102);return;}
+   if(!InpNABDAllowRemoteControl || NABDRemotePaused())
+     {NABDWebsiteBlocked(id,"website remote control disabled or paused",103);return;}
+   if(IsEmergencyStopActive()){NABDWebsiteBlocked(id,"emergency stop active",104);return;}
+   if(HasOwnPosition() || HasOwnPendingOrder() || HasForeignNettingExposure())
+     {NABDWebsiteBlocked(id,"existing position/order or foreign netting exposure",105);return;}
+   if(g_cycle_closing){NABDWebsiteBlocked(id,"previous cycle is closing",106);return;}
+   if(!IsWithinTradingHours()){NABDWebsiteBlocked(id,"outside allowed trading hours",107);return;}
+   if(InpUseSmallProfit && g_last_cycle_end>0 &&
+      ServerNow()-g_last_cycle_end<InpCycleCooldownSeconds)
+     {NABDWebsiteBlocked(id,"cycle cooldown active",108);return;}
    string reason="";
-   if(DailyRiskLimitReached(reason) || IsHighImpactNewsWindow(reason))
-     {NABDWebsiteBlocked(id,reason);return;}
+   if(DailyRiskLimitReached(reason)){NABDWebsiteBlocked(id,reason,109);return;}
+   if(IsHighImpactNewsWindow(reason)){NABDWebsiteBlocked(id,reason,110);return;}
    int direction=(int)GlobalVariableGet(NABDKey("WD"));
    double entry=GlobalVariableGet(NABDKey("WE")),sl=GlobalVariableGet(NABDKey("WL")),tp=GlobalVariableGet(NABDKey("WP"));
    MqlTick tick;
-   if(!SymbolInfoTick(g_symbol,tick) || ServerNow()-tick.time>10 || tick.time>ServerNow()+2 ||
-      !NABDWebsitePlanValid((double)TimeGMT(),(double)g_website_enabled_at,
+   if(!SymbolInfoTick(g_symbol,tick) || ServerNow()-tick.time>10 || tick.time>ServerNow()+2)
+     {NABDWebsiteBlocked(id,"broker tick stale or unavailable",111);return;}
+   if(!NABDWebsitePlanValid((double)TimeGMT(),(double)g_website_enabled_at,
        GlobalVariableGet(NABDKey("WF")),GlobalVariableGet(NABDKey("WX")),GlobalVariableGet(NABDKey("WB")),
        (double)iTime(g_symbol,PERIOD_M5,1),direction,entry,sl,tp,tick.bid,tick.ask,g_point,
        (double)InpMaxSpreadPoints,MinimumStopDistance()))
-     {NABDWebsiteBlocked(id,"expired plan, changed candle, price, spread or stop distance");return;}
+     {NABDWebsiteBlocked(id,"approval expired, candle mismatch, entry moved or invalid stops/spread",112);return;}
    SignalData signal;ZeroMemory(signal);
    signal.direction=direction;signal.entry=entry;signal.stop_loss=sl;signal.take_profit=tp;
    if(!ReadIndicatorValue(g_entry_atr_handle,1,signal.atr) || signal.atr<=0)
-     {NABDWebsiteBlocked(id,"ATR not ready for position management");return;}
+     {NABDWebsiteBlocked(id,"ATR not ready for position management",113);return;}
    signal.reason="NABD website gold recommendation";
    g_last_entry_bar=iTime(g_symbol,PERIOD_M5,0);
    bool accepted=PlaceSignal(signal);
-   GlobalVariableSet(NABDKey("WR"),accepted?2.0:1.0);GlobalVariableSet(NABDKey("WI"),id);GlobalVariablesFlush();
-   LogEvent(accepted?"WEBSITE_SUBMITTED":"WEBSITE_BLOCKED",
-     StringFormat("approval=%I64d; inspect Trade/History and order retcodes",(long)id));
+   if(!accepted)
+     {
+      NABDWebsiteBlocked(id,"PlaceSignal declined or broker returned a rejection",
+        g_website_attempt_code>0?g_website_attempt_code:115,g_website_attempt_retcode);
+      return;
+     }
+   GlobalVariableSet(NABDKey("WRC"),0.0);
+   GlobalVariableSet(NABDKey("WRT"),(double)g_website_attempt_retcode);
+   GlobalVariableSet(NABDKey("WR"),2.0);GlobalVariableSet(NABDKey("WI"),id);GlobalVariablesFlush();
+   LogEvent("WEBSITE_SUBMITTED",StringFormat("approval=%.0f,retcode=%u; verify deal in History",
+     id,g_website_attempt_retcode));
   }
 void NABDOnTimer()
   {

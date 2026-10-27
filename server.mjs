@@ -551,7 +551,13 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         if (path==='/api/bridge/website-result') {
           if (!commandJournal?.websiteResult || !Number.isSafeInteger(b.id) || b.id<=0 ||
               !['SUBMITTED','REJECTED'].includes(b.status)) return send(req,res,400,{error:'Invalid website result'});
-          await commandJournal.websiteResult(source,b.id,b.status,clock());
+          // Reason codes and broker retcodes are bounded integers from the EA, not
+          // untrusted arbitrary strings or claims that a deal was filled.
+          if ((b.reason_code!==undefined && (!Number.isInteger(b.reason_code) || b.reason_code<0 || b.reason_code>999)) ||
+              (b.mt5_retcode!==undefined && (!Number.isInteger(b.mt5_retcode) || b.mt5_retcode<0 || b.mt5_retcode>999999)))
+            return send(req,res,400,{error:'Invalid MT5 rejection diagnostic'});
+          await commandJournal.websiteResult(source,b.id,b.status,clock(),
+            {reason_code:b.reason_code,mt5_retcode:b.mt5_retcode});
           await refreshWebsiteActivity(symbol, source, true);
           return send(req,res,200,{ok:true});
         }

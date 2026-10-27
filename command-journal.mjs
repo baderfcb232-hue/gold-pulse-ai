@@ -19,7 +19,9 @@ export async function createCommandJournal(connectionString) {
         id bigint PRIMARY KEY DEFAULT nextval('nabd_command_id'), source_key text NOT NULL,
         plan_id text NOT NULL, time double precision NOT NULL, expires double precision NOT NULL,
         status text NOT NULL, plan text NOT NULL, reported_at double precision,
-        UNIQUE(source_key,plan_id))`);
+        UNIQUE(source_key,plan_id));
+      ALTER TABLE nabd_website_entries ADD COLUMN IF NOT EXISTS reason_code integer;
+      ALTER TABLE nabd_website_entries ADD COLUMN IF NOT EXISTS mt5_retcode integer`);
   } catch {await pool.end(); throw Error('Could not initialize durable command journal');}
   const safe = async fn => {try {return await fn();} catch {throw Error('سجل الأوامر الدائم غير متاح؛ لم يتم تأكيد إرسال الأمر.');}};
   const expire = (client, now) => client.query("UPDATE nabd_command_journal SET status='EXPIRED' WHERE status='QUEUED' AND expires<=$1", [now]);
