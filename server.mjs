@@ -20,6 +20,7 @@ import {createRuntimeBackup} from './runtime-backup.mjs';
 import {createCommandJournal} from './command-journal.mjs';
 import {demoTradeDecision} from './demo-trade.mjs';
 import {automaticRiskSizing} from './automatic-risk.mjs';
+import {validateManualLot} from './trade-lot.mjs';
 import {websiteTradeDecision, entrySourceKey} from './website-entry.mjs';
 import {brokerGoldMarket, brokerBtcMarket} from './broker-market.mjs';
 
@@ -256,7 +257,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     if (cfg.signalSource !== 'EA') return {ready: false, reason: 'EA_SOURCE_REQUIRED', plan: null};
     return demoTradeDecision({enabled: cfg.demoRecommendationExecution === true, snapshot, publication: publicationReview(), now: clock()});
   }
-  function websiteExecutionReview(selected = snapshot) {
+  function websiteExecutionReview(selected = snapshot, tradeSizing = null) {
     if (!cfg.demoRecommendationExecution || !cfg.publicationEnabled) return {ready:false,reason:'DISABLED',plan:null};
     if (!selected?.execution.website_recommendations) return {ready:false,reason:'MT5_WEBSITE_UPDATE_REQUIRED',plan:null};
     const btc = /^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(selected.symbol);
@@ -278,7 +279,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     return websiteTradeDecision({enabled: cfg.demoRecommendationExecution && cfg.publicationEnabled,
       snapshot: selected, market, analysisPlan, costs: costStatus(selected),
       requiredStrategy:scalpGold ? 'NABD-GOLD-SCALP-M5M15-V1' : null,
-      durable: typeof commandJournal?.claimWebsite === 'function', now: clock()});
+      durable: typeof commandJournal?.claimWebsite === 'function', now: clock(), tradeSizing});
   }
   function publicState() {
     const a = sourceAnalysis(snapshot, clock(), cfg);
@@ -448,6 +449,24 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           return send(req, res, 426, {error: 'صيغة الربط القديمة لا تحتوي على الشموع ومواصفات البروكر. استخدم جسر NABD المحدّث.', endpoint: '/api/mt5'});
         const result = ingest(raw); return send(req, res, 200, {ok: true, status: result?.ignored ? 'ignored' : 'success', ...result, received_at: clock()});
       }
+      if (path === '/api/trade-sizing' && req.method === 'POST') {
+        if (!operator(req)) return send(req,res,401,{error:'Operator login required'});
+        if (!commandJournal?.setTradeSizing) return send(req,res,503,{error:'Persistent settings unavailable'});
+        const b=await body(req,1000);
+        if (!['XAUUSD','BTCUSD'].includes(b?.symbol) || !['AUTO','FIXED'].includes(b?.mode))
+          return send(req,res,400,{error:'Invalid symbol or lot mode'});
+        const selected=b.symbol==='BTCUSD' ? (cfg.goldOnly?null:btcSnapshot) : snapshot;
+        if (!selected || !selected.execution?.demo || !/just.?markets/i.test(selected.broker||''))
+          return send(req,res,409,{error:'Matching Demo account not connected'});
+        if (clock()-selected.received_at>10) return send(req,res,409,{error:'Stale MT5 feed'});
+        const lot=b.mode==='FIXED' ? Number(b.lot) : null;
+        if (b.mode==='FIXED') {
+          const check=validateManualLot(lot,selected.spec);
+          if (!check.ok) return send(req,res,400,{error:check.reason});
+        }
+        const saved=await commandJournal.setTradeSizing(entrySourceKey(selected),b.mode,lot,clock());
+        return send(req,res,200,{symbol:b.symbol,...saved});
+      }
       if (path === '/api/risk-settings' && req.method === 'POST') {
         if (!operator(req)) return send(req, res, 401, {error: 'تسجيل دخول المشغّل مطلوب.'});
         if (!snapshot || publicState().connection !== 'LIVE')
@@ -491,8 +510,10 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           riskSizing,
           websiteEntries: snapshot && commandJournal?.websiteEntries ? await commandJournal.websiteEntries(entrySourceKey(snapshot)) : [],
           websiteDecisions: snapshot && commandJournal?.websiteDecisions ? await commandJournal.websiteDecisions(entrySourceKey(snapshot)) : [],
+          tradeSizing: snapshot && commandJournal?.getTradeSizing ? await commandJournal.getTradeSizing(entrySourceKey(snapshot)) : {mode:'AUTO',lot:null},
           btc: !cfg.goldOnly && btcSnapshot ? {account:btcSnapshot.account,positions:btcSnapshot.positions,lastUpdate:btcSnapshot.received_at,
             riskSizing: automaticRiskSizing(btcSnapshot, marketFeed.publicState().markets.BTCUSD?.currentSignal, now),
+            tradeSizing:commandJournal?.getTradeSizing ? await commandJournal.getTradeSizing(entrySourceKey(btcSnapshot)) : {mode:'AUTO',lot:null},
             websiteEntries:commandJournal?.websiteEntries ? await commandJournal.websiteEntries(entrySourceKey(btcSnapshot)) : []} : null,
           deals: db.prepare('SELECT data FROM deals ORDER BY time DESC LIMIT 1000').all().map(x => JSON.parse(x.data)),
           commands: commandJournal ? await commandJournal.list(clock()) : db.prepare('SELECT * FROM commands ORDER BY id DESC LIMIT 100').all(),
@@ -563,7 +584,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         }
         activity.lastPollAt = clock();
         await refreshWebsiteActivity(symbol, source);
-        const decision=websiteExecutionReview(chosen),p=decision.plan;
+        const tradeSizing=commandJournal?.getTradeSizing ? await commandJournal.getTradeSizing(entrySourceKey(chosen)) : {mode:'AUTO'};
+        const decision=websiteExecutionReview(chosen,tradeSizing),p=decision.plan;
         const candidate=marketFeed.publicState().markets[symbol]?.currentSignal;
         if (candidate && commandJournal?.recordWebsiteDecision) {
           try {
@@ -581,7 +603,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         if (!Number.isSafeInteger(id) || id<=0) throw new Error('Invalid website approval identifier');
         rememberWebsiteActivity(symbol, record);
         const fields=['NBWEB1',chosen.account_ref,chosen.symbol,chosen.execution.managed_magic,
-          p.side,p.entry,p.sl,p.tp,Math.floor(p.issued_at),Math.floor(p.expires_at),p.bar_time,id];
+          p.side,p.entry,p.sl,p.tp,Math.floor(p.issued_at),Math.floor(p.expires_at),p.bar_time,id,
+          ...(p.manual_lot == null ? [] : [p.manual_lot])];
         if(fields.some(v=>/[|\r\n]/.test(String(v))))throw new Error('Invalid website approval identity');
         return send(req,res,200,fields.join('|'),'text/plain; charset=utf-8');
       }

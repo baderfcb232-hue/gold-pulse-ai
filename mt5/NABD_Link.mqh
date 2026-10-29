@@ -155,6 +155,7 @@ void NABDOnTimer()
    GlobalVariableSet(NABDKey("RP"),InpRiskPercent);
    GlobalVariableSet(NABDKey("MV"),DemoBrokerMinimumLotEnabled()?1.0:0.0);
    GlobalVariableSet(NABDKey("ND"),DemoWebsiteNoDailyLimitsEnabled()?1.0:0.0);
+   GlobalVariableSet(NABDKey("VL"),InpNABDWebsiteRecommendations && InpNABDDemoRecommendations ? 1.0 : 0.0);
    GlobalVariableSet(NABDKey("RD"),MathMax(0.0,AccountInfoDouble(ACCOUNT_EQUITY)*InpMaxDailyLossPercent/100.0+GetTodayNet()));
    GlobalVariableSet(NABDKey("NF"),InpUseNewsFilter?1.0:0.0);
    GlobalVariableSet(NABDKey("PS"),NABDRemotePaused()?1.0:0.0);

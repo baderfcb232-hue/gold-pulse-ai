@@ -1,12 +1,13 @@
 import {createHash} from 'node:crypto';
 import {automaticRiskSizing} from './automatic-risk.mjs';
+import {validateManualLot,stopLossEstimate} from './trade-lot.mjs';
 
 export const entrySourceKey = s => createHash('sha256').update(JSON.stringify([
   s.account_ref, s.broker, s.symbol, s.execution.managed_magic])).digest('hex');
 
 // A website plan can execute only against its own account's MT5 broker feed.
 // Gold and BTC never share a quote source. Demo-only, explicitly opted-in.
-export function websiteTradeDecision({enabled, snapshot: s, market: m, analysisPlan: a, costs, durable, now, requiredStrategy = null}) {
+export function websiteTradeDecision({enabled, snapshot: s, market: m, analysisPlan: a, costs, durable, now, requiredStrategy = null, tradeSizing = null}) {
   const no = reason => ({ready: false, reason, plan: null});
   if (!enabled) return no('DISABLED');
   if (!s?.execution?.website_recommendations) return no('MT5_WEBSITE_UPDATE_REQUIRED');
@@ -51,10 +52,23 @@ export function websiteTradeDecision({enabled, snapshot: s, market: m, analysisP
       Math.abs(price - p.entry) > risk * .15 || (s.ask - s.bid) / s.spec.point > Math.min(maxSpread, s.ea?.settings?.max_spread_points || maxSpread) ||
       (buy ? exit <= p.sl || exit >= tp : exit >= p.sl || exit <= tp)) return no('PRICE_OR_SPREAD_MOVED');
   if (!costs?.ready) return no('WAITING_COSTS');
-  const sizing = automaticRiskSizing(s, p, now);
-  if (!sizing.available) return no(sizing.reason);
-  if (!sizing.estimate?.volume) return no(sizing.estimate?.code || 'INVALID_PLAN');
-  return {ready: true, reason: 'WEBSITE_READY', plan: {...p, tp, expires_at: Math.min(p.expires_at, now + 15)}};
+  let manualLot = null;
+  if (tradeSizing?.mode === 'FIXED') {
+    if (s.execution.manual_lot_supported !== true) return no('MT5_MANUAL_LOT_UPDATE_REQUIRED');
+    const checked = validateManualLot(tradeSizing.lot, s.spec);
+    if (!checked.ok) return no(checked.reason);
+    const stopLoss = stopLossEstimate(checked.lot, p, s.spec);
+    if (!(s.account?.equity>0) || !stopLoss || stopLoss > s.account.equity)
+      return no('MANUAL_LOT_RISK_TOO_HIGH');
+    manualLot = checked.lot; // Same entry/SL/TP. MT5 checks margin, broker stops and actual loss.
+  } else {
+    const sizing = automaticRiskSizing(s, p, now);
+    if (!sizing.available) return no(sizing.reason);
+    if (!sizing.estimate?.volume) return no(sizing.estimate?.code || 'INVALID_PLAN');
+  }
+  return {ready: true, reason: 'WEBSITE_READY',
+    plan: {...p, tp, ...(manualLot===null ? {} : {manual_lot:manualLot}),
+      expires_at: Math.min(p.expires_at, now + 15)}};
 }
 
 // A dispatch is claimed durably BEFORE returning a wire payload. An uncertain
