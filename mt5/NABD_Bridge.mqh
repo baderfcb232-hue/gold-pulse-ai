@@ -219,7 +219,7 @@ void NBProcessWebsiteRecommendation()
        ",\"mt5_retcode\":"+NBD(NBMainValue("WRT"),0)+"}",response)==200)reported_id=result_id;
    if(NABDRemotePaused())return;
    if(NBRequest("POST","/api/bridge/website-recommendation","{"+source+"}",response)!=200 || StringLen(response)==0)return;
-   string parts[];if(StringSplit(response,'|',parts)!=12 || parts[0]!="NBWEB1" ||
+   string parts[];if(StringSplit(response,'|',parts)!=13 || parts[0]!="NBWEB1" ||
       parts[1]!=(string)AccountInfoInteger(ACCOUNT_LOGIN) || parts[2]!=g_symbol || parts[3]!=(string)InpMagicNumber)return;
    int direction=parts[4]=="BUY"?1:parts[4]=="SELL"?-1:0;
    double entry=StringToDouble(parts[5]),sl=StringToDouble(parts[6]),tp=StringToDouble(parts[7]);
@@ -232,6 +232,7 @@ void NBProcessWebsiteRecommendation()
    GlobalVariableSet(NABDKey("WD"),(double)direction);GlobalVariableSet(NABDKey("WB"),(double)bar);
    GlobalVariableSet(NABDKey("WE"),entry);GlobalVariableSet(NABDKey("WL"),sl);GlobalVariableSet(NABDKey("WP"),tp);
    GlobalVariableSet(NABDKey("WF"),(double)issued);GlobalVariableSet(NABDKey("WX"),(double)expiry);
+    GlobalVariableSet(NABDKey("WV"),StringToDouble(parts[12]));
    GlobalVariableSet(NABDKey("WA"),(double)id);
   }
 void NBProcessCommand()
