@@ -257,7 +257,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     if (cfg.signalSource !== 'EA') return {ready: false, reason: 'EA_SOURCE_REQUIRED', plan: null};
     return demoTradeDecision({enabled: cfg.demoRecommendationExecution === true, snapshot, publication: publicationReview(), now: clock()});
   }
-  async function websiteExecutionReview(selected = snapshot) {
+  function websiteExecutionReview(selected = snapshot, tradeSizing = null) {
     if (!cfg.demoRecommendationExecution || !cfg.publicationEnabled) return {ready:false,reason:'DISABLED',plan:null};
     if (!selected?.execution.website_recommendations) return {ready:false,reason:'MT5_WEBSITE_UPDATE_REQUIRED',plan:null};
     const btc = /^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(selected.symbol);
@@ -276,7 +276,6 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     const market = marketFeed.publicState().markets[btc ? 'BTCUSD' : 'XAUUSD'];
     const analysisPlan = btc ? brokerBtcMarket(selected,clock())?.analysis.plan :
       brokerGoldMarket(selected,clock(),{goldStrategy:cfg.goldSignalStrategy})?.analysis.plan;
-    const tradeSizing=commandJournal?.getTradeSizing ? await commandJournal.getTradeSizing(entrySourceKey(selected)) : {mode:'AUTO'};
     return websiteTradeDecision({enabled: cfg.demoRecommendationExecution && cfg.publicationEnabled,
       snapshot: selected, market, analysisPlan, costs: costStatus(selected),
       requiredStrategy:scalpGold ? 'NABD-GOLD-SCALP-M5M15-V1' : null,
@@ -585,7 +584,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         }
         activity.lastPollAt = clock();
         await refreshWebsiteActivity(symbol, source);
-        const decision=await websiteExecutionReview(chosen),p=decision.plan;
+        const tradeSizing=commandJournal?.getTradeSizing ? await commandJournal.getTradeSizing(entrySourceKey(chosen)) : {mode:'AUTO'};
+        const decision=websiteExecutionReview(chosen,tradeSizing),p=decision.plan;
         const candidate=marketFeed.publicState().markets[symbol]?.currentSignal;
         if (candidate && commandJournal?.recordWebsiteDecision) {
           try {
