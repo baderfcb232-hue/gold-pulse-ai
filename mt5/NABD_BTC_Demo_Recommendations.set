@@ -60,3 +60,5 @@ InpNABDDemoRecommendations=true
 InpNABDWebsiteRecommendations=true
 
 InpDemoBrokerMinimumLot=true
+
+InpDemoWebsiteNoDailyLimits=true

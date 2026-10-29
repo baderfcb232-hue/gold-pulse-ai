@@ -70,3 +70,16 @@ test('minimum fallback never applies to live or old terminals and requires daily
   const s=snapshot();s.broker='JustMarkets-Demo';s.execution={...s.execution,demo:true,minimum_volume_fallback:true};
   assert.equal(automaticRiskSizing(s,plan(),now).estimate.volume,0);
 });
+
+test('explicit demo website mode removes daily cap, while live and non-website modes retain it',()=>{
+  const s=snapshot(),p=plan();s.broker='JustMarkets-Demo';
+  s.execution={...s.execution,demo:true,minimum_volume_fallback:true,daily_risk_remaining:0,
+    website_recommendations:true,demo_recommendations:true,website_no_daily_limits:true};
+  const result=automaticRiskSizing(s,p,now);
+  assert.equal(result.estimate.volume,.01);assert.ok(result.estimate.loss>0);
+  for(const field of ['website_recommendations','demo_recommendations','website_no_daily_limits']){
+    const copy=structuredClone(s);copy.execution[field]=false;
+    assert.equal(automaticRiskSizing(copy,p,now).estimate.volume,0);
+  }
+  s.execution.demo=false;assert.equal(automaticRiskSizing(s,p,now).estimate.volume,0);
+});

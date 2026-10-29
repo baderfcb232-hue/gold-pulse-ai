@@ -109,7 +109,7 @@ void NABDProcessWebsiteApproval()
      {NABDWebsiteBlocked(id,"existing position/order or foreign netting exposure",105);return;}
    if(g_cycle_closing){NABDWebsiteBlocked(id,"previous cycle is closing",106);return;}
    if(!IsWithinTradingHours()){NABDWebsiteBlocked(id,"outside allowed trading hours",107);return;}
-   if(InpUseSmallProfit && g_last_cycle_end>0 &&
+   if(!DemoWebsiteNoDailyLimitsEnabled() && InpUseSmallProfit && g_last_cycle_end>0 &&
       ServerNow()-g_last_cycle_end<InpCycleCooldownSeconds)
      {NABDWebsiteBlocked(id,"cycle cooldown active",108);return;}
    string reason="";
@@ -154,6 +154,7 @@ void NABDOnTimer()
    GlobalVariableSet(NABDKey("DL"),InpMaxDailyLossPercent);
    GlobalVariableSet(NABDKey("RP"),InpRiskPercent);
    GlobalVariableSet(NABDKey("MV"),DemoBrokerMinimumLotEnabled()?1.0:0.0);
+   GlobalVariableSet(NABDKey("ND"),DemoWebsiteNoDailyLimitsEnabled()?1.0:0.0);
    GlobalVariableSet(NABDKey("RD"),MathMax(0.0,AccountInfoDouble(ACCOUNT_EQUITY)*InpMaxDailyLossPercent/100.0+GetTodayNet()));
    GlobalVariableSet(NABDKey("NF"),InpUseNewsFilter?1.0:0.0);
    GlobalVariableSet(NABDKey("PS"),NABDRemotePaused()?1.0:0.0);

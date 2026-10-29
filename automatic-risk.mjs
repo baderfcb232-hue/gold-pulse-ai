@@ -33,10 +33,12 @@ export function automaticRiskSizing(snapshot, plan = null, now = Date.now() / 10
   // Keep legacy terminals and real accounts on their strict percentage budget.
   const demoMinimum = snapshot.execution.demo === true && /just.?markets/i.test(snapshot.broker || '') &&
     snapshot.execution.minimum_volume_fallback === true;
+  const noDailyLimits = demoMinimum && snapshot.execution.website_recommendations === true &&
+    snapshot.execution.demo_recommendations === true && snapshot.execution.website_no_daily_limits === true;
   const remaining = snapshot.execution.daily_risk_remaining;
   if (demoMinimum && result.estimate.code === 'BELOW_MINIMUM_VOLUME') {
     const loss = result.estimate.minimumLoss;
-    if (!Number.isFinite(remaining) || loss > remaining + 1e-8) {
+    if (!noDailyLimits && (!Number.isFinite(remaining) || loss > remaining + 1e-8)) {
       result.estimate = {...result.estimate, code: 'DAILY_RISK_BELOW_MINIMUM_VOLUME',
         reason: 'خسارة أصغر لوت تتجاوز المتبقي من حد الخسارة اليومي.'};
     } else {
@@ -46,7 +48,9 @@ export function automaticRiskSizing(snapshot, plan = null, now = Date.now() / 10
       if (result.estimate.volume) {
         result.estimate = {...result.estimate, code: 'SIZED_DEMO_MINIMUM',
           effectiveRiskPercent, exceedsConfiguredRisk: true,
-          reason: 'أصغر لوت للوسيط على الحساب التجريبي؛ يتجاوز مخاطرة الصفقة المعتادة ويبقى ضمن الحد اليومي.'};
+          reason: noDailyLimits
+            ? 'أصغر لوت على Demo؛ الحد اليومي معطّل لتوصيات نبض، وتبقى خسارة الصفقة مرتبطة بالستوب.'
+            : 'أصغر لوت للوسيط على الحساب التجريبي؛ يتجاوز مخاطرة الصفقة المعتادة ويبقى ضمن الحد اليومي.'};
       }
     }
   }

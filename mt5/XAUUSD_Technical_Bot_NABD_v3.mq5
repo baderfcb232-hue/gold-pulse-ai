@@ -1,5 +1,5 @@
 #property strict
-#property version   "1.17"
+#property version   "1.18"
 #property description "NABD JustMarkets MT5 gold EA: EMA/RSI signals, protected risk and estimated net small-profit cycles."
 
 #include <Trade/Trade.mqh>
@@ -32,6 +32,7 @@ input bool            InpRespectNextLevel       = true;
 
 //--- risk and execution
 input group "Risk and execution"
+input bool            InpDemoWebsiteNoDailyLimits = true;      // Demo website only: no daily loss/trade count cap
 input bool            InpDemoBrokerMinimumLot   = true;        // Demo only: allow broker minimum within daily loss limit
 input double          InpRiskPercent            = 0.50;        // Equity stop risk for the whole cycle
 input double          InpRewardRisk             = 2.00;        // Target = R multiple
@@ -155,6 +156,7 @@ bool   IsHighImpactNewsWindow(string &reason);
 bool   IsWithinTradingHours();
 double RecentLow(const int start_shift,const int count);
 double RecentHigh(const int start_shift,const int count);
+bool DemoWebsiteNoDailyLimitsEnabled();
 bool DemoBrokerMinimumLotEnabled();
 double ExecutionRiskBudget(const ENUM_ORDER_TYPE order_type,const double entry,const double stop_loss);
 double CalculateVolume(const ENUM_ORDER_TYPE order_type,const double entry,const double stop_loss);
@@ -724,8 +726,8 @@ bool PlaceSignal(const SignalData &signal)
    double total_volume=CalculateVolume(order_type,signal.entry,signal.stop_loss);
    double minimum=SymbolInfoDouble(g_symbol,SYMBOL_VOLUME_MIN);
    double step=SymbolInfoDouble(g_symbol,SYMBOL_VOLUME_STEP);
-   int remaining=InpMaxTradesPerDay-CountTodayEntries();
-   int legs=SPPlanLegCount(InpUseSmallProfit ? InpMaxBasketPositions : 1,
+   int remaining=DemoWebsiteNoDailyLimitsEnabled() ? 1 : InpMaxTradesPerDay-CountTodayEntries();
+   int legs=SPPlanLegCount(DemoWebsiteNoDailyLimitsEnabled() ? 1 : (InpUseSmallProfit ? InpMaxBasketPositions : 1),
                           remaining,IsHedgingAccount(),total_volume,minimum);
    double volume=SPVolumePerLeg(total_volume,legs,minimum,step);
    volume=NormalizeDouble(volume,VolumeDigits(step));
@@ -808,6 +810,12 @@ void ManageOpenPositions()
       return;
    if(IsEmergencyStopActive())
       return;
+   if(DemoWebsiteNoDailyLimitsEnabled())
+     {
+      SyncCycleState();
+      if(g_cycle_closing)CloseCyclePositions("PREVIOUS_CLOSE_REQUEST");
+      return; // Website trade keeps its original broker-side SL and TP1.
+     }
    if(ManageSmallProfitCycle())
       return;
    if(!InpUseBreakEven && !InpUseAtrTrailing)
@@ -1288,6 +1296,7 @@ double GetTodayNet()
 
 bool DailyRiskLimitReached(string &reason)
   {
+   if(DemoWebsiteNoDailyLimitsEnabled()){reason="";return false;}
    int entries=CountTodayEntries();
    if(entries>=InpMaxTradesPerDay)
      {
@@ -1394,6 +1403,12 @@ double RecentHigh(const int start_shift,const int count)
 //+------------------------------------------------------------------+
 //| Risk-based volume                                                |
 //+------------------------------------------------------------------+
+bool DemoWebsiteNoDailyLimitsEnabled()
+  {
+   return InpDemoWebsiteNoDailyLimits && InpEnableNABDLink && InpNABDDemoRecommendations &&
+      InpNABDWebsiteRecommendations && InpNABDAllowRemoteControl &&
+      AccountInfoInteger(ACCOUNT_TRADE_MODE)==ACCOUNT_TRADE_MODE_DEMO && IsJustMarketsAccount();
+  }
 bool DemoBrokerMinimumLotEnabled()
   {
    return InpDemoBrokerMinimumLot &&
@@ -1410,7 +1425,7 @@ double ExecutionRiskBudget(const ENUM_ORDER_TYPE order_type,const double entry,c
       if(minimum<=0.0 || !OrderCalcProfit(order_type,g_symbol,minimum,entry,stop_loss,loss))return 0.0;
       budget=MathMax(budget,MathAbs(loss));
      }
-   return MathMin(budget,daily);
+   return DemoWebsiteNoDailyLimitsEnabled() ? budget : MathMin(budget,daily);
   }
 double CalculateVolume(const ENUM_ORDER_TYPE order_type,const double entry,const double stop_loss)
   {

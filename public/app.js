@@ -241,7 +241,7 @@ function renderExecution(){
   renderCommandProgress();
   put('execution-badge',!mainFresh()?'حالة البوت غير متاحة':x?.enabled?(x.demo?'حساب تجريبي':'حساب حقيقي'):'التنفيذ المحلي غير مفعّل');
   $('execution-badge').className='pill '+(x?.enabled?'warn':'neutral');
-  put('execution-description',x?`${x.paused?'دخول الصفقات موقوف':'إدارة البوت من MT5'} · هدف الربح الصغير ${num(x.small_profit_target)} ${state?.spec?.currency||''} · مخاطرة الإعداد المحلي ${num(x.risk_percent)}% · ${x.remote_control?'التحكم من الموقع متاح':'التحكم من الموقع غير مفعّل'}`:'إعدادات التنفيذ تظهر عند وصول ربط البوت.');
+  put('execution-description',x?(x.demo && x.website_no_daily_limits ? `Demo · حدود الخسارة وعدد الدخولات اليومية معطّلة · ستوب التوصية والهدف الأول · حساب اللوت يبدأ من ${num(x.risk_percent)}% مع السماح بأقل لوت · ${x.paused?'الدخول موقوف':'الدخول مفعّل'}` : `${x.paused?'دخول الصفقات موقوف':'إدارة البوت من MT5'} · هدف الربح الصغير ${num(x.small_profit_target)} ${state?.spec?.currency||''} · مخاطرة الإعداد المحلي ${num(x.risk_percent)}% · ${x.remote_control?'التحكم من الموقع متاح':'التحكم من الموقع غير مفعّل'}`):'إعدادات التنفيذ تظهر عند وصول ربط البوت.');
   // Always explain disabled controls. The actual command is blocked by
   // confirmCommand(), rechecked before POST, and revalidated on the server.
   for(const [id,action] of [['pause-bot','PAUSE'],['resume-bot','RESUME'],['close-all','CLOSE_ALL']]){

@@ -1,5 +1,5 @@
 #property strict
-#property version "3.08"
+#property version "3.09"
 #property description "NABD MT5 telemetry bridge. Separate chart; it does not open trades."
 #include <Trade/Trade.mqh>
 CTrade g_trade;
