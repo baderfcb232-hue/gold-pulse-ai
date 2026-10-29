@@ -54,6 +54,7 @@ export function websiteTradeDecision({enabled, snapshot: s, market: m, analysisP
   if (!costs?.ready) return no('WAITING_COSTS');
   let manualLot = null;
   if (tradeSizing?.mode === 'FIXED') {
+    if (s.execution.manual_lot_supported !== true) return no('MT5_MANUAL_LOT_UPDATE_REQUIRED');
     const checked = validateManualLot(tradeSizing.lot, s.spec);
     if (!checked.ok) return no(checked.reason);
     const stopLoss = stopLossEstimate(checked.lot, p, s.spec);
