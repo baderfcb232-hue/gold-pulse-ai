@@ -13,3 +13,9 @@ test('stop estimate follows the recommendation stop',()=>{
  assert.equal(stopLossEstimate(0.1,{side:'BUY',entry:3000,sl:2999},spec),10);
  assert.equal(stopLossEstimate(0.1,{side:'BUY',entry:3000,sl:3001},spec),null);
 });
+
+import {websiteTradeDecision} from './website-entry.mjs';
+test('manual lot is rejected unless the MT5 build advertises explicit support',()=>{
+ const gate=websiteTradeDecision({enabled:true,snapshot:{execution:{website_recommendations:false}},tradeSizing:{mode:'FIXED',lot:0.01}});
+ assert.equal(gate.reason,'MT5_WEBSITE_UPDATE_REQUIRED');
+});
