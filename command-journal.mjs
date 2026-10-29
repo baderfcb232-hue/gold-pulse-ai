@@ -21,13 +21,27 @@ export async function createCommandJournal(connectionString) {
         status text NOT NULL, plan text NOT NULL, reported_at double precision,
         UNIQUE(source_key,plan_id));
       ALTER TABLE nabd_website_entries ADD COLUMN IF NOT EXISTS reason_code integer;
-      ALTER TABLE nabd_website_entries ADD COLUMN IF NOT EXISTS mt5_retcode integer`);
+      ALTER TABLE nabd_website_entries ADD COLUMN IF NOT EXISTS mt5_retcode integer;
+      CREATE TABLE IF NOT EXISTS nabd_trade_sizing (
+        source_key text PRIMARY KEY, mode text NOT NULL CHECK(mode IN ('AUTO','FIXED')),
+        lot double precision, updated_at double precision NOT NULL)`);
   } catch {await pool.end(); throw Error('Could not initialize durable command journal');}
   const safe = async fn => {try {return await fn();} catch {throw Error('سجل الأوامر الدائم غير متاح؛ لم يتم تأكيد إرسال الأمر.');}};
   const expire = (client, now) => client.query("UPDATE nabd_command_journal SET status='EXPIRED' WHERE status='QUEUED' AND expires<=$1", [now]);
   const row = r => r ? {...r, id: Number(r.id)} : null;
   return {
     ...websiteEntryJournal(pool),
+    getTradeSizing: source => safe(async () => {
+      const r=(await pool.query('SELECT mode,lot,updated_at FROM nabd_trade_sizing WHERE source_key=$1',[source])).rows[0];
+      return r ? {mode:r.mode,lot:r.lot,updated_at:r.updated_at} : {mode:'AUTO',lot:null};
+    }),
+    setTradeSizing: (source,mode,lot,now) => safe(async () => {
+      const r=await pool.query(`INSERT INTO nabd_trade_sizing(source_key,mode,lot,updated_at)
+        VALUES($1,$2,$3,$4) ON CONFLICT(source_key) DO UPDATE SET
+        mode=EXCLUDED.mode,lot=EXCLUDED.lot,updated_at=EXCLUDED.updated_at
+        RETURNING mode,lot,updated_at`,[source,mode,lot,now]);
+      return r.rows[0];
+    }),
     list: now => safe(async () => {await expire(pool, now); return (await pool.query('SELECT * FROM nabd_command_journal ORDER BY id DESC LIMIT 100')).rows.map(row);}),
     enqueue: (now, action, ticket, fraction) => safe(async () => {
       const c = await pool.connect();
