@@ -58,3 +58,5 @@ InpEnableNABDLink=true
 InpNABDAllowRemoteControl=true
 InpNABDDemoRecommendations=true
 InpNABDWebsiteRecommendations=true
+
+InpDemoBrokerMinimumLot=true

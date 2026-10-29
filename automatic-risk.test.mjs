@@ -46,3 +46,27 @@ test('invalid account, risk, contract, stop direction and mismatched symbols can
     const p=plan();change(p);const r=automaticRiskSizing(snapshot(),p,now);assert.equal(r.estimate,null);assert.equal(r.reason,'INVALID_PLAN');
   }
 });
+
+test('demo minimum is broker sized, margin checked and daily capped',()=>{
+  const s=snapshot(),p=plan();
+  s.broker='JustMarkets-Demo';
+  s.execution={...s.execution,demo:true,minimum_volume_fallback:true,daily_risk_remaining:10};
+  const r=automaticRiskSizing(s,p,now);
+  assert.equal(r.estimate.volume,.01);
+  assert.equal(r.estimate.code,'SIZED_DEMO_MINIMUM');
+  assert.ok(Math.abs(r.estimate.loss-7.68)<1e-8);
+  assert.ok(r.estimate.effectiveRiskPercent>.5);
+  s.execution.daily_risk_remaining=4;
+  assert.equal(automaticRiskSizing(s,p,now).estimate.code,'DAILY_RISK_BELOW_MINIMUM_VOLUME');
+  s.execution.daily_risk_remaining=10;s.account.free_margin=0;
+  assert.equal(automaticRiskSizing(s,p,now).estimate.code,'INSUFFICIENT_MARGIN');
+});
+test('minimum fallback never applies to live or old terminals and requires daily allowance',()=>{
+  for(const change of [s=>s.execution.demo=false,s=>s.execution.minimum_volume_fallback=false,s=>s.broker='Other-Demo']){
+    const s=snapshot();s.broker='JustMarkets-Demo';
+    s.execution={...s.execution,demo:true,minimum_volume_fallback:true,daily_risk_remaining:10};change(s);
+    assert.equal(automaticRiskSizing(s,plan(),now).estimate.code,'BELOW_MINIMUM_VOLUME');
+  }
+  const s=snapshot();s.broker='JustMarkets-Demo';s.execution={...s.execution,demo:true,minimum_volume_fallback:true};
+  assert.equal(automaticRiskSizing(s,plan(),now).estimate.volume,0);
+});

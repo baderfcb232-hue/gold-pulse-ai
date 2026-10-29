@@ -362,6 +362,8 @@ void NABDOnTimer()
      ",\"demo\":"+NBB(AccountInfoInteger(ACCOUNT_TRADE_MODE)==ACCOUNT_TRADE_MODE_DEMO)+",\"paused\":"+NBB(NABDRemotePaused())+
      ",\"managed_magic\":"+NBQ((string)InpMagicNumber)+",\"small_profit_target\":"+NBD(NBMainValue("TP"),2)+
      ",\"max_daily_loss_percent\":"+NBD(NBMainValue("DL"),2)+",\"risk_percent\":"+NBD(NBMainValue("RP"),2)+
+     ",\"minimum_volume_fallback\":"+NBB(NBMainFresh() && NBMainValue("MV")>0.5)+
+     ",\"daily_risk_remaining\":"+NBD(NBMainValue("RD"))+
      ",\"news_filter\":"+NBB(NBMainValue("NF")>0.5)+"},\"ea\":"+NBEA(offset);
    if(g_nb_bootstrap_done)payload+=",\"daily_candles\":"+g_nb_daily;
    if(InpNABDSendAccount)

@@ -29,5 +29,26 @@ export function automaticRiskSizing(snapshot, plan = null, now = Date.now() / 10
     expired: !Number.isFinite(plan.expires_at) || plan.expires_at <= now || (plan.status != null && plan.status !== 'TRACKING')};
   result.estimate = positionSize({equity: account.equity, riskPercent, entry: plan.entry, sl: plan.sl,
     spec, freeMargin: Number.isFinite(account.free_margin) ? account.free_margin : 0});
+  // Only a new demo EA explicitly advertising this mode can request the minimum.
+  // Keep legacy terminals and real accounts on their strict percentage budget.
+  const demoMinimum = snapshot.execution.demo === true && /just.?markets/i.test(snapshot.broker || '') &&
+    snapshot.execution.minimum_volume_fallback === true;
+  const remaining = snapshot.execution.daily_risk_remaining;
+  if (demoMinimum && result.estimate.code === 'BELOW_MINIMUM_VOLUME') {
+    const loss = result.estimate.minimumLoss;
+    if (!Number.isFinite(remaining) || loss > remaining + 1e-8) {
+      result.estimate = {...result.estimate, code: 'DAILY_RISK_BELOW_MINIMUM_VOLUME',
+        reason: 'خسارة أصغر لوت تتجاوز المتبقي من حد الخسارة اليومي.'};
+    } else {
+      const effectiveRiskPercent = loss / account.equity * 100;
+      result.estimate = positionSize({equity: account.equity, riskPercent: effectiveRiskPercent,
+        entry: plan.entry, sl: plan.sl, spec, freeMargin: account.free_margin});
+      if (result.estimate.volume) {
+        result.estimate = {...result.estimate, code: 'SIZED_DEMO_MINIMUM',
+          effectiveRiskPercent, exceedsConfiguredRisk: true,
+          reason: 'أصغر لوت للوسيط على الحساب التجريبي؛ يتجاوز مخاطرة الصفقة المعتادة ويبقى ضمن الحد اليومي.'};
+      }
+    }
+  }
   return result;
 }

@@ -153,6 +153,8 @@ void NABDOnTimer()
    GlobalVariableSet(NABDKey("TP"),InpUseSmallProfit?InpBasketProfitTarget:0.0);
    GlobalVariableSet(NABDKey("DL"),InpMaxDailyLossPercent);
    GlobalVariableSet(NABDKey("RP"),InpRiskPercent);
+   GlobalVariableSet(NABDKey("MV"),DemoBrokerMinimumLotEnabled()?1.0:0.0);
+   GlobalVariableSet(NABDKey("RD"),MathMax(0.0,AccountInfoDouble(ACCOUNT_EQUITY)*InpMaxDailyLossPercent/100.0+GetTodayNet()));
    GlobalVariableSet(NABDKey("NF"),InpUseNewsFilter?1.0:0.0);
    GlobalVariableSet(NABDKey("PS"),NABDRemotePaused()?1.0:0.0);
    GlobalVariableSet(NABDKey("EM"),IsEmergencyStopActive()?1.0:0.0);

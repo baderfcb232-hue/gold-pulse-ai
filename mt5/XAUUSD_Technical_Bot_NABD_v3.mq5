@@ -1,5 +1,5 @@
 #property strict
-#property version   "1.16"
+#property version   "1.17"
 #property description "NABD JustMarkets MT5 gold EA: EMA/RSI signals, protected risk and estimated net small-profit cycles."
 
 #include <Trade/Trade.mqh>
@@ -32,6 +32,7 @@ input bool            InpRespectNextLevel       = true;
 
 //--- risk and execution
 input group "Risk and execution"
+input bool            InpDemoBrokerMinimumLot   = true;        // Demo only: allow broker minimum within daily loss limit
 input double          InpRiskPercent            = 0.50;        // Equity stop risk for the whole cycle
 input double          InpRewardRisk             = 2.00;        // Target = R multiple
 input double          InpStopBufferAtr           = 0.20;
@@ -154,6 +155,8 @@ bool   IsHighImpactNewsWindow(string &reason);
 bool   IsWithinTradingHours();
 double RecentLow(const int start_shift,const int count);
 double RecentHigh(const int start_shift,const int count);
+bool DemoBrokerMinimumLotEnabled();
+double ExecutionRiskBudget(const ENUM_ORDER_TYPE order_type,const double entry,const double stop_loss);
 double CalculateVolume(const ENUM_ORDER_TYPE order_type,const double entry,const double stop_loss);
 bool   MarginIsAcceptable(const ENUM_ORDER_TYPE order_type,const double entry,const double volume);
 int    VolumeDigits(const double step);
@@ -736,10 +739,8 @@ bool PlaceSignal(const SignalData &signal)
 
    string side=(signal.direction>0 ? "BUY" : "SELL");
    string comment=StringFormat("XAU_BOT_%s",side);
-   // Split the original 0.50% risk budget; never multiply it by the leg count.
-   double equity=AccountInfoDouble(ACCOUNT_EQUITY);
-   double budget=MathMin(equity*InpRiskPercent/100.0,
-                        MathMax(0.0,equity*InpMaxDailyLossPercent/100.0+GetTodayNet()));
+   // Minimum-lot fallback is demo-only and remains capped by the daily allowance.
+   double budget=ExecutionRiskBudget(order_type,signal.entry,signal.stop_loss);
    double risk_per_leg=budget/legs;
    double actual_volume=0.0;
    int accepted=0;
@@ -755,9 +756,11 @@ bool PlaceSignal(const SignalData &signal)
       double price=signal.direction>0 ? tick.ask : tick.bid;
       double distance=signal.direction>0 ? tick.bid-signal.stop_loss : signal.stop_loss-tick.ask;
       double profit=0.0;
+      double allowed_risk=(DemoBrokerMinimumLotEnabled() && legs==1 && volume<=minimum+1.0e-9)
+         ? ExecutionRiskBudget(order_type,price,signal.stop_loss) : risk_per_leg;
       if(distance<=MinimumStopDistance() ||
          !OrderCalcProfit(order_type,g_symbol,volume,price,signal.stop_loss,profit) ||
-         MathAbs(profit)>risk_per_leg+1.0e-8 ||
+         MathAbs(profit)>allowed_risk+1.0e-8 ||
          !MarginIsAcceptable(order_type,price,volume))
         {
          LogEvent("ORDER_BLOCKED","fresh price, stop risk, or combined margin check failed");
@@ -1391,14 +1394,30 @@ double RecentHigh(const int start_shift,const int count)
 //+------------------------------------------------------------------+
 //| Risk-based volume                                                |
 //+------------------------------------------------------------------+
+bool DemoBrokerMinimumLotEnabled()
+  {
+   return InpDemoBrokerMinimumLot &&
+      AccountInfoInteger(ACCOUNT_TRADE_MODE)==ACCOUNT_TRADE_MODE_DEMO && IsJustMarketsAccount();
+  }
+double ExecutionRiskBudget(const ENUM_ORDER_TYPE order_type,const double entry,const double stop_loss)
+  {
+   double equity=AccountInfoDouble(ACCOUNT_EQUITY);
+   double daily=MathMax(0.0,equity*InpMaxDailyLossPercent/100.0+GetTodayNet());
+   double budget=equity*InpRiskPercent/100.0;
+   if(DemoBrokerMinimumLotEnabled())
+     {
+      double minimum=SymbolInfoDouble(g_symbol,SYMBOL_VOLUME_MIN),loss=0.0;
+      if(minimum<=0.0 || !OrderCalcProfit(order_type,g_symbol,minimum,entry,stop_loss,loss))return 0.0;
+      budget=MathMax(budget,MathAbs(loss));
+     }
+   return MathMin(budget,daily);
+  }
 double CalculateVolume(const ENUM_ORDER_TYPE order_type,const double entry,const double stop_loss)
   {
    if(InpRiskPercent<=0.0 || entry<=0.0 || stop_loss<=0.0)
       return(0.0);
 
-   double risk_money=AccountInfoDouble(ACCOUNT_EQUITY)*InpRiskPercent/100.0;
-   double daily_remaining=AccountInfoDouble(ACCOUNT_EQUITY)*InpMaxDailyLossPercent/100.0+GetTodayNet();
-   risk_money=MathMin(risk_money,MathMax(0.0,daily_remaining));
+   double risk_money=ExecutionRiskBudget(order_type,entry,stop_loss);
    if(risk_money<=0.0)
       return(0.0);
 
@@ -1416,10 +1435,10 @@ double CalculateVolume(const ENUM_ORDER_TYPE order_type,const double entry,const
    if(min_volume<=0.0 || max_volume<=0.0 || step<=0.0)
       return(0.0);
 
-   if(raw_volume<min_volume)
-      return(0.0); // Never exceed the requested risk just to satisfy the broker minimum.
+   if(raw_volume+1.0e-10<min_volume)
+      return(0.0); // Daily allowance or strict risk mode cannot fund the minimum.
 
-   double volume=MathFloor(raw_volume/step)*step;
+   double volume=MathFloor(raw_volume/step+1.0e-9)*step;
    volume=MathMin(volume,max_volume);
    volume=NormalizeDouble(volume,VolumeDigits(step));
    if(volume<min_volume)
