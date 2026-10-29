@@ -603,7 +603,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         if (!Number.isSafeInteger(id) || id<=0) throw new Error('Invalid website approval identifier');
         rememberWebsiteActivity(symbol, record);
         const fields=['NBWEB1',chosen.account_ref,chosen.symbol,chosen.execution.managed_magic,
-          p.side,p.entry,p.sl,p.tp,Math.floor(p.issued_at),Math.floor(p.expires_at),p.bar_time,id,p.manual_lot ?? 0];
+          p.side,p.entry,p.sl,p.tp,Math.floor(p.issued_at),Math.floor(p.expires_at),p.bar_time,id,
+          ...(p.manual_lot == null ? [] : [p.manual_lot])];
         if(fields.some(v=>/[|\r\n]/.test(String(v))))throw new Error('Invalid website approval identity');
         return send(req,res,200,fields.join('|'),'text/plain; charset=utf-8');
       }
