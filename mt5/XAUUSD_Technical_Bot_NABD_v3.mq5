@@ -724,6 +724,21 @@ bool PlaceSignal(const SignalData &signal)
 
    ENUM_ORDER_TYPE order_type=(signal.direction>0 ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
    double total_volume=CalculateVolume(order_type,signal.entry,signal.stop_loss);
+   bool manual_website=InpNABDWebsiteRecommendations && AccountInfoInteger(ACCOUNT_TRADE_MODE)==ACCOUNT_TRADE_MODE_DEMO &&
+                       GlobalVariableCheck(NABDKey("WV")) && GlobalVariableGet(NABDKey("WV"))>0.0;
+   if(manual_website)
+     {
+      double requested=GlobalVariableGet(NABDKey("WV"));
+      double vmin=SymbolInfoDouble(g_symbol,SYMBOL_VOLUME_MIN);
+      double vmax=SymbolInfoDouble(g_symbol,SYMBOL_VOLUME_MAX);
+      double vstep=SymbolInfoDouble(g_symbol,SYMBOL_VOLUME_STEP);
+      if(vstep<=0) {g_website_attempt_code=122;return(false);}
+      double steps=(requested-vmin)/vstep;
+      if(requested<vmin-1.0e-8 || requested>vmax+1.0e-8 ||
+         MathAbs(steps-MathRound(steps))>1.0e-5)
+        {g_website_attempt_code=122;LogEvent("ORDER_BLOCKED","invalid manual lot");return(false);}
+      total_volume=requested;
+     }
    double minimum=SymbolInfoDouble(g_symbol,SYMBOL_VOLUME_MIN);
    double step=SymbolInfoDouble(g_symbol,SYMBOL_VOLUME_STEP);
    int remaining=DemoWebsiteNoDailyLimitsEnabled() ? 1 : InpMaxTradesPerDay-CountTodayEntries();
@@ -760,6 +775,7 @@ bool PlaceSignal(const SignalData &signal)
       double profit=0.0;
       double allowed_risk=(DemoBrokerMinimumLotEnabled() && legs==1 && volume<=minimum+1.0e-9)
          ? ExecutionRiskBudget(order_type,price,signal.stop_loss) : risk_per_leg;
+      if(manual_website)allowed_risk=AccountInfoDouble(ACCOUNT_EQUITY);
       if(distance<=MinimumStopDistance() ||
          !OrderCalcProfit(order_type,g_symbol,volume,price,signal.stop_loss,profit) ||
          MathAbs(profit)>allowed_risk+1.0e-8 ||
