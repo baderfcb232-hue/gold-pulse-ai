@@ -1,0 +1,47 @@
+name: Package NABD MT5 Link ZIP
+on:
+  push:
+    branches:
+      - artifact/nabd-mt5-link-1-16-3-07
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify required MT5 files and versions
+        run: |
+          set -euo pipefail
+          grep -F '#property version   "1.16"' mt5/XAUUSD_Technical_Bot_NABD_v3.mq5
+          grep -F '#property version "3.07"' mt5/NABD_Bridge_EA.mq5
+          test -f mt5/NABD_Link.mqh
+          test -f mt5/NABD_Bridge.mqh
+      - name: Build ZIP with all source files and installation guide
+        run: |
+          set -euo pipefail
+          mkdir -p output/NABD
+          for file in \
+            XAUUSD_Technical_Bot_NABD_v3.mq5 \
+            NABD_Link.mqh \
+            NABD_Bridge_EA.mq5 \
+            NABD_Bridge.mqh \
+            NABD_Main_Monitor.set \
+            NABD_Demo_Recommendations.set \
+            NABD_Bridge_Monitor.set \
+            NABD_BTC_Demo_Recommendations.set \
+            NABD_BTC_Bridge_Demo.set \
+            INSTALL_AR.md; do
+            cp "mt5/$file" "output/NABD/$file"
+          done
+          cd output
+          zip -q -r NABD_MT5_Link.zip NABD
+          unzip -t NABD_MT5_Link.zip
+          sha256sum NABD_MT5_Link.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NABD_MT5_Link_1.16_Bridge_3.07
+          path: output/NABD_MT5_Link.zip
+          if-no-files-found: error
+          retention-days: 30
