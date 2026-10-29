@@ -14,8 +14,8 @@ jobs:
       - name: Verify required MT5 files and versions
         run: |
           set -euo pipefail
-          grep -F '#property version   "1.16"' mt5/XAUUSD_Technical_Bot_NABD_v3.mq5
-          grep -F '#property version "3.07"' mt5/NABD_Bridge_EA.mq5
+          grep -F '#property version   "1.18"' mt5/XAUUSD_Technical_Bot_NABD_v3.mq5
+          grep -F '#property version "3.09"' mt5/NABD_Bridge_EA.mq5
           test -f mt5/NABD_Link.mqh
           test -f mt5/NABD_Bridge.mqh
       - name: Build ZIP with all source files and installation guide
@@ -41,7 +41,7 @@ jobs:
           sha256sum NABD_MT5_Link.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: NABD_MT5_Link_1.16_Bridge_3.07
+          name: NABD_MT5_Link_1.18_Bridge_3.09
           path: output/NABD_MT5_Link.zip
           if-no-files-found: error
           retention-days: 30
