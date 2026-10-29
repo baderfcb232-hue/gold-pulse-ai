@@ -88,7 +88,7 @@ test('authenticated website bridge dispatches a plan once under simultaneous pol
   assert.equal(responses.filter(Boolean).length,1);
   assert.equal(app.publicState().websiteBridge.connection,'LIVE');
   assert.equal(app.publicState().websiteBridge.lastResult,'DISPATCHED');
-  const wire=responses.find(Boolean).split('|');assert.equal(wire.length,12);assert.equal(wire[0],'NBWEB1');
+  const wire=responses.find(Boolean).split('|');assert.equal(wire.length,13);assert.equal(wire[0],'NBWEB1');assert.equal(wire[12],'0','AUTO mode leaves lot sizing to EA');
   const frozen=app.marketFeed.history('XAUUSD')[0];
   assert.equal(app.publicState().currentSignal.id,frozen.id);
   assert.deepEqual(wire.slice(4,8),[frozen.side,String(frozen.entry),String(frozen.sl),String(frozen.tp1)]);
