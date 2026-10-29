@@ -219,7 +219,8 @@ void NBProcessWebsiteRecommendation()
        ",\"mt5_retcode\":"+NBD(NBMainValue("WRT"),0)+"}",response)==200)reported_id=result_id;
    if(NABDRemotePaused())return;
    if(NBRequest("POST","/api/bridge/website-recommendation","{"+source+"}",response)!=200 || StringLen(response)==0)return;
-   string parts[];if(StringSplit(response,'|',parts)!=13 || parts[0]!="NBWEB1" ||
+   string parts[];int fields=StringSplit(response,'|',parts);
+   if((fields!=12 && fields!=13) || parts[0]!="NBWEB1" ||
       parts[1]!=(string)AccountInfoInteger(ACCOUNT_LOGIN) || parts[2]!=g_symbol || parts[3]!=(string)InpMagicNumber)return;
    int direction=parts[4]=="BUY"?1:parts[4]=="SELL"?-1:0;
    double entry=StringToDouble(parts[5]),sl=StringToDouble(parts[6]),tp=StringToDouble(parts[7]);
@@ -365,6 +366,7 @@ void NABDOnTimer()
      ",\"max_daily_loss_percent\":"+NBD(NBMainValue("DL"),2)+",\"risk_percent\":"+NBD(NBMainValue("RP"),2)+
      ",\"minimum_volume_fallback\":"+NBB(NBMainFresh() && NBMainValue("MV")>0.5)+
      ",\"website_no_daily_limits\":"+NBB(NBMainFresh() && NBMainValue("ND")>0.5)+
+     ",\"manual_lot_supported\":"+NBB(NBMainFresh() && NBMainValue("VL")>0.5)+
      ",\"daily_risk_remaining\":"+NBD(NBMainValue("RD"))+
      ",\"news_filter\":"+NBB(NBMainValue("NF")>0.5)+"},\"ea\":"+NBEA(offset);
    if(g_nb_bootstrap_done)payload+=",\"daily_candles\":"+g_nb_daily;
