@@ -768,7 +768,9 @@ bool PlaceSignal(const SignalData &signal)
    double risk_per_leg=budget/legs;
    double actual_volume=0.0;
    int accepted=0;
-   if(!ClaimEntryBar())
+   // Website recommendations have a durable unique plan-id claim in PostgreSQL and MT5.
+   // A bar-only gate would silently drop a different approved plan in the same M5 bar.
+   if(!InpNABDWebsiteRecommendations && !ClaimEntryBar())
      {g_website_attempt_code=118;return(false);}
    for(int leg=0;leg<legs;leg++)
      {
