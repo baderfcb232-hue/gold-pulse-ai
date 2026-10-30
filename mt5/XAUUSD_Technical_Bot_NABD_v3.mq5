@@ -1,5 +1,5 @@
 #property strict
-#property version   "1.18"
+#property version   "1.19"
 #property description "NABD JustMarkets MT5 gold EA: EMA/RSI signals, protected risk and estimated net small-profit cycles."
 
 #include <Trade/Trade.mqh>
@@ -33,7 +33,9 @@ input bool            InpRespectNextLevel       = true;
 //--- risk and execution
 input group "Risk and execution"
 input bool            InpDemoWebsiteNoDailyLimits = true;      // Demo website only: no daily loss/trade count cap
-input bool            InpDemoBrokerMinimumLot   = true;        // Demo only: allow broker minimum within daily loss limit
+input bool            InpDemoBrokerMinimumLot   = true;
+input int             InpMaxConcurrentPositions = 5;         // Demo: combined cap across managed gold/BTC positions
+input double          InpMaxOpenRiskPercent     = 2.0;       // Demo: aggregate worst-case loss to SL across positions        // Demo only: allow broker minimum within daily loss limit
 input double          InpRiskPercent            = 0.50;        // Equity stop risk for the whole cycle
 input double          InpRewardRisk             = 2.00;        // Target = R multiple
 input double          InpStopBufferAtr           = 0.20;
@@ -148,6 +150,7 @@ void   ManageOpenPositions();
 bool   IsEmergencyStopActive();
 void   CloseOwnPositions();
 bool   HasOwnPosition();
+bool   ConcurrentWebsiteEntryAllowed();
 int    CountOwnPositions();
 int    CountTodayEntries();
 double GetTodayNet();
@@ -268,6 +271,8 @@ int OnInit()
       !MathIsValidNumber(InpMaxMarginUsePercent) ||
       InpMaxMarginUsePercent<=0.0 || InpMaxMarginUsePercent>100.0 ||
       InpMaxBasketPositions<1 || InpMaxBasketPositions>20 ||
+      InpMaxConcurrentPositions<1 || InpMaxConcurrentPositions>20 ||
+      !MathIsValidNumber(InpMaxOpenRiskPercent) || InpMaxOpenRiskPercent<=0.0 || InpMaxOpenRiskPercent>100.0 ||
       !MathIsValidNumber(InpBasketProfitTarget) || InpBasketProfitTarget<=0.0 ||
       !MathIsValidNumber(InpExitCostPerLot) || InpExitCostPerLot<0.0 ||
       !MathIsValidNumber(InpCloseBufferMoney) || InpCloseBufferMoney<0.0 ||
@@ -718,8 +723,10 @@ bool BuildSignal(SignalData &signal)
 bool PlaceSignal(const SignalData &signal)
   {
    g_website_attempt_code=0;g_website_attempt_retcode=0;
-   if(!ExecutionPermissionsAvailable() || HasOwnPosition() || HasOwnPendingOrder() ||
-      HasForeignNettingExposure() || g_cycle_closing)
+   if(!ExecutionPermissionsAvailable() ||
+      (!DemoWebsiteNoDailyLimitsEnabled() && HasOwnPosition()) ||
+      (DemoWebsiteNoDailyLimitsEnabled() && !ConcurrentWebsiteEntryAllowed()) ||
+      HasOwnPendingOrder() || HasForeignNettingExposure() || g_cycle_closing)
      {g_website_attempt_code=116;return(false);}
 
    ENUM_ORDER_TYPE order_type=(signal.direction>0 ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
@@ -776,6 +783,8 @@ bool PlaceSignal(const SignalData &signal)
       double allowed_risk=(DemoBrokerMinimumLotEnabled() && legs==1 && volume<=minimum+1.0e-9)
          ? ExecutionRiskBudget(order_type,price,signal.stop_loss) : risk_per_leg;
       if(manual_website)allowed_risk=AccountInfoDouble(ACCOUNT_EQUITY);
+      if(DemoWebsiteNoDailyLimitsEnabled() && !ConcurrentWebsiteEntryAllowed())
+        {g_website_attempt_code=123;break;}
       if(distance<=MinimumStopDistance() ||
          !OrderCalcProfit(order_type,g_symbol,volume,price,signal.stop_loss,profit) ||
          MathAbs(profit)>allowed_risk+1.0e-8 ||
@@ -961,6 +970,33 @@ void CloseCyclePositions(const string reason)
          LogEvent(reason+"_CLOSE_PENDING",StringFormat("ticket=%I64u,retcode=%u,%s",ticket,code,
                                                        g_trade.ResultRetcodeDescription()));
      }
+  }
+
+// Account-wide protective limit: each already open position needs a valid stop.
+// Never permit parallel orders on a netting account, where stops/ownership merge.
+bool ConcurrentWebsiteEntryAllowed()
+  {
+   if(!IsHedgingAccount())return false;
+   int count=0;
+   double risk=0.0;
+   for(int i=0;i<PositionsTotal();i++)
+     {
+      ulong ticket=PositionGetTicket(i);
+      if(ticket==0 || !PositionSelectByTicket(ticket))continue;
+      count++;
+      double stop=PositionGetDouble(POSITION_SL),volume=PositionGetDouble(POSITION_VOLUME);
+      double entry=PositionGetDouble(POSITION_PRICE_OPEN),loss=0.0;
+      ENUM_ORDER_TYPE kind=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY?ORDER_TYPE_BUY:ORDER_TYPE_SELL;
+      if(stop<=0.0 || volume<=0.0 || !OrderCalcProfit(kind,PositionGetString(POSITION_SYMBOL),volume,entry,stop,loss))
+        {LogEvent("ORDER_BLOCKED","Open position without reliable stop/risk");return false;}
+      risk+=MathMax(0.0,-loss);
+     }
+   if(count>=InpMaxConcurrentPositions)
+     {LogEvent("ORDER_BLOCKED","Account concurrent position cap reached");return false;}
+   double equity=AccountInfoDouble(ACCOUNT_EQUITY);
+   if(equity<=0.0 || risk>=equity*InpMaxOpenRiskPercent/100.0)
+     {LogEvent("ORDER_BLOCKED","Existing aggregate stop risk reached account cap");return false;}
+   return true;
   }
 
 bool HasOwnPosition()
