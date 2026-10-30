@@ -249,7 +249,15 @@ function renderExecution(){
   const x=state?.execution;
   put('control-connection-summary',!mainFresh()?'حالة MT5 غير حديثة؛ ننتظر تحديث البوت.':x?.paused?'دخول صفقات جديدة موقوف':x?.enabled?'الدخول التلقائي مسموح عند اكتمال الشروط':'التنفيذ غير مفعّل داخل MT5');
   put('demo-execution-status',demoExecutionMessage(state));
-  $('control-download-mt5').hidden=state?.websiteExecution?x?.website_recommendations===true:x?.demo_recommendations===true;
+  // Never hide the update package based only on a remote execution flag:
+  // it does not prove that the updated compiled EA is installed on the VPS.
+  $('control-download-mt5').hidden=false;
+  const goldReady=effectiveConnection()==='LIVE' && mainFresh() && !!state?.signalSourceReady;
+  const bridge=state?.websiteBridge?.connection||'NOT_OBSERVED';
+  const goldNote=!goldReady?'الذهب: بيانات MT5 أو نبض البوت غير حديثة':state?.websiteExecution?.ready?'الذهب: خطة جديدة جاهزة لإرسال Demo':'الذهب: الاتصال حي؛ '+(state?.websiteExecution?.reason||'ننتظر شروط التوصية');
+  const btc=privateData?.btc;
+  const btcNote=!btc?'البيتكوين: لم تُؤكد بيانات جسر BTC في حساب المشغّل':now()-btc.lastUpdate>15?'البيتكوين: تحديث جسر BTC متأخر':'البيتكوين: وصل تحديث MT5؛ تنفيذ الصفقة يحتاج فحص شروطها';
+  put('mt5-market-readiness',goldNote+' | '+btcNote+' | جسر الذهب: '+bridge+' | تحميل ملفات MT5 لا يعني تركيبها على VPS.');
   renderCommandProgress();
   put('execution-badge',!mainFresh()?'حالة البوت غير متاحة':x?.enabled?(x.demo?'حساب تجريبي':'حساب حقيقي'):'التنفيذ المحلي غير مفعّل');
   $('execution-badge').className='pill '+(x?.enabled?'warn':'neutral');
