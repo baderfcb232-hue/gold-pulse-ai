@@ -20,7 +20,9 @@ export function websiteTradeDecision({enabled, snapshot: s, market: m, analysisP
   if (!s.execution.demo_recommendations || !s.execution.enabled || !s.execution.main_connected ||
       !s.execution.remote_control || s.execution.paused || s.ea?.emergency_stop || !s.terminal_connected)
     return no('MT5_EXECUTION_NOT_READY');
-  if (s.positions?.length) return no('POSITION_ALREADY_OPEN');
+  // A distinct, source-bound recommendation may arrive while an earlier trade remains open.
+  // MT5 enforces hedging/netting compatibility, portfolio exposure and margin per order.
+  // The durable journal below prevents replay of the SAME recommendation.
   if (![s.received_at, s.quote_at, s.ea?.heartbeat_at].every(v => Number.isFinite(v) && v <= now + 5) ||
       now - s.received_at > 5 || now - s.quote_at > 10 || now - s.ea.heartbeat_at > 5)
     return no('STALE_MT5');

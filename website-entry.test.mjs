@@ -65,7 +65,7 @@ test('website execution rejects unsafe account, stale source, old plans, foreign
     ['NOT_JUSTMARKETS_DEMO',f=>f.snapshot.broker='Other-Demo'],['NOT_JUSTMARKETS_DEMO',f=>f.snapshot.symbol='ETHUSD'],
     ['MT5_EXECUTION_NOT_READY',f=>f.snapshot.execution.paused=true],['MT5_EXECUTION_NOT_READY',f=>f.snapshot.ea.emergency_stop=true],
     ['STALE_MT5',f=>f.snapshot.received_at=NOW-6],['STALE_MT5',f=>f.snapshot.ea.heartbeat_at=NOW+6],
-    ['POSITION_ALREADY_OPEN',f=>f.snapshot.positions=[{}]],['WAITING_WEBSITE_PLAN',f=>f.market.currentSignal=null],
+    ['WAITING_WEBSITE_PLAN',f=>f.market.currentSignal=null],
     ['WEBSITE_SOURCE_MISMATCH',f=>f.market.currentSignal.source_id='REFERENCE'],
     ['WEBSITE_SOURCE_MISMATCH',f=>f.market.currentSignal.broker_symbol='XAUUSD.other'],
     ['WEBSITE_PLAN_CHANGED',f=>f.analysisPlan.bar_time-=300],
@@ -75,6 +75,12 @@ test('website execution rejects unsafe account, stale source, old plans, foreign
     ['WAITING_COSTS',f=>f.costs.ready=false],['PRICE_OR_SPREAD_MOVED',f=>f.snapshot.ask+=10],
     ['BELOW_MINIMUM_VOLUME',f=>f.snapshot.account.equity=1],['INSUFFICIENT_MARGIN',f=>f.snapshot.account.free_margin=0]
   ]){const f=decisionFixture();change(f);assert.equal(websiteTradeDecision(f).reason,reason,reason);}
+});
+test('a fresh distinct website recommendation remains eligible with an earlier position',()=>{
+  const f=decisionFixture();
+  f.snapshot.positions=[{ticket:'444',side:'BUY',volume:0.01,entry:f.market.currentSignal.entry-1,
+    sl:f.market.currentSignal.sl,tp:f.market.currentSignal.tp1}];
+  assert.equal(websiteTradeDecision(f).reason,'WEBSITE_READY');
 });
 test('authenticated website bridge dispatches a plan once under simultaneous polling and exposes only an unconfirmed submission',async t=>{
   const {app,base,post,source}=await setup(t);

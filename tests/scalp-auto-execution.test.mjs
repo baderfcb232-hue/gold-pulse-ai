@@ -30,7 +30,6 @@ test('explicit Demo scalp candidate is eligible only when all legacy broker and 
    ['MT5_EXECUTION_NOT_READY',z=>z.snapshot.execution.paused=true],
    ['MT5_EXECUTION_NOT_READY',z=>z.snapshot.execution.enabled=false],
    ['MT5_EXECUTION_NOT_READY',z=>z.snapshot.ea.emergency_stop=true],
-   ['POSITION_ALREADY_OPEN',z=>z.snapshot.positions=[{}]],
    ['STALE_MT5',z=>z.snapshot.quote_at=NOW-30],
    ['WAITING_COSTS',z=>z.costs.ready=false],
    ['DURABLE_ENTRY_JOURNAL_REQUIRED',z=>z.durable=false],
@@ -41,6 +40,11 @@ test('explicit Demo scalp candidate is eligible only when all legacy broker and 
     const modified=scenario();mutate(modified);
     assert.equal(websiteTradeDecision(modified).reason,reason,reason);
   }
+});
+test('new scalp plans are not blocked solely by an existing position',()=>{
+ const f=scenario(); f.snapshot.positions=[{ticket:'123',side:'BUY',volume:0.01,entry:f.market.currentSignal.entry,
+   sl:f.market.currentSignal.sl,tp:f.market.currentSignal.tp1}];
+ assert.equal(websiteTradeDecision(f).reason,'WEBSITE_READY');
 });
 test('BTC and gold strategy identities cannot authorize each other',()=>{
  const f=scenario();f.requiredStrategy='EMA-PULLBACK-1';

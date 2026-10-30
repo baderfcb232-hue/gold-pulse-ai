@@ -365,6 +365,7 @@ $('refresh-controls').onclick=async()=>{
 };
 $('control-download-mt5').onclick=event=>{if(!authenticated){event.preventDefault();$('login-dialog').showModal();}};
 $('command-dialog').addEventListener('close',()=>{pendingCommand=null;});
+$('open-bitcoin-market').onclick=()=>{switchView('overview');const btc=document.querySelector('#market-symbols [data-symbol="BTCUSD"]');if(btc&&!btc.hidden)btc.click();else toast('سوق البيتكوين غير متاح حاليًا؛ افحص ربط MT5.',true);};
 $('pause-bot').onclick=()=>confirmCommand('PAUSE');$('resume-bot').onclick=()=>confirmCommand('RESUME');$('close-all').onclick=()=>confirmCommand('CLOSE_ALL');$('signal-filter').onchange=renderSignals;$('signal-source-filter').onchange=renderSignals;$('results-source-filter').onchange=renderResults;$('news-filter').onchange=renderNews;
 $('download-mt5').onclick=event=>{if(!authenticated){event.preventDefault();$('login-dialog').showModal();}};
 $('copy-bridge-url').onclick=async()=>{try{await navigator.clipboard.writeText($('bridge-url').value);toast('تم نسخ رابط الجسر.');}catch{toast('انسخ الرابط من الحقل مباشرة.',true);$('bridge-url').select();}};
