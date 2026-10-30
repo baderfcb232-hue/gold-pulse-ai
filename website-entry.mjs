@@ -24,7 +24,10 @@ export function websiteTradeDecision({enabled, snapshot: s, market: m, analysisP
   // MT5 enforces hedging/netting compatibility, portfolio exposure and margin per order.
   // The durable journal below prevents replay of the SAME recommendation.
   if (![s.received_at, s.quote_at, s.ea?.heartbeat_at].every(v => Number.isFinite(v) && v <= now + 5) ||
-      now - s.received_at > 5 || now - s.quote_at > 10 || now - s.ea.heartbeat_at > 5)
+      // The bridge normally polls every 3 seconds; a short network delay must not
+      // reject an otherwise fresh broker-bound plan. The EA still independently
+      // requires a broker tick no older than 10 seconds before placing an order.
+      now - s.received_at > 10 || now - s.quote_at > 10 || now - s.ea.heartbeat_at > 10)
     return no('STALE_MT5');
   const p = m?.currentSignal;
   if (!p || m.connection !== 'LIVE' || m.analysis?.status !== 'READY') return no('WAITING_WEBSITE_PLAN');
