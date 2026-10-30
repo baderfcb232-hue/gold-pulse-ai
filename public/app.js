@@ -256,7 +256,7 @@ function renderExecution(){
   const bridge=state?.websiteBridge?.connection||'NOT_OBSERVED';
   const goldNote=!goldReady?'الذهب: بيانات MT5 أو نبض البوت غير حديثة':state?.websiteExecution?.ready?'الذهب: خطة جديدة جاهزة لإرسال Demo':'الذهب: الاتصال حي؛ '+(state?.websiteExecution?.reason||'ننتظر شروط التوصية');
   const btc=privateData?.btc;
-  const btcNote=!btc?'البيتكوين: لم تُؤكد بيانات جسر BTC في حساب المشغّل':now()-btc.lastUpdate>15?'البيتكوين: تحديث جسر BTC متأخر':'البيتكوين: وصل تحديث MT5؛ تنفيذ الصفقة يحتاج فحص شروطها';
+  const btcNote=!btc?'البيتكوين: لم تُؤكد بيانات جسر BTC في حساب المشغّل':(!Number.isFinite(btc.lastUpdate)||now()-btc.lastUpdate>15)?'البيتكوين: تحديث جسر BTC متأخر':'البيتكوين: وصل تحديث MT5؛ تنفيذ الصفقة يحتاج فحص شروطها';
   put('mt5-market-readiness',goldNote+' | '+btcNote+' | جسر الذهب: '+bridge+' | تحميل ملفات MT5 لا يعني تركيبها على VPS.');
   renderCommandProgress();
   put('execution-badge',!mainFresh()?'حالة البوت غير متاحة':x?.enabled?(x.demo?'حساب تجريبي':'حساب حقيقي'):'التنفيذ المحلي غير مفعّل');
