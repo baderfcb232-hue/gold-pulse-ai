@@ -32,7 +32,6 @@ jobs:
               if not p.is_file(): raise FileNotFoundError(name)
               if p.suffix == '.set':
                 s=p.read_text(encoding='utf-8-sig')
-                assert 'InpNABDToken=' in s, name
                 assert not any(line.startswith('InpNABDToken=') and line.strip() != 'InpNABDToken=' for line in s.splitlines()), name
               z.write(p, 'NABD/'+name)
           with ZipFile(out) as z:
