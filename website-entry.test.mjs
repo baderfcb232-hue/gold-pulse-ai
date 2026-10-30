@@ -116,6 +116,16 @@ test('authenticated website bridge dispatches a plan once under simultaneous pol
   const publicText=await (await fetch(base+'/api/state')).text();assert.ok(!publicText.includes('websiteEntries'));
   assert.ok(!publicText.includes(source.account_ref));assert.equal(app.db.prepare('SELECT count(*) n FROM commands').get().n,0);
 });
+test('broker market exposes a current plan only within its execution eligibility window',async t=>{
+  const {app,setNow}=await setup(t);
+  const nowMarket=app.marketFeed.publicState().markets.XAUUSD;
+  assert.ok(nowMarket.currentSignal);
+  setNow(NOW+76);
+  const expiredForEntry=app.marketFeed.publicState().markets.XAUUSD;
+  assert.equal(expiredForEntry.currentSignal,null);
+  assert.equal(expiredForEntry.analysis.status,'SCANNING');
+  assert.equal(expiredForEntry.analysis.plan,undefined);
+});
 test('bridge diagnostics restore the durable result and expire polling freshness without claiming a fill',async t=>{
   const journal=sqliteJournal(), raw=rawSnapshot();
   const snapshot=cleanSnapshot(raw,NOW),source=entrySourceKey(snapshot);
