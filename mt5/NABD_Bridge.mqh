@@ -233,7 +233,10 @@ void NBProcessWebsiteRecommendation()
    GlobalVariableSet(NABDKey("WD"),(double)direction);GlobalVariableSet(NABDKey("WB"),(double)bar);
    GlobalVariableSet(NABDKey("WE"),entry);GlobalVariableSet(NABDKey("WL"),sl);GlobalVariableSet(NABDKey("WP"),tp);
    GlobalVariableSet(NABDKey("WF"),(double)issued);GlobalVariableSet(NABDKey("WX"),(double)expiry);
-    GlobalVariableSet(NABDKey("WV"),StringToDouble(parts[12]));
+   // AUTO approvals have 12 fields. Reading parts[12] in that case is a
+   // fatal MQL array-out-of-range error and stops this bridge's timer.
+   // Always reset the previous manual lot when the next approval is AUTO.
+   GlobalVariableSet(NABDKey("WV"),fields==13?StringToDouble(parts[12]):0.0);
    GlobalVariableSet(NABDKey("WA"),(double)id);
   }
 void NBProcessCommand()

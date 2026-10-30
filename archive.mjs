@@ -4,7 +4,7 @@ import {resolve} from 'node:path';
 const table=Array.from({length:256},(_,i)=>{for(let n=0;n<8;n++)i=(i&1)?0xedb88320^(i>>>1):i>>>1;return i>>>0;});
 function crc32(bytes){let crc=0xffffffff;for(const b of bytes)crc=table[(crc^b)&255]^(crc>>>8);return(crc^0xffffffff)>>>0;}
 export function mt5Archive(root){
-  const files=['XAUUSD_Technical_Bot_NABD_v3.mq5','NABD_Link.mqh','NABD_Bridge_EA.mq5','NABD_Bridge.mqh','NABD_Main_Monitor.set','NABD_Demo_Recommendations.set','NABD_Bridge_Monitor.set','NABD_BTC_Demo_Recommendations.set','NABD_BTC_Bridge_Demo.set','INSTALL_AR.md'];
+  const files=['XAUUSD_Technical_Bot_NABD_v3.mq5','NABD_Link.mqh','NABD_Bridge_EA.mq5','NABD_Bridge.mqh','NABD_Main_Monitor.set','NABD_Demo_Recommendations.set','NABD_Bridge_Monitor.set','NABD_BTC_Demo_Recommendations.set','NABD_BTC_Bridge_Demo.set','INSTALL_AR.md','RECOVERY_3.10_AR.md'];
   const local=[],central=[];let offset=0;
   for(const name of files){
     const path=Buffer.from('NABD/'+name),data=readFileSync(resolve(root,'mt5',name)),crc=crc32(data);
