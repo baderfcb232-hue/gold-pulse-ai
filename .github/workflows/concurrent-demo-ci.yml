@@ -1,0 +1,23 @@
+name: NABD Demo parallel-entry checks
+on:
+  pull_request:
+    paths:
+      - 'website-entry.mjs'
+      - 'website-entry.test.mjs'
+      - 'mt5/**'
+      - 'public/**'
+      - 'tests/**'
+      - '.github/workflows/concurrent-demo-ci.yml'
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: node --check public/app.js
+      - run: node --check website-entry.mjs
