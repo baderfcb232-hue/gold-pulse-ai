@@ -150,7 +150,7 @@ void   ManageOpenPositions();
 bool   IsEmergencyStopActive();
 void   CloseOwnPositions();
 bool   HasOwnPosition();
-bool   ConcurrentWebsiteEntryAllowed();
+bool   ConcurrentWebsiteEntryAllowed(const double additional_risk=0.0);
 int    CountOwnPositions();
 int    CountTodayEntries();
 double GetTodayNet();
@@ -788,6 +788,7 @@ bool PlaceSignal(const SignalData &signal)
       if(distance<=MinimumStopDistance() ||
          !OrderCalcProfit(order_type,g_symbol,volume,price,signal.stop_loss,profit) ||
          MathAbs(profit)>allowed_risk+1.0e-8 ||
+         (DemoWebsiteNoDailyLimitsEnabled() && !ConcurrentWebsiteEntryAllowed(MathMax(0.0,-profit))) ||
          !MarginIsAcceptable(order_type,price,volume))
         {
          LogEvent("ORDER_BLOCKED","fresh price, stop risk, or combined margin check failed");
@@ -974,7 +975,7 @@ void CloseCyclePositions(const string reason)
 
 // Account-wide protective limit: each already open position needs a valid stop.
 // Never permit parallel orders on a netting account, where stops/ownership merge.
-bool ConcurrentWebsiteEntryAllowed()
+bool ConcurrentWebsiteEntryAllowed(const double additional_risk)
   {
    if(!IsHedgingAccount())return false;
    int count=0;
@@ -994,7 +995,7 @@ bool ConcurrentWebsiteEntryAllowed()
    if(count>=InpMaxConcurrentPositions)
      {LogEvent("ORDER_BLOCKED","Account concurrent position cap reached");return false;}
    double equity=AccountInfoDouble(ACCOUNT_EQUITY);
-   if(equity<=0.0 || risk>=equity*InpMaxOpenRiskPercent/100.0)
+   if(equity<=0.0 || risk+additional_risk>=equity*InpMaxOpenRiskPercent/100.0)
      {LogEvent("ORDER_BLOCKED","Existing aggregate stop risk reached account cap");return false;}
    return true;
   }
