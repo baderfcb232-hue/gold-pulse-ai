@@ -979,7 +979,9 @@ void CloseCyclePositions(const string reason)
 // Never permit parallel orders on a netting account, where stops/ownership merge.
 bool ConcurrentWebsiteEntryAllowed(const double additional_risk)
   {
-   if(!IsHedgingAccount())return false;
+   // A netting account may open its first order, but cannot hold independent
+   // overlapping recommendations on the same symbol without merging stops.
+   if(!IsHedgingAccount() && CountOwnPositions()>0)return false;
    int count=0;
    double risk=0.0;
    for(int i=0;i<PositionsTotal();i++)
