@@ -31,6 +31,7 @@ test('explicit Demo scalp candidate is eligible only when all legacy broker and 
    ['MT5_EXECUTION_NOT_READY',z=>z.snapshot.execution.enabled=false],
    ['MT5_EXECUTION_NOT_READY',z=>z.snapshot.ea.emergency_stop=true],
    ['STALE_MT5',z=>z.snapshot.quote_at=NOW-30],
+   ['STALE_MT5',z=>z.snapshot.received_at=NOW-11],
    ['WAITING_COSTS',z=>z.costs.ready=false],
    ['DURABLE_ENTRY_JOURNAL_REQUIRED',z=>z.durable=false],
    ['WEBSITE_SOURCE_MISMATCH',z=>z.market.currentSignal.source_id='REFERENCE'],
@@ -49,4 +50,9 @@ test('new scalp plans are not blocked solely by an existing position',()=>{
 test('BTC and gold strategy identities cannot authorize each other',()=>{
  const f=scenario();f.requiredStrategy='EMA-PULLBACK-1';
  assert.equal(websiteTradeDecision(f).reason,'WEBSITE_STRATEGY_MISMATCH');
+});
+
+test('short bridge arrival delay does not reject a fresh broker quote and EA heartbeat',()=>{
+ const f=scenario();f.snapshot.received_at=NOW-7;f.snapshot.ea.heartbeat_at=NOW-7;f.snapshot.quote_at=NOW-4;
+ assert.equal(websiteTradeDecision(f).reason,'WEBSITE_READY');
 });

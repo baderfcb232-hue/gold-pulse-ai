@@ -196,7 +196,7 @@ function renderTradeSizing(){
 }
 function renderAutomaticRisk(){
   const r=privateData?.riskSizing,box=$('automatic-risk-content'),currency=r?.currency||state?.spec?.currency||'';
-  if(!r?.available){box.replaceChildren(empty('ننتظر حقوق الحساب ونسبة المخاطرة ومواصفات العقد من MT5.'));return;}
+  if(!r?.available){box.replaceChildren(empty('ننتظر حقوق الحساب ونسبة المخاطرة ومواصفات العقد من MT5.'));renderWebsiteEntries(box);return;}
   const summary=e('div','position-data');
   for(const [label,value]of [['حقوق الحساب',`${num(r.capital)} ${currency}`],['نسبة المخاطرة',`${num(r.riskPercent)}%`],['سقف الصفقة',`${num(r.budget,4)} ${currency}`],['أقل لوت',num(r.minimumVolume,8)]]){
     const cell=e('div');cell.append(e('small','',label),e('strong','number',value));summary.append(cell);
@@ -210,12 +210,15 @@ function renderAutomaticRisk(){
   parts.push(e('p','subtle',`مسافة الستوب القصوى لأقل لوت ضمن السقف الحالي: ${num(r.maxStopDistance,4)} من وحدات سعر الذهب، قبل التكاليف. لا يغيّر النظام وقف الاستراتيجية ليُجبر الصفقة على الدخول.`));
   if(!privateData?.lastUpdate||now()-privateData.lastUpdate>10)parts.push(e('p','error-text','بيانات الحساب قديمة؛ هذا تقدير محفوظ ويحتاج تحديث MT5.'));
   box.replaceChildren(...parts);
-  const entries=privateData?.websiteEntries||[];
-  if(entries.length){box.append(e('h3','','إرسال توصيات نبض إلى MT5'));
+  renderWebsiteEntries(box);
+}
+function renderWebsiteEntries(box){
+  const entries=[...(privateData?.websiteEntries||[]).map(x=>({...x,market:'الذهب'})),...(privateData?.btc?.websiteEntries||[]).map(x=>({...x,market:'بيتكوين'}))].sort((a,b)=>(b.time||0)-(a.time||0));
+  if(entries.length){box.append(e('h3','','إرسال توصيات نبض إلى MT5 — الذهب والبيتكوين'));
     for(const record of entries.slice(0,8)){
       const row=e('p','subtle'),p=record.plan;
       const status=record.status==='SUBMITTED'?'أرسل MT5 طلب التنفيذ؛ راجع Trade/History':record.status==='REJECTED'?'منع MT5 التنفيذ؛ راجع Experts':now()>record.expires?'لم يصل تأكيد التنفيذ خلال المهلة؛ لن نكرر الإرسال':'أُرسلت إلى الجسر؛ بانتظار رد MT5';
-      row.textContent=`${time(record.time,true)} · ${sides[p.side]} · دخول ${price(p.entry)} · وقف ${price(p.sl)} · هدف ${price(p.tp)} · ${status}`;box.append(row);
+      row.textContent=`${record.market} · ${time(record.time,true)} · ${sides[p.side]} · دخول ${price(p.entry)} · وقف ${price(p.sl)} · هدف ${price(p.tp)} · ${status}${record.reason_code!=null?' · سبب EA '+record.reason_code:''}${record.mt5_retcode!=null?' · كود MT5 '+record.mt5_retcode:''}`;box.append(row);
     }
   }
 }

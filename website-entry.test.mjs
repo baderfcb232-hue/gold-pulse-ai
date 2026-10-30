@@ -64,7 +64,7 @@ test('website execution rejects unsafe account, stale source, old plans, foreign
     ['DURABLE_ENTRY_JOURNAL_REQUIRED',f=>f.durable=false],['NOT_JUSTMARKETS_DEMO',f=>f.snapshot.execution.demo=false],
     ['NOT_JUSTMARKETS_DEMO',f=>f.snapshot.broker='Other-Demo'],['NOT_JUSTMARKETS_DEMO',f=>f.snapshot.symbol='ETHUSD'],
     ['MT5_EXECUTION_NOT_READY',f=>f.snapshot.execution.paused=true],['MT5_EXECUTION_NOT_READY',f=>f.snapshot.ea.emergency_stop=true],
-    ['STALE_MT5',f=>f.snapshot.received_at=NOW-6],['STALE_MT5',f=>f.snapshot.ea.heartbeat_at=NOW+6],
+    ['STALE_MT5',f=>f.snapshot.received_at=NOW-11],['STALE_MT5',f=>f.snapshot.ea.heartbeat_at=NOW+6],
     ['WAITING_WEBSITE_PLAN',f=>f.market.currentSignal=null],
     ['WEBSITE_SOURCE_MISMATCH',f=>f.market.currentSignal.source_id='REFERENCE'],
     ['WEBSITE_SOURCE_MISMATCH',f=>f.market.currentSignal.broker_symbol='XAUUSD.other'],
