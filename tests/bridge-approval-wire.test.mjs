@@ -24,3 +24,11 @@ test('12-field AUTO approval cannot crash the bridge and clears prior manual siz
 test('13-field manual approval preserves the exact requested lot', () => {
   assert.equal(approvalLot([...Array(12).fill('1'), '0.07']), 0.07);
 });
+
+test('non-executing local bridges cannot claim an approval meant for VPS', () => {
+  const method = source.slice(source.indexOf('void NBProcessWebsiteRecommendation()'), source.indexOf('void NBProcessCommand()'));
+  assert.match(method, /if\(!TradingExecutionEnabled\(\)\)return;/);
+  const timer = source.slice(source.indexOf('void NABDOnTimer()'));
+  assert.match(timer, /NBMainValue\("WM"\)>0\.5[^;]*!TradingExecutionEnabled\(\)/);
+  assert.ok(timer.indexOf('!TradingExecutionEnabled()') < timer.indexOf('NBRequest("POST","/api/mt5"'));
+});
