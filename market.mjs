@@ -68,7 +68,9 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
       if (change) savePlan({...p, ...change});
     }
     const a = m.broker_mode ? m.analysis : scalpAnalysis(m, now, calendar()); m.analysis = a;
-    if (a.plan && !history(symbol).some(p => p.status === 'TRACKING' && sameSource(p, m) && p.strategy === a.plan.strategy)) {
+    // One immutable recommendation per broker source + closed candle + side.
+    // An older TRACKING position must never suppress a distinct new M5 setup.
+    if (a.plan && !history(symbol).some(p => sameSource(p, m) && p.strategy === a.plan.strategy && p.bar_time === a.plan.bar_time && p.side === a.plan.side)) {
       const p = a.plan, id = `${p.strategy}:${symbol}:${p.source_id ? p.source_id + ':' : ''}${p.bar_time}:${p.side}`;
       db.prepare('INSERT OR IGNORE INTO market_signals VALUES(?,?,?)').run(id, p.issued_at, JSON.stringify({...p, id}));
       db.prepare('DELETE FROM market_signals WHERE id NOT IN (SELECT id FROM market_signals ORDER BY issued_at DESC LIMIT 400)').run();
@@ -113,9 +115,13 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
     if (!fresh && m.quote) a = {...a, decision: 'WAIT', status: 'STALE', plan: null, setup: null,
       reason: 'السعر متأخر أو المصدر مغلق؛ الشارت محفوظ وإصدار فرص جديدة متوقف.'};
     const plans = history(symbol).filter(p => sameSource(p, m));
-    const active = plans.find(p => p.status === 'TRACKING' && p.expires_at > now && p.strategy === a.strategy) || null;
+    // Broker execution must only consider the CURRENT closed-candle setup.
+    // Old tracking plans remain in history, but are never advertised as fresh.
+    const active = plans.find(p => p.status === 'TRACKING' && p.expires_at > now && p.strategy === a.strategy &&
+      (!m.broker_mode || (a.plan && p.bar_time === a.plan.bar_time && p.side === a.plan.side &&
+        Number.isFinite(p.issued_at) && now - p.issued_at <= 75 && p.issued_at <= now + 5))) || null;
     if (a.plan && !active && plans.some(p => p.strategy === a.plan.strategy && p.bar_time === a.plan.bar_time && p.side === a.plan.side))
-      a = {...a, decision: 'WAIT', status: 'SCANNING', setup: null, reason: 'انتهت متابعة هذا التكوين؛ ننتظر تأكيدًا من شمعة جديدة.'};
+      a = {...a, decision: 'WAIT', status: 'SCANNING', setup: null, reason: 'انتهت مهلة دخول هذه التوصية؛ ننتظر تكوين شمعة جديدة دون إعادة إصدارها.'};
     const available = fresh && !['NEWS_BLOCK', 'WARMING', 'GAP', 'BLOCKED'].includes(a.status);
     if (!available) a = {...a, setup: null};
     const defaultTf = m.default_tf || 'M1', step = MARKET_TF[defaultTf];
@@ -133,7 +139,7 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
       market_hours: m.market_hours, transport: m.transport, feed_error: m.feed_error,
       minute_count: recentRows.length * step / 60, last_bar: recentRows.at(-1)?.time || null,
       change_from_last_close: last && m.quote ? (m.quote.price / last - 1) * 100 : null,
-      analysis: {...a, plan: undefined}, currentSignal: available ? active : null,
+      analysis: {...a, plan: undefined}, currentSignal: available && (!m.broker_mode || a.status === 'READY') ? active : null,
       suspendedSignal: !available && active ? active.id : null,
       recentSignals: plans.slice(0, 8)};
   }
