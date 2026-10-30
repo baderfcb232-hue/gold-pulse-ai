@@ -217,6 +217,9 @@ void NBProcessWebsiteRecommendation()
        ",\"status\":"+NBQ(result==2?"SUBMITTED":"REJECTED")+
        ",\"reason_code\":"+NBD(NBMainValue("WRC"),0)+
        ",\"mt5_retcode\":"+NBD(NBMainValue("WRT"),0)+"}",response)==200)reported_id=result_id;
+   // A local terminal with Algo Trading off must never claim a recommendation
+   // that belongs to an executable copy on the MetaTrader VPS.
+   if(!TradingExecutionEnabled())return;
    if(NABDRemotePaused())return;
    if(NBRequest("POST","/api/bridge/website-recommendation","{"+source+"}",response)!=200 || StringLen(response)==0)return;
    string parts[];int fields=StringSplit(response,'|',parts);
@@ -303,6 +306,17 @@ void NABDOnTimer()
   {
    if(!InpEnableNABDLink){NBStatus("Link disabled: set InpEnableNABDLink=true.");return;}
    if(MQLInfoInteger(MQL_TESTER))return;
+   // An inactive local bridge would overwrite the live VPS execution state and
+   // could race the VPS for an identical website recommendation. Only the
+   // terminal permitted to execute may publish in website trading mode.
+   if(NBMainFresh() && NBMainValue("WM")>0.5 && InpNABDAllowRemoteControl && InpNABDSendAccount && !TradingExecutionEnabled())
+     {
+      static bool duplicate_warned=false;
+      if(!duplicate_warned)Print("NABD non-executing bridge suspended; verify that the MetaTrader VPS has the only active execution bridge.");
+      duplicate_warned=true;
+      NBStatus("Execution not permitted here. No telemetry or approval will be sent.");
+      return;
+     }
    if(StringLen(InpNABDToken)<32 || StringFind(InpNABDUrl,"https://")!=0)
      {if(!g_nb_warned){Print("NABD requires an HTTPS URL and a 32+ character ingest token.");g_nb_warned=true;}return;}
    ulong now=GetTickCount64();

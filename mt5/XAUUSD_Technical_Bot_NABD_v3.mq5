@@ -1610,6 +1610,9 @@ void LogEvent(const string event_name,const string details)
    FileSeek(handle,0,SEEK_END);
    FileWrite(handle,TimeToString(ServerNow(),TIME_DATE|TIME_SECONDS),g_symbol,event_name,details);
    FileClose(handle);
+   // Surface website/entry rejection in MT5 Experts as well as CSV for operator diagnosis.
+   if(event_name=="WEBSITE_BLOCKED" || event_name=="ORDER_BLOCKED" || event_name=="WEBSITE_SUBMITTED")
+      PrintFormat("NABD %s | %s | %s",event_name,g_symbol,details);
   }
 
 bool IsSuccessfulRetcode(const uint retcode)
