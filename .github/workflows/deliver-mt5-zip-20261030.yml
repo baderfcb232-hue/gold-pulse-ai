@@ -1,0 +1,48 @@
+name: Package NABD MT5 bundle
+on:
+  push:
+    branches:
+      - deliver/nabd-mt5-package-20261030
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and validate MT5 ZIP
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          names = [
+            'XAUUSD_Technical_Bot_NABD_v3.mq5', 'NABD_Link.mqh',
+            'NABD_Bridge_EA.mq5', 'NABD_Bridge.mqh',
+            'NABD_Main_Monitor.set', 'NABD_Demo_Recommendations.set',
+            'NABD_Bridge_Monitor.set', 'NABD_BTC_Demo_Recommendations.set',
+            'NABD_BTC_Bridge_Demo.set', 'INSTALL_AR.md', 'RECOVERY_3.10_AR.md'
+          ]
+          out = Path('dist/NABD_MT5_Link_2026-10-30.zip')
+          out.parent.mkdir(exist_ok=True)
+          with ZipFile(out, 'w', ZIP_DEFLATED, compresslevel=9) as z:
+            for name in names:
+              p = Path('mt5') / name
+              if not p.is_file(): raise FileNotFoundError(name)
+              if p.suffix == '.set':
+                s=p.read_text(encoding='utf-8-sig')
+                assert 'InpNABDToken=' in s, name
+                assert not any(line.startswith('InpNABDToken=') and line.strip() != 'InpNABDToken=' for line in s.splitlines()), name
+              z.write(p, 'NABD/'+name)
+          with ZipFile(out) as z:
+            assert z.testzip() is None
+            assert z.namelist() == ['NABD/'+n for n in names]
+          print(out, out.stat().st_size)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NABD_MT5_Link_2026-10-30
+          path: dist/NABD_MT5_Link_2026-10-30.zip
+          if-no-files-found: error
+          retention-days: 7
