@@ -123,7 +123,7 @@ test('broker market exposes a current plan only within its execution eligibility
   setNow(NOW+76);
   const expiredForEntry=app.marketFeed.publicState().markets.XAUUSD;
   assert.equal(expiredForEntry.currentSignal,null);
-  assert.equal(expiredForEntry.analysis.status,'SCANNING');
+  assert.equal(expiredForEntry.analysis.status,'STALE'); // snapshot was intentionally not refreshed
   assert.equal(expiredForEntry.analysis.plan,undefined);
 });
 test('bridge diagnostics restore the durable result and expire polling freshness without claiming a fill',async t=>{
