@@ -105,8 +105,10 @@ void NABDProcessWebsiteApproval()
    if(!InpNABDAllowRemoteControl || NABDRemotePaused())
      {NABDWebsiteBlocked(id,"website remote control disabled or paused",103);return;}
    if(IsEmergencyStopActive()){NABDWebsiteBlocked(id,"emergency stop active",104);return;}
-   if(HasOwnPosition() || HasOwnPendingOrder() || HasForeignNettingExposure())
-     {NABDWebsiteBlocked(id,"existing position/order or foreign netting exposure",105);return;}
+   if((!DemoWebsiteNoDailyLimitsEnabled() && HasOwnPosition()) ||
+      (DemoWebsiteNoDailyLimitsEnabled() && !ConcurrentWebsiteEntryAllowed()) ||
+      HasOwnPendingOrder() || HasForeignNettingExposure())
+     {NABDWebsiteBlocked(id,"parallel entry incompatible with hedging, account exposure limit, or pending order",105);return;}
    if(g_cycle_closing){NABDWebsiteBlocked(id,"previous cycle is closing",106);return;}
    if(!IsWithinTradingHours()){NABDWebsiteBlocked(id,"outside allowed trading hours",107);return;}
    if(!DemoWebsiteNoDailyLimitsEnabled() && InpUseSmallProfit && g_last_cycle_end>0 &&
