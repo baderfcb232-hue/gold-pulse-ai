@@ -439,6 +439,25 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       if (path === '/api/state' && req.method === 'GET') return send(req, res, 200, protectSignals('state', publicState(), await canReadSignals(req)));
       if (path === '/api/market' && req.method === 'GET') return send(req, res, 200, protectSignals('market', marketState(), await canReadSignals(req)));
       if (path === '/api/news' && req.method === 'GET') return send(req, res, 200, newsFeed.publicState());
+      // Lightweight, read-only broker quote snapshots for one-second UI polling.
+      // The EA remains authoritative; never synthesize a quote or alter execution.
+      if (path === '/api/market/broker-quotes' && req.method === 'GET') {
+        const quote = (snap, symbol) => {
+          if (!snap || !Number.isFinite(snap.bid) || !Number.isFinite(snap.ask) ||
+              !Number.isFinite(snap.quote_at) || !Number.isFinite(snap.received_at)) return null;
+          const age = Math.max(0,clock()-snap.quote_at);
+          const receiptAge = Math.max(0,clock()-snap.received_at);
+          const source_id = 'MT5:' + createHash('sha256')
+            .update(JSON.stringify([snap.account_ref,snap.broker,snap.symbol])).digest('hex').slice(0,24);
+          return {symbol,source_id,broker_symbol:snap.symbol,
+            quote:{price:(snap.bid+snap.ask)/2,bid:snap.bid,ask:snap.ask,time:snap.quote_at},
+            received_at:snap.received_at,quoteAge:age,point:snap.spec.point,
+            connection:snap.terminal_connected && age<=defaults.quoteTtl && receiptAge<=defaults.quoteTtl
+              ? 'LIVE' : 'STALE'};
+        };
+        return send(req,res,200,{serverTime:clock(),quotes:{
+          XAUUSD:quote(snapshot,'XAUUSD'),BTCUSD:cfg.goldOnly?null:quote(btcSnapshot,'BTCUSD')}});
+      }
       if (path === '/api/market/broker-candles' && req.method === 'GET') {
         const symbol = url.searchParams.get('symbol') || 'XAUUSD', tf = url.searchParams.get('tf') || 'M5';
         if (!['XAUUSD','BTCUSD'].includes(symbol) || !['M5','M15','H1','H4'].includes(tf))
