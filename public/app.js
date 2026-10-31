@@ -128,9 +128,9 @@ function renderSignals(){
   const rows=signals.filter(s=>(filter==='ALL'||s.status===filter)&&(source==='ALL'||(s.source==='MT5_EA'?'MT5_EA':'DASHBOARD')===source));
   put('signals-count',`${rows.length} إشارة · آخر 200 إشارة`);
   replace('signals-list',...(rows.length?rows.map(s=>{
-    const row=e('article','signal-row'),head=e('div');head.append(e('small','signal-source',s.source==='MT5_EA'?'بوت MT5':'محرك الموقع'),e('h3',s.side==='BUY'?'buy':'sell',sides[s.side]+' · '+s.symbol),e('small','subtle',time(s.issued_at,true)));
+    const row=e('article','signal-row'),head=e('div');head.append(e('small','signal-source',s.source==='MT5_EA'?'بوت MT5':s.source?.startsWith('MT5')?'توصية نبض · '+s.source:'محرك الموقع · '+(s.source||'مرجعي')),e('h3',s.side==='BUY'?'buy':'sell',sides[s.side]+' · '+(s.broker_symbol||s.symbol)),e('small','subtle',time(s.issued_at,true)));
     const levels=e('div','level-inline');for(const [label,v]of [['الدخول',s.entry],['الستوب',s.sl],['هدف أول',s.tp1],['الهدف',s.tp2]])if(Number.isFinite(v)){const cell=e('div');cell.append(e('small','',label),e('strong','',price(v)));levels.append(cell);}
-    const status=e('div','row-status');status.append(badge(statuses[s.status]||s.status,s.status==='TP2'?'good':s.status==='SL'?'bad':'neutral'),e('small','subtle',s.r==null?'متابعة افتراضية':`${num(s.r)}R · قبل التكاليف`));row.append(head,levels,status);return row;
+    const status=e('div','row-status');status.append(badge(statuses[s.status]||s.status,s.status==='TP2'?'good':s.status==='SL'?'bad':'neutral'),e('small','subtle',s.telegram_delivery==='SENT'?'أُرسلت إلى تليجرام · متابعة تحليلية':s.r==null?'متابعة افتراضية':`${num(s.r)}R · قبل التكاليف`));row.append(head,levels,status);return row;
   }):[empty('لم تصدر توصيات ضمن هذا الاختيار بعد.') ]));
 }
 function metric(label,value,note=''){const m=e('div','metric');m.append(e('span','',label),e('strong','',value),e('small','',note));return m;}
