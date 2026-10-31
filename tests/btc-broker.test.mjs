@@ -167,7 +167,7 @@ test('BTC Magic recovery is refused when old BTC positions exist or previous sou
     const dir=mkdtempSync(join(tmpdir(),'nabd-btc-rebind-block-'));
     const start=createApplication({dataDir:dir,clock:()=>NOW});
     const old=btcRaw();old.execution.managed_magic='26092309';
-    if(oldPositions)old.positions=goldRaw().positions;
+    if(oldPositions)old.positions=entryFixture().positions;
     start.ingest(old);await start.close();
     const now=NOW+age,app=createApplication({dataDir:dir,clock:()=>now,config:{btcMagicRebindEnabled:true}});
     const next=btcRaw();next.quote_at=now;
