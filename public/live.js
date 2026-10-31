@@ -102,9 +102,13 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
       : m ? `${m.symbol === 'XAUUSD' ? 'الذهب المرجعي يُجلب كل نحو 30 ثانية؛ الشموع من عينات السعر المتاحة.' : (m.transport === 'WebSocket' ? 'بث Coinbase المباشر؛' : 'جلب Coinbase الاحتياطي كل ثانية؛') + ' سعر BTC-USD على المنصة.'} مستقل عن سعر تنفيذ بروكرك.` : 'ننتظر بيانات المصدر؛ لن نعرض أسعارًا تجريبية.');
     const states = {NO_DATA: 'انتظار المصدر', WARMING: 'تحميل الشموع', SCANNING: 'البحث عن فرصة', WATCH: 'فرصة مشروطة', READY: 'تحققت شروط السعر', GAP: 'فجوة بيانات', NEWS_BLOCK: 'فلتر الأخبار', BLOCKED: 'شروط الدخول تمنع الإشارة', STALE: 'تحديث متأخر'};
     const state = !live && m?.quote ? 'STALE' : a?.status || 'NO_DATA';
-    put('scalp-decision', p ? side(p.side) + (broker ? ' · MT5' : ' · مرجعي') : states[state]);
+    const alignmentWait = broker && live && !p && a?.status === 'SCANNING' &&
+      (a?.reason || '').startsWith('انتظار توافق الاتجاه:');
+    put('scalp-decision', p ? side(p.side) + (broker ? ' · MT5' : ' · مرجعي') :
+      alignmentWait ? 'انتظار توافق الفريمات' : states[state]);
     $('scalp-decision').className = p ? (p.side === 'BUY' ? 'buy' : 'sell') : '';
-    put('scalp-status', p ? 'متابعة إشارة محفوظة' : states[state]); $('scalp-status').className = 'pill ' + (p ? 'good' : state === 'WATCH' ? 'warn' : 'neutral');
+    put('scalp-status', p ? 'متابعة إشارة محفوظة' : alignmentWait ? 'مراقبة آمنة' : states[state]);
+    $('scalp-status').className = 'pill ' + (p ? 'good' : alignmentWait || state === 'WATCH' ? 'warn' : 'neutral');
     put('scalp-reason', data.membersOnly ? 'سجّل الدخول بحساب مؤكد ومخوّل لمشاهدة التوصيات.' : !live && m?.quote ? 'إصدار فرص جديدة متوقف. نحتفظ بالشارت والتحليل السابق حتى يعود مصدر حديث.'
       : p ? `الإشارة صدرت ${time(p.issued_at)} ومستوياتها ثابتة. الشروط الحالية لفرصة جديدة: ${a?.reason || 'تجري المتابعة.'}` : a?.reason || 'يجري الاتصال بمصدر السوق.');
     const score = live && a?.checks?.length && Number.isFinite(a.score) && a.score >= 0 && a.score <= 100 ? a.score : null;

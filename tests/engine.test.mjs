@@ -82,3 +82,14 @@ test('a confirmed pullback can produce both buy and sell plans with correctly or
     assert.ok(Math.abs(a.plan.entry-a.plan.sl)>0);
   }
 });
+
+test('neutral M15 against SELL H1 explains wait without forcing an executable plan',()=>{
+  const raw=entryFixture('SELL');
+  raw.candles.M15=raw.candles.M15.map(c=>({...c,open:3990,high:3990,low:3990,close:3990}));
+  const result=analyze(cleanSnapshot(raw,NOW),NOW);
+  assert.equal(result.frames.M15.direction,'NEUTRAL');
+  assert.equal(result.frames.H1.direction,'SELL');
+  assert.equal(result.decision,'WAIT');
+  assert.equal(result.plan,null);
+  assert.match(result.reasons.join(' '),/M15 محايد، H1 بيع/);
+});
