@@ -29,10 +29,15 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
       b.setAttribute('aria-pressed', String(b.dataset.symbol === symbol));
     });
     configureChart();
-    const m = market(), current = activePlan();
-    if (current && initialized && !seenSignals.has(current.id) && $('signal-notifications').checked)
-      notify(`فرصة مضاربة ${side(current.side)} · ${m.name} · ${fmt(current.entry)}`);
-    for (const item of Object.values(data.markets)) if (item.currentSignal) seenSignals.add(item.currentSignal.id);
+    // Each market must notify independently: a BTC recommendation must not be lost
+    // just because the operator is currently browsing the gold chart.
+    for (const item of Object.values(data.markets)) {
+      const plan = item.currentSignal;
+      if (!plan || seenSignals.has(plan.id)) continue;
+      if (initialized && fresh(item) && plan.expires_at > now() && $('signal-notifications').checked)
+        notify(`فرصة مضاربة ${side(plan.side)} · ${item.name} · ${fmt(plan.entry)}`);
+      seenSignals.add(plan.id);
+    }
     initialized = true;
     render();
     loadChart();
@@ -47,8 +52,29 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
       b.dataset.tf = value; b.setAttribute('aria-pressed', String(value === tf)); return b;
     }));
   }
+  function renderBitcoinReadiness() {
+    const btc = data?.markets?.BTCUSD, current = btc?.currentSignal;
+    const live = fresh(btc), active = live && current?.expires_at > now();
+    const status = !btc ? 'غير مفعّل' : !btc.quote ? 'بانتظار السعر' :
+      !live ? 'السعر متأخر' : active ? 'توصية نشطة' : 'المراقبة شغّالة';
+    const reason = !btc ? 'سوق البيتكوين غير متاح في إعدادات الخادم.' :
+      !live ? 'لا تُصدر توصية تنفيذ من سعر قديم؛ راجع مصدر BTC أو اتصال MT5.' :
+      data?.membersOnly ? 'عرض التوصيات يتطلب حسابًا مخوّلًا.' :
+      active ? 'صدرت توصية جديدة للبيتكوين؛ راجع الدخول والوقف والهدف في السجل.' :
+      btc.analysis?.reason || 'يبحث النظام عن اكتمال شروط الدخول، دون إنشاء توصيات وهمية.';
+    put('btc-signal-status', status);
+    $('btc-signal-status').className = 'pill ' + (active ? 'good' : !live ? 'warn' : 'neutral');
+    put('btc-signal-reason', reason);
+  }
   function render() {
     const m = market(), live = fresh(m), a = m?.analysis, p = activePlan();
+    renderBitcoinReadiness();
+    const overview = document.querySelector?.('[data-panel="overview"]');
+    const bitcoinSelected = symbol === 'BTCUSD' && (overview ? !overview.hidden : true);
+    $('nav-bitcoin').classList.toggle('selected', bitcoinSelected);
+    $('nav-bitcoin').setAttribute('aria-pressed', String(bitcoinSelected));
+    document.querySelector?.('[data-view="overview"]')?.classList.toggle('selected',
+      !bitcoinSelected && (overview ? !overview.hidden : true));
     put('live-market-name', `${symbol} · ${m?.name || 'متابعة السوق'}`);
     put('live-connection', !m?.quote ? 'جلب السوق…' : live ? 'متابعة السوق متصلة' : 'السعر متأخر / انقطاع المصدر');
     $('live-connection').className = 'pill ' + (live ? 'good' : 'warn');

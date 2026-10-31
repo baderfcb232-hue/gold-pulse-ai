@@ -66,3 +66,6 @@ body{background:radial-gradient(ellipse at 68% 0,#2a1c332e,transparent 55%),var(
 .execution-technical-details summary{cursor:pointer;width:fit-content;font-size:13px;text-decoration:underline;text-underline-offset:4px}
 .execution-technical-details[open] summary{margin-bottom:12px}
 .execution-technical-details .technical-details-content{border-inline-start:2px solid var(--border);padding-inline-start:12px;overflow-wrap:anywhere}
+
+/* Bitcoin navigation and independently updated recommendation readiness. */
+.nav-button.bitcoin-nav{display:inline-flex;align-items:center;gap:7px;color:var(--gold)}.nav-button.bitcoin-nav.selected{background:#352813;color:#ffe4ae}.market-readiness-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:11px 15px;margin:0 0 17px;background:#171321;border:1px solid var(--border);border-radius:10px}.market-readiness-bar>strong{font-size:13px;color:var(--gold)}.market-readiness-bar>.subtle{flex:1;min-width:160px;font-size:12px}.market-readiness-bar>.text-button{font-size:12px;white-space:nowrap}@media(max-width:760px){.market-readiness-bar{gap:8px}.market-readiness-bar>.subtle{flex-basis:100%;order:3}.nav-button.bitcoin-nav{gap:5px}}
