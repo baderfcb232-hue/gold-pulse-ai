@@ -174,3 +174,34 @@ test('journal failure never falls back to ephemeral command delivery', async t =
   assert.equal(app.db.prepare('SELECT count(*) AS n FROM commands').get().n,0);
   assert.notEqual((await fetch(base+'/api/bridge/next',{headers:{Authorization:'Bearer '+INGEST}})).status,200);
 });
+
+test('Telegram market recommendations appear in the unified private dashboard history and export',async t=>{
+  const {app,base}=await setup(t);
+  const legacy={id:'legacy-gold',source:'MT5_EA',symbol:'XAUUSD',issued_at:NOW-60,
+    side:'SELL',entry:4000,sl:4010,tp1:3990,tp2:3980,status:'TRACKING'};
+  const btc={id:'btc-telegram-scalp',source:'MT5 · JustMarkets-Demo',source_id:'MT5:test',
+    symbol:'BTCUSD',broker_symbol:'BTCUSD.m',strategy:'NABD-BTC-SCALP-M5M15-V1',
+    issued_at:NOW-5,expires_at:NOW+120,side:'BUY',entry:77000,sl:76800,
+    tp1:77200,tp2:77300,status:'TRACKING'};
+  app.db.prepare('INSERT INTO signals (id,issued_at,data) VALUES(?,?,?)')
+    .run(legacy.id,legacy.issued_at,JSON.stringify(legacy));
+  app.db.prepare('INSERT INTO market_signals (id,issued_at,data) VALUES(?,?,?)')
+    .run(btc.id,btc.issued_at,JSON.stringify(btc));
+  app.db.prepare('INSERT INTO telegram_delivery (id,state,updated_at) VALUES(?,?,?)')
+    .run(btc.id,'SENT',NOW);
+  assert.equal((await fetch(base+'/api/signals')).status,401);
+  assert.equal((await fetch(base+'/api/signals.csv')).status,401);
+  const headers={Authorization:'Bearer '+ADMIN};
+  const response=await fetch(base+'/api/signals',{headers});
+  assert.equal(response.status,200);
+  const {signals}=await response.json();
+  assert.deepEqual(signals.map(x=>x.id),[btc.id,legacy.id]);
+  assert.equal(signals[0].telegram_delivery,'SENT');
+  assert.equal(signals[0].broker_symbol,'BTCUSD.m');
+  assert.equal(signals[1].telegram_delivery,null);
+  const market=await (await fetch(base+'/api/market/signals',{headers})).json();
+  assert.equal(market.signals[0].id,btc.id);
+  const csv=await (await fetch(base+'/api/signals.csv',{headers})).text();
+  assert.ok(csv.includes(btc.id));
+  assert.ok(csv.includes(legacy.id));
+});
