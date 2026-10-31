@@ -257,7 +257,7 @@ test('one-second BTC ticks are broker fenced and cannot refresh stale full EA pe
   assert.equal(fast.quotes.BTCUSD.quote.bid,quote.bid);
   assert.equal(fast.quotes.BTCUSD.quote.ask,quote.ask);
   assert.equal(fast.quotes.BTCUSD.quote.time,now);
-  assert.equal(fast.quotes.XAUUSD.quote.bid,raw.bid===0?0:fixture().bid);
+  assert.equal(fast.quotes.XAUUSD.quote.bid,null);
   assert.equal(app.marketFeed.publicState().markets.BTCUSD.quote.bid,quote.bid);
   now=NOW+13;
   assert.equal((await postQuote({...quote,quote_at:now})).status,409);
