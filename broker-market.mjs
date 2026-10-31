@@ -1,10 +1,11 @@
 import {createHash} from 'node:crypto';
 import {analyze, TF_SECONDS, defaults} from './engine.mjs';
 import {analyzeGoldScalp,goldScalpBarFreshness} from './strategies/gold-scalping.mjs';
+import {analyzeBtcScalp,btcScalpBarFreshness} from './strategies/btc-scalping.mjs';
 
 // Reuse the existing website strategy with the broker's closed OHLC bars.
 // Account data and the EA's execution controls never enter the public market.
-export function brokerInstrumentMarket(snapshot, now, {goldStrategy = 'EMA_LEGACY'} = {}) {
+export function brokerInstrumentMarket(snapshot, now, {goldStrategy = 'EMA_LEGACY', btcStrategy = 'EMA_LEGACY'} = {}) {
   const gold = /^XAUUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(snapshot?.symbol || '');
   const btc = /^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(snapshot?.symbol || '');
   if (!gold && !btc) return null;
@@ -16,12 +17,14 @@ export function brokerInstrumentMarket(snapshot, now, {goldStrategy = 'EMA_LEGAC
     .update(JSON.stringify([snapshot.account_ref, snapshot.broker, snapshot.symbol])).digest('hex').slice(0, 24);
   const source = 'MT5 · ' + snapshot.broker;
   const a = gold && goldStrategy === 'SCALP' ? analyzeGoldScalp(snapshot,now) :
+    btc && btcStrategy === 'SCALP' ? analyzeBtcScalp(snapshot,now) :
     analyze(snapshot, now, btc ? {maxSpreadPoints: Math.max(1, btcSpreadPoints)} : undefined);
   const incomplete = Object.values(a.frames).some(f => f.direction === 'UNKNOWN');
   // For gold scalp status, use the same closed-candle rules as the scalp
   // analyzer itself. Legacy and BTC retain their original timeframe policy.
   const oldBars = gold && goldStrategy === 'SCALP'
     ? !goldScalpBarFreshness(snapshot,now).fresh
+    : btc && btcStrategy === 'SCALP' ? !btcScalpBarFreshness(snapshot,now).fresh
     : Object.entries(TF_SECONDS).some(([tf, step]) => {
       const last = snapshot.candles[tf].at(-1);
       return last && now - (last.time + step) > step + 120;
@@ -57,5 +60,5 @@ export function brokerInstrumentMarket(snapshot, now, {goldStrategy = 'EMA_LEGAC
 // Maintain gold-only behavior for existing callers; BTC has a separate feed.
 export const brokerGoldMarket = (snapshot, now, options = {}) => /^XAUUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(snapshot?.symbol || '')
   ? brokerInstrumentMarket(snapshot, now, options) : null;
-export const brokerBtcMarket = (snapshot, now) => /^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(snapshot?.symbol || '')
-  ? brokerInstrumentMarket(snapshot, now) : null;
+export const brokerBtcMarket = (snapshot, now, options = {}) => /^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(snapshot?.symbol || '')
+  ? brokerInstrumentMarket(snapshot, now, options) : null;

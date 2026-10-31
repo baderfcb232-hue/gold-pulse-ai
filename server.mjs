@@ -66,12 +66,16 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     publicationEnabled: process.env.SIGNAL_PUBLICATION_ENABLED === 'true',
     demoRecommendationExecution: process.env.DEMO_RECOMMENDATION_EXECUTION === 'true',
     goldSignalStrategy: process.env.NABD_GOLD_SIGNAL_STRATEGY || 'EMA_LEGACY',
+    btcSignalStrategy: process.env.NABD_BTC_SIGNAL_STRATEGY || 'EMA_LEGACY',
+    btcScalpDemoAutoExecution: process.env.NABD_BTC_SCALP_DEMO_AUTOTRADE === 'true',
     scalpDemoAutoExecution: process.env.NABD_SCALP_DEMO_AUTOTRADE === 'true',
     btcMagicRebindEnabled: process.env.NABD_BTC_MAGIC_REBIND_ONCE === 'true', ...config};
   if (!['EA','DASHBOARD'].includes(cfg.signalSource)) throw new Error('SIGNAL_SOURCE must be EA or DASHBOARD');
   if (typeof cfg.publicationEnabled !== 'boolean') throw new Error('publicationEnabled must be a boolean');
   if (typeof cfg.goldOnly !== 'boolean') throw new Error('goldOnly must be a boolean');
   if (!['EMA_LEGACY','SCALP'].includes(cfg.goldSignalStrategy)) throw new Error('Invalid NABD_GOLD_SIGNAL_STRATEGY');
+  if (!['EMA_LEGACY','SCALP'].includes(cfg.btcSignalStrategy)) throw new Error('Invalid NABD_BTC_SIGNAL_STRATEGY');
+  if (typeof cfg.btcScalpDemoAutoExecution !== 'boolean') throw new Error('Invalid NABD_BTC_SCALP_DEMO_AUTOTRADE');
   if (typeof cfg.scalpDemoAutoExecution !== 'boolean') throw new Error('Invalid NABD_SCALP_DEMO_AUTOTRADE');
   // Restore the original Telegram candidate sources without relaxing order controls.
   const telegramPolicy = config.telegramPolicy ?? process.env.TELEGRAM_SIGNAL_POLICY ?? 'LEGACY';
@@ -112,7 +116,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   const marketFeed = createMarketFeed({db, clock, ...feedOptions, calendar: () => snapshot?.calendar || null,
     enabledSymbols: cfg.goldOnly ? ['XAUUSD'] : undefined,
     brokerSnapshot: () => snapshot, brokerSnapshotBTC: () => cfg.goldOnly ? null : btcSnapshot,
-    goldSignalStrategy: cfg.goldSignalStrategy,
+    goldSignalStrategy: cfg.goldSignalStrategy, btcSignalStrategy: cfg.btcSignalStrategy,
     onChange: () => {researchWorker.reviewCandidates(); emit('market', marketState);}});
   const newsFeed = createNewsFeed({db, clock, ...feedOptions, onChange: () => emit('news', newsFeed.publicState)});
   const telegram = createTelegramPublisher({db, clock, ...telegramOptions, enabled: cfg.publicationEnabled,
@@ -265,22 +269,24 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     const btc = /^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(selected.symbol);
     if (btc && cfg.goldOnly) return {ready:false,reason:'GOLD_ONLY',plan:null};
     const scalpGold = !btc && cfg.goldSignalStrategy === 'SCALP';
+    const scalpBtc = btc && cfg.btcSignalStrategy === 'SCALP';
+    if (scalpBtc && !cfg.btcScalpDemoAutoExecution) return {ready:false,reason:'BTC_SCALP_RECOMMENDATIONS_ONLY',plan:null};
     // Explicit Demo-only opt-in; the gold scalp mode cannot inherit old live order permissions.
     if (scalpGold && !cfg.scalpDemoAutoExecution)
       return {ready:false,reason:'SCALP_RECOMMENDATIONS_ONLY',plan:null};
     // Independent server cap, in addition to MT5's local 3-entries/day and risk limit.
     // Never rely on a stale or missing risk configuration to authorize an order.
-    if (scalpGold && !(selected?.execution?.risk_percent > 0 &&
+    if ((scalpGold || scalpBtc) && !(selected?.execution?.risk_percent > 0 &&
       selected.execution.risk_percent <= 0.5 && selected.execution.max_daily_loss_percent > 0 &&
       selected.execution.max_daily_loss_percent <= 2 &&
       selected.execution.news_filter === true))
       return {ready:false,reason:'SCALP_RISK_LIMITS_NOT_CONFIRMED',plan:null};
     const market = marketFeed.publicState().markets[btc ? 'BTCUSD' : 'XAUUSD'];
-    const analysisPlan = btc ? brokerBtcMarket(selected,clock())?.analysis.plan :
+    const analysisPlan = btc ? brokerBtcMarket(selected,clock(),{btcStrategy:cfg.btcSignalStrategy})?.analysis.plan :
       brokerGoldMarket(selected,clock(),{goldStrategy:cfg.goldSignalStrategy})?.analysis.plan;
     return websiteTradeDecision({enabled: cfg.demoRecommendationExecution && cfg.publicationEnabled,
       snapshot: selected, market, analysisPlan, costs: costStatus(selected),
-      requiredStrategy:scalpGold ? 'NABD-GOLD-SCALP-M5M15-V1' : null,
+      requiredStrategy:scalpGold ? 'NABD-GOLD-SCALP-M5M15-V1' : scalpBtc ? 'NABD-BTC-SCALP-M5M15-V1' : null,
       durable: typeof commandJournal?.claimWebsite === 'function', now: clock(), tradeSizing});
   }
   // Independent, read-only Bitcoin health. Never classify a fresh Coinbase
