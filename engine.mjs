@@ -270,9 +270,13 @@ export function analyze(snapshot, now = Date.now() / 1000, settings = defaults, 
     Math.abs(m15.close - m15.ema21) <= m15.atr14 &&
     (h1.direction === 'BUY' ? m15.close >= m15.ema200 : m15.close <= m15.ema200);
   const side = aligned || neutralPullback ? h1.direction : 'NEUTRAL';
-  if (!['BUY', 'SELL'].includes(side)) return {...result, risk: 'CAUTION',
-    reasons: [experimental ? 'M15 يعاكس H1 أو تصحيحه المحايد قرب EMA21 لم يتأكد.' :
-      'اتجاه فريم 15 دقيقة والساعة غير متوافق.']};
+  if (!['BUY', 'SELL'].includes(side)) {
+    const name = value => ({BUY: 'شراء', SELL: 'بيع', NEUTRAL: 'محايد', UNKNOWN: 'غير مكتمل'}[value] || 'غير مكتمل');
+    return {...result, risk: 'CAUTION',
+      // No change to alignment policy or execution eligibility: make WAIT clear.
+      reasons: [experimental ? 'M15 يعاكس H1 أو تصحيحه المحايد قرب EMA21 لم يتأكد.' :
+        `انتظار توافق الاتجاه: M15 ${name(m15.direction)}، H1 ${name(h1.direction)}. لن تصدر توصية قبل توافقهما واستيفاء شروط الدخول الأخرى.`]};
+  }
   const buy = side === 'BUY', v = f.atr14;
   if (!(v > 0)) return {...result, reasons: ['التذبذب غير قابل للحساب.']};
   const checks = [
