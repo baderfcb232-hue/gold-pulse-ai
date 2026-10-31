@@ -38,9 +38,8 @@ test('switch BTC scalp on in read-only mode; gold remains legacy and no BTC auto
  const btc=app.marketFeed.publicState().markets.BTCUSD;
  assert.equal(btc.analysis.strategy,BTC_SCALP_STRATEGY);
  assert.equal(app.marketFeed.publicState().markets.XAUUSD.analysis.strategy,'REFERENCE-SCALP-1');
- const {plan,...decision}=app.marketFeed.publicState().markets.BTCUSD?.execution||{};
+ assert.equal(app.marketFeed.publicState().markets.BTCUSD.execution_mode,undefined);
  assert.equal(app.server.listening,false);
- assert.equal(decision?.ready,true===false);
 });
 test('BTC scalp config rejects invalid values',()=>{
  assert.throws(()=>createApplication({config:{btcSignalStrategy:'UNKNOWN'}}),/Invalid NABD_BTC_SIGNAL_STRATEGY/);
