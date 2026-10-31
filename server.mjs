@@ -328,8 +328,18 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     const next = cleanSnapshot(raw, clock());
     if (/^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(next.symbol)) {
       const sourceBTC = `${next.account_ref}|${next.broker}|${next.symbol}|${next.execution.managed_magic}`;
-      if (lastSourceBTC && sourceBTC !== lastSourceBTC)
-        throw new Error('BTC source mismatch. Use a separate MT5 account/source configuration.');
+      if (lastSourceBTC && sourceBTC !== lastSourceBTC) {
+        // Report FIELD NAMES only (never account IDs, tokens or Magic values).
+        // Do not automatically rebind an old source to a different EA/account.
+        const changed = [
+          ['account_ref', btcSnapshot?.account_ref !== next.account_ref],
+          ['broker', btcSnapshot?.broker !== next.broker],
+          ['symbol', btcSnapshot?.symbol !== next.symbol],
+          ['managed_magic', btcSnapshot?.execution.managed_magic !== next.execution.managed_magic]
+        ].filter(([, differs]) => differs).map(([name]) => name);
+        throw new Error('BTC source mismatch: ' + (changed.join(', ') || 'identity') +
+          '. Align BTC EA and bridge with the stored MT5 source.');
+      }
       // A late MT5 request must never roll the stored broker price or trading state backwards.
       // It is not malformed: acknowledge it as ignored so the bridge continues normally.
       // Keep the previous received_at unchanged, so stale prices cannot look fresh.
