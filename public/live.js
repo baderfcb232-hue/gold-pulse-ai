@@ -1,3 +1,4 @@
+import {drawBrokerCandles} from './broker-chart.js';
 export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   const $ = id => document.getElementById(id);
   const node = (tag, cls, text) => {const n = document.createElement(tag); if (cls) n.className = cls;
@@ -14,7 +15,8 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   let data = null, news = null, symbol = 'XAUUSD', tf = 'M15', chartKey = '';
   let lastServerSeen = 0, lastNewsSeen = 0, fetched = false, historyFetched = false, historyRows = [], historyStamp = '', newsStamp = '';
   let initialized = false;
-  let chartSourceKey = '';
+  let chartSourceKey = '', referenceChart = false, brokerChartData = null, brokerChartKey = '', brokerChartLoading = false;
+  let lastBrokerFetch = 0;
   const seenSignals = new Set();
   const market = () => data?.markets?.[symbol];
   const fresh = m => Boolean(m?.quote && m.connection === 'LIVE' && now() - m.quote.time <= m.quoteTtl && Date.now() - lastServerSeen < 12000);
@@ -46,7 +48,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   }
   function configureChart() {
     if (symbol === chartSourceKey) return;
-    chartSourceKey = symbol; tf = 'M15'; chartKey = '';
+    chartSourceKey = symbol; tf = 'M15'; chartKey = ''; brokerChartKey = ''; brokerChartData = null;
     $('live-chart-tfs').replaceChildren(...['M1', 'M5', 'M15', 'H1', 'H4'].map(value => {
       const b = node('button', value === tf ? 'active' : '', tfButtons[value]);
       b.dataset.tf = value; b.setAttribute('aria-pressed', String(value === tf)); return b;
@@ -62,6 +64,12 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     put('live-price', fmt(m?.quote?.price));
     put('live-change', m?.change_from_last_close == null ? 'USD' : `${m.change_from_last_close >= 0 ? '+' : ''}${num(m.change_from_last_close, 3)}% عن آخر إغلاق`);
     put('live-source', m?.source || 'جلب المصدر'); put('live-quote-time', m?.quote ? time(m.quote.time) + ' · غزة' : '—');
+    const quoteBroker = m?.candle_kind === 'BROKER_OHLC' && Number.isFinite(m?.quote?.bid) && Number.isFinite(m?.quote?.ask);
+    $('broker-quote-values').hidden = !quoteBroker;
+    if (quoteBroker) {
+      put('live-ask', fmt(m.quote.ask)); put('live-bid', fmt(m.quote.bid));
+      put('live-spread', Number.isFinite(m.point) && m.point > 0 ? num((m.quote.ask - m.quote.bid) / m.point, 1) + ' نقطة' : fmt(m.quote.ask - m.quote.bid) + ' USD');
+    }
     const broker = m?.candle_kind === 'BROKER_OHLC';
     $('live-frames').style.gridTemplateColumns = broker ? 'repeat(2,minmax(0,1fr))' : 'repeat(3,minmax(0,1fr))';
     put('live-price-kind', broker ? 'سعر البروكر' : 'سعر مرجعي');
@@ -116,34 +124,75 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
       node('p', 'subtle', confirmed ? `صدرت ${time(p.issued_at)} · متبقي ${Math.max(0, Math.ceil(p.expires_at - now()))} ثانية` : 'مراقبة فقط؛ لا تُعامل كإشارة دخول مؤكدة.'));
     $('scalp-plan').replaceChildren(box);
   }
-  function loadChart() {
-    const key = `${symbol}:${tf}`;
+  function signalLines() {
+    const m = market(), p = activePlan();
+    if (!p || m?.candle_kind !== 'BROKER_OHLC' || p.source_id !== m.source_id) return [];
+    return [['دخول',p.entry,'#b9a0ff'],['SL',p.sl,'#ed778e'],['TP1',p.tp1,'#73d9b7'],['TP2',p.tp2,'#73d9b7']]
+      .filter(([,value])=>Number.isFinite(value)).map(([name,value,color])=>({name,value,color}));
+  }
+  function drawBroker() {
+    if (!brokerChartData || brokerChartData.symbol !== symbol || brokerChartData.tf !== tf) return;
+    drawBrokerCandles($('broker-chart-canvas'),brokerChartData,signalLines());
+  }
+  async function loadBrokerChart() {
+    if (referenceChart || brokerChartLoading) return;
+    const m = market(), requestSymbol = symbol, requestTf = tf;
+    const key = requestSymbol + ':' + requestTf + ':' + (m?.history_revision || 0) + ':' + (m?.received_at || 0);
+    if (brokerChartKey === key && brokerChartData) {drawBroker();return;}
+    // Poll no more frequently than every 3 seconds; avoid races across assets.
+    if (Date.now() - lastBrokerFetch < 2800 && brokerChartData) {drawBroker();return;}
+    lastBrokerFetch = Date.now(); brokerChartLoading = true;
+    try {
+      const payload = await api('/api/market/broker-candles?symbol=' + encodeURIComponent(requestSymbol) + '&tf=' + encodeURIComponent(requestTf));
+      if (requestSymbol !== symbol || requestTf !== tf) return;
+      if (!payload || payload.candle_kind !== 'BROKER_OHLC' || payload.symbol !== symbol || payload.tf !== tf) throw Error('Invalid broker chart source');
+      brokerChartData = payload; brokerChartKey = key;
+      $('broker-chart-empty').hidden = payload.candles?.length > 0;
+      put('broker-chart-status', payload.connection === 'LIVE' ? 'شموع MT5 · متصل' : 'شموع MT5 · السعر متأخر');
+      $('broker-chart-status').className = 'pill ' + (payload.connection === 'LIVE' ? 'good' : 'warn');
+      put('live-chart-source', payload.source + ' · ' + payload.broker_symbol + ' · ' + tfLabels[tf]);
+      put('live-chart-kind', 'شموع MT5 مغلقة · خطوط Bid/Ask وتوصيات من مصدر الوسيط نفسه. آخر شمعة قد تختلف عن آخر تيك.');
+      drawBroker();
+    } catch {
+      if (requestSymbol !== symbol || requestTf !== tf) return;
+      brokerChartKey = ''; brokerChartData = null; $('broker-chart-empty').hidden = false;
+      put('broker-chart-status','بيانات MT5 غير متاحة');
+      $('broker-chart-status').className = 'pill warn';
+      put('live-chart-source','بانتظار شموع MT5 الحقيقية · لا استبدال ببيانات Coinbase');
+    } finally {brokerChartLoading = false;}
+  }
+  function loadReferenceChart() {
+    const key = symbol + ':' + tf;
     if (key === chartKey) return;
     chartKey = key;
     const tvSymbol = symbol === 'BTCUSD' ? 'COINBASE:BTCUSD' : 'OANDA:XAUUSD';
-    const interval = {M1: '1', M5: '5', M15: '15', H1: '60', H4: '240'}[tf];
-    const config = {autosize: true, symbol: tvSymbol, interval, timezone: 'Etc/UTC',
-      theme: 'dark', backgroundColor: 'rgba(12,21,29,1)', gridColor: 'rgba(255,255,255,0.04)',
-      style: '1', withdateranges: true, hide_side_toolbar: false, hide_top_toolbar: false,
-      hide_legend: false, hide_volume: false, allow_symbol_change: false, save_image: false,
-      studies: ['MASimple@tv-basicstudies', 'RSI@tv-basicstudies', 'MACD@tv-basicstudies'],
-      support_host: 'https://www.tradingview.com', width: '100%', height: '100%'};
-    // TradingView reads its config only on document load. A new frame also
-    // applies symbol/timeframe changes when only the URL fragment differs.
-    const previousFrame = $('live-chart'), frame = previousFrame.cloneNode(false);
-    frame.title = `شارت TradingView المرجعي · ${tvSymbol}`;
-    frame.onload = () => {$('live-chart-empty').hidden = true;};
-    frame.onerror = () => {$('live-chart-empty').hidden = false;};
-    $('live-chart-empty').hidden = false;
-    // Keep the external widget isolated. It supplies display data only and
-    // never replaces broker quotes, indicators or recommendation inputs.
-    frame.src = 'https://www.tradingview-widget.com/embed-widget/advanced-chart/?locale=ar#' +
-      encodeURIComponent(JSON.stringify(config));
+    const interval = {M1:'1',M5:'5',M15:'15',H1:'60',H4:'240'}[tf];
+    const config = {autosize:true,symbol:tvSymbol,interval,timezone:'Etc/UTC',
+      theme:'dark',backgroundColor:'rgba(12,21,29,1)',gridColor:'rgba(255,255,255,0.04)',
+      style:'1',withdateranges:true,hide_side_toolbar:false,hide_top_toolbar:false,
+      hide_legend:false,hide_volume:false,allow_symbol_change:false,save_image:false,
+      studies:['MASimple@tv-basicstudies','RSI@tv-basicstudies','MACD@tv-basicstudies'],
+      support_host:'https://www.tradingview.com',width:'100%',height:'100%'};
+    const previousFrame=$('live-chart'),frame=previousFrame.cloneNode(false);
+    frame.title='TradingView للمرجع فقط · '+tvSymbol;
+    frame.onload=()=>{$('live-chart-empty').hidden=true;};
+    frame.onerror=()=>{$('live-chart-empty').hidden=false;};
+    frame.src='https://www.tradingview-widget.com/embed-widget/advanced-chart/?locale=ar#'+encodeURIComponent(JSON.stringify(config));
     previousFrame.replaceWith(frame);
+    $('live-chart-full').href='https://www.tradingview.com/chart/?symbol='+encodeURIComponent(tvSymbol)+'&interval='+interval;
+  }
+  function loadChart() {
     put('live-chart-title', 'شارت ' + (symbol === 'BTCUSD' ? 'بيتكوين' : 'الذهب'));
-    put('live-chart-source', `TradingView · ${tvSymbol} · سعر مرجعي · ${tfLabels[tf]}`);
-    put('live-chart-kind', 'أسعار الشارت للمقارنة وقد تختلف عن سعر تنفيذ الوسيط.');
-    $('live-chart-full').href = 'https://www.tradingview.com/chart/?symbol=' + encodeURIComponent(tvSymbol) + '&interval=' + interval;
+    $('broker-chart-wrap').hidden = referenceChart;
+    $('reference-chart-wrap').hidden = !referenceChart;
+    $('live-chart-full').hidden = !referenceChart;
+    $('chart-reference-toggle').textContent = referenceChart ? 'العودة إلى شارت MT5' : 'عرض TradingView للمقارنة';
+    $('chart-reference-toggle').setAttribute('aria-pressed',String(referenceChart));
+    if (referenceChart) {
+      loadReferenceChart();
+      put('live-chart-source', 'TradingView · مرجع خارجي لا يُستخدم في توصيات MT5');
+      put('live-chart-kind', 'سعر Coinbase / OANDA للمقارنة فقط وقد يختلف عن سعر JustMarkets.');
+    } else loadBrokerChart();
   }
   async function loadHistory() {
     if (historyFetched) return; historyFetched = true;
@@ -187,9 +236,10 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     await Promise.allSettled([api('/api/market').then(applyMarket), api('/api/news').then(applyNews)]); fetched = false;
   }
   $('market-symbols').querySelectorAll('button').forEach(b => b.onclick = () => {symbol = b.dataset.symbol; configureChart(); $('market-symbols').querySelectorAll('button').forEach(x => {x.classList.toggle('active', x === b); x.setAttribute('aria-pressed', String(x === b));}); render(); loadChart();});
+  $('chart-reference-toggle').onclick = () => {referenceChart = !referenceChart; chartKey=''; brokerChartKey=''; loadChart();};
   $('live-chart-tfs').onclick = event => {
     const b = event.target.closest('button[data-tf]'); if (!b || !$('live-chart-tfs').contains(b)) return;
-    tf = b.dataset.tf;
+    tf = b.dataset.tf; brokerChartKey=''; lastBrokerFetch=0;
     $('live-chart-tfs').querySelectorAll('button').forEach(x => {x.classList.toggle('active', x === b); x.setAttribute('aria-pressed', String(x === b));}); loadChart();
   };
   $('scalp-history-filter').onchange = renderHistory; $('headline-filter').onchange = () => {newsStamp = ''; renderNews();};
