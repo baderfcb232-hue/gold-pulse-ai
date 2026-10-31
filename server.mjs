@@ -126,6 +126,18 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   let revision = 0;
   const audit = (event, data) => db.prepare('INSERT INTO audit(time,event,data) VALUES(?,?,?)').run(clock(), event, JSON.stringify(data));
   const signalRows = () => db.prepare('SELECT data FROM signals ORDER BY issued_at DESC LIMIT 200').all().map(x => JSON.parse(x.data));
+  // The publisher reads marketFeed.history() while the legacy dashboard once
+  // read only signalRows(). Merge both stores for a single operator-visible
+  // history, without changing recommendation generation or MT5 execution.
+  function unifiedSignalRows() {
+    const rows = [...signalRows(), ...marketFeed.history()];
+    const byId = new Map();
+    for (const row of rows) if (row?.id && !byId.has(row.id)) byId.set(row.id, row);
+    const delivered = db.prepare('SELECT state FROM telegram_delivery WHERE id=?');
+    return [...byId.values()].sort((a,b) => b.issued_at - a.issued_at).slice(0,200)
+      .map(p => ({...p, telegram_delivery: delivered.get(p.id)?.state || null}));
+  }
+
   const websiteActivity = Object.fromEntries(['XAUUSD','BTCUSD'].map(symbol => [symbol,
     {lastPollAt:null,lastDispatchAt:null,lastReportAt:null,lastResult:null,journalState:'NOT_CHECKED',readAt:null,source:null}]));
   function rememberWebsiteActivity(symbol, record) {
@@ -532,12 +544,12 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       }
       if (path === '/api/signals' && req.method === 'GET') {
         if (!await canReadSignals(req)) return send(req, res, 401, {error: 'سجّل الدخول بحساب مؤكد ومخوّل لمشاهدة التوصيات.'});
-        return send(req, res, 200, {signals: signalRows(), kind: 'EXPERIMENTAL_SHADOW_OBSERVATIONS'});
+        return send(req, res, 200, {signals: unifiedSignalRows(), kind: 'EXPERIMENTAL_SHADOW_OBSERVATIONS'});
       }
       if (path === '/api/signals.csv' && req.method === 'GET') {
         if (!await canReadSignals(req)) return send(req, res, 401, {error: 'تسجيل الدخول مطلوب لتصدير سجل التوصيات.'});
         const cols = ['id','source','issued_at','symbol','side','entry','sl','tp1','tp2','status','tp1_hit','exit','r','tracking'];
-        const csv = '\uFEFF' + [cols.join(','), ...signalRows().map(s => cols.map(k => escapeCsv(s[k])).join(','))].join('\r\n');
+        const csv = '\uFEFF' + [cols.join(','), ...unifiedSignalRows().map(s => cols.map(k => escapeCsv(s[k])).join(','))].join('\r\n');
         return send(req, res, 200, csv, 'text/csv; charset=utf-8', {'Content-Disposition': 'attachment; filename="nabd-signals.csv"'});
       }
       if (['/api/mt5', '/api/update'].includes(path) && req.method === 'POST') {
