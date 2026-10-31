@@ -514,7 +514,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           return {symbol,source_id,broker_symbol:snap.symbol,
             quote:{price:(snap.bid+snap.ask)/2,bid:snap.bid,ask:snap.ask,time:snap.quote_at},
             received_at:snap.received_at,quoteAge:age,point:snap.spec.point,
-            connection:snap.terminal_connected && age<=defaults.quoteTtl && receiptAge<=defaults.quoteTtl
+            connection:snap.terminal_connected && age<=10 && receiptAge<=10
               ? 'LIVE' : 'STALE'};
         };
         return send(req,res,200,{serverTime:clock(),quotes:{
