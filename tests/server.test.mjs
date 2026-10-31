@@ -205,3 +205,18 @@ test('Telegram market recommendations appear in the unified private dashboard hi
   assert.ok(csv.includes(btc.id));
   assert.ok(csv.includes(legacy.id));
 });
+
+test('Telegram-delivered references are prominent but remain non-executable in signals UI',async t=>{
+  const {base}=await setup(t);
+  const html=await (await fetch(base+'/')).text();
+  const js=await (await fetch(base+'/app.js')).text();
+  const telegramPosition=html.indexOf('id="telegram-sent-card"');
+  const opportunitiesPosition=html.indexOf('id="scalp-history-list"');
+  assert.ok(telegramPosition>=0 && telegramPosition<opportunitiesPosition,
+    'Telegram SENT history must be visible above general research opportunities');
+  assert.match(html,/id="telegram-sent-list"/);
+  assert.match(js,/telegram_delivery==='SENT'/);
+  assert.match(js,/Coinbase \/ مرجع خارجي · غير قابل لتنفيذ MT5/);
+  assert.match(js,/لا تفتح صفقة MT5/);
+  assert.match(js,/سجّل الدخول بحساب مخوّل/);
+});
