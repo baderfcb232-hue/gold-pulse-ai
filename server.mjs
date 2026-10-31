@@ -283,6 +283,38 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       requiredStrategy:scalpGold ? 'NABD-GOLD-SCALP-M5M15-V1' : null,
       durable: typeof commandJournal?.claimWebsite === 'function', now: clock(), tradeSizing});
   }
+  // Independent, read-only Bitcoin health. Never classify a fresh Coinbase
+  // reference price as a trade-ready MT5 quote. No account identifiers or orders.
+  function btcHealth() {
+    const now = clock(), market = marketFeed.publicState().markets.BTCUSD;
+    const age = btcSnapshot ? Math.max(0, now - btcSnapshot.quote_at) : null;
+    const receiptAge = btcSnapshot ? Math.max(0, now - btcSnapshot.received_at) : null;
+    const terminal = btcSnapshot?.terminal_connected === true;
+    const mt5FeedFresh = Boolean(btcSnapshot && terminal &&
+      age <= defaults.quoteTtl && receiptAge <= defaults.quoteTtl);
+    const sourceMatches = market?.source_id?.startsWith('MT5:') === true;
+    const decision = btcSnapshot ? websiteExecutionReview(btcSnapshot) :
+      {ready:false, reason:'NO_BTC_MT5_SNAPSHOT'};
+    const bridge = websiteBridgeState('BTCUSD');
+    return {
+      enabled: !cfg.goldOnly,
+      hasMt5Snapshot: Boolean(btcSnapshot),
+      quoteAgeSeconds: age == null ? null : Math.floor(age),
+      bridgeReceiptAgeSeconds: receiptAge == null ? null : Math.floor(receiptAge),
+      mt5FeedFresh, sourceMatches, // Both required for broker execution.
+      analysisStatus: market?.analysis?.status ?? 'NO_DATA',
+      analysisReason: sourceMatches ? market?.analysis?.reason ?? null : 'انتظار مصدر MT5 للبيتكوين؛ الأسعار المرجعية غير قابلة للتنفيذ.',
+      frameDirections: sourceMatches ? Object.fromEntries(
+        ['M5','M15','H1','H4'].map(tf => [tf,market?.analysis?.frames?.[tf]?.direction ?? 'UNKNOWN'])) : null,
+      executableSignalPresent: mt5FeedFresh && sourceMatches &&
+        market?.connection === 'LIVE' && market?.analysis?.status === 'READY' &&
+        Boolean(market.currentSignal),
+      demoExecutionReady: decision.ready === true,
+      demoExecutionReason: decision.reason,
+      websiteBridgeConnection: bridge.connection,
+      websiteLastResult: bridge.lastResult
+    };
+  }
   function publicState() {
     const a = sourceAnalysis(snapshot, clock(), cfg);
     const publication = publicationReview(a);
@@ -414,7 +446,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
               : !messaging.verification.canPost ? 'TELEGRAM_NOT_VERIFIED' : publication.reason,
             costs: costStatus().status, prerequisites: state.publicationReadiness, telegram: {...telegramReadiness(), faultAlerts: messaging.faultAlerts, configured: messaging.configured,
               mode: messaging.mode, verification: messaging.verification, testDelivery: messaging.testDelivery}},
-          goldOnly: cfg.goldOnly, websiteBridge: state.websiteBridge,
+          goldOnly: cfg.goldOnly, websiteBridge: state.websiteBridge, btc: btcHealth(),
           mt5: {connection: state.connection, signalSourceReady: state.signalSourceReady,
             quoteAgeSeconds: state.quoteAge, lastQuoteAt: state.lastUpdate, lastIngestAt: snapshot?.received_at ?? null},
           markets: Object.fromEntries(Object.entries(sources).map(([symbol, source]) => [symbol, {
@@ -759,6 +791,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           websiteLastResult: state.websiteBridge.lastResult,
           blockers: state.publicationReadiness.filter(check => !check.ready).map(check => check.id)
         }));
+        console.info('NABD BTC recommendation health:', JSON.stringify(btcHealth()));
         lastRecommendationDiagnosticAt = clock();
       }
       db.prepare("UPDATE commands SET status='EXPIRED' WHERE status='QUEUED' AND expires<?").run(clock());
