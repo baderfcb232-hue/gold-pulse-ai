@@ -203,3 +203,34 @@ test('broker OHLC endpoint does not substitute Coinbase reference when MT5 is mi
   assert.equal(result.status,503);
   assert.match((await result.json()).error,/No MT5 broker candles/);
 });
+
+test('independent BTC health separates broker quotes from stale reference data',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'nabd-btc-health-'));
+  let now=NOW;
+  const app=createApplication({dataDir:dir,clock:()=>now,
+    ingestToken:'btc-health-test-xxxxxxxxxxxxxxxxxxxxxxxx'});
+  t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
+  await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
+  const base='http://127.0.0.1:'+app.server.address().port;
+  const check=async()=> (await (await fetch(base+'/healthz')).json()).btc;
+  let status=await check();
+  assert.equal(status.hasMt5Snapshot,false);
+  assert.equal(status.mt5FeedFresh,false);
+  assert.equal(status.demoExecutionReady,false);
+  const raw=btcRaw();
+  const sent=await fetch(base+'/api/mt5',{method:'POST',headers:{
+    Authorization:'Bearer btc-health-test-xxxxxxxxxxxxxxxxxxxxxxxx',
+    'Content-Type':'application/json'},body:JSON.stringify(raw)});
+  assert.equal(sent.status,200);
+  status=await check();
+  assert.equal(status.hasMt5Snapshot,true);
+  assert.equal(status.mt5FeedFresh,true);
+  assert.equal(status.sourceMatches,true);
+  assert.equal(status.quoteAgeSeconds,0);
+  assert.equal(status.frameDirections.M15,'BUY');
+  now+=30;
+  status=await check();
+  assert.equal(status.mt5FeedFresh,false);
+  assert.equal(status.executableSignalPresent,false);
+  assert.equal(status.demoExecutionReady,false);
+});
