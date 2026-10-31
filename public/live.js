@@ -16,7 +16,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   let lastServerSeen = 0, lastNewsSeen = 0, fetched = false, historyFetched = false, historyRows = [], historyStamp = '', newsStamp = '';
   let initialized = false;
   let chartSourceKey = '', referenceChart = false, brokerChartData = null, brokerChartKey = '', brokerChartLoading = false;
-  let lastBrokerFetch = 0;
+  let lastBrokerFetch = 0, quotePolling = false, lastQuoteStamp = '';
   const seenSignals = new Set();
   const market = () => data?.markets?.[symbol];
   const fresh = m => Boolean(m?.quote && m.connection === 'LIVE' && now() - m.quote.time <= m.quoteTtl && Date.now() - lastServerSeen < 12000);
@@ -53,6 +53,30 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
       const b = node('button', value === tf ? 'active' : '', tfButtons[value]);
       b.dataset.tf = value; b.setAttribute('aria-pressed', String(value === tf)); return b;
     }));
+  }
+  // Use one-second broker snapshots for the displayed quote only.
+  // Do not alter strategy status, signals, candles or execution eligibility here.
+  async function refreshBrokerQuotes() {
+    if (quotePolling || document.hidden) return;
+    quotePolling = true;
+    try {
+      const response = await api('/api/market/broker-quotes');
+      const q = response?.quotes?.[symbol], m = market();
+      if (!m || m.candle_kind !== 'BROKER_OHLC' || !q || q.source_id !== m.source_id) return;
+      const stamp = symbol + ':' + q.quote.time + ':' + q.quote.bid + ':' + q.quote.ask;
+      if (stamp !== lastQuoteStamp) {
+        lastQuoteStamp = stamp;
+        put('live-price',fmt(q.quote.price));
+        put('live-ask',fmt(q.quote.ask));put('live-bid',fmt(q.quote.bid));
+        put('live-spread',Number.isFinite(q.point) && q.point > 0 ?
+          num((q.quote.ask-q.quote.bid)/q.point,1)+' نقطة' : fmt(q.quote.ask-q.quote.bid)+' USD');
+      }
+      put('live-update-age','عمر السعر '+Math.max(0,Math.floor(response.serverTime-q.quote.time))+' ثانية');
+      $('live-connection').className='pill '+(q.connection==='LIVE'?'good':'warn');
+      put('live-connection',q.connection==='LIVE'?'متابعة السوق متصلة':'السعر متأخر / انقطاع المصدر');
+    } catch {
+      // Existing SSE and five-second fallback stay available on network errors.
+    } finally {quotePolling = false;}
   }
   function render() {
     const m = market(), live = fresh(m), a = m?.analysis, p = activePlan();
@@ -245,8 +269,8 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   $('scalp-history-filter').onchange = renderHistory; $('headline-filter').onchange = () => {newsStamp = ''; renderNews();};
   stream.addEventListener('market', event => {try {applyMarket(JSON.parse(event.data));} catch {}});
   stream.addEventListener('news', event => {try {applyNews(JSON.parse(event.data));} catch {}});
-  document.addEventListener('visibilitychange', () => {if (!document.hidden) {fetchLive(); loadHistory();}});
-  setInterval(() => {render(); renderNews();}, 1000);
+  document.addEventListener('visibilitychange', () => {if (!document.hidden) {fetchLive(); loadHistory(); refreshBrokerQuotes();}});
+  setInterval(() => {render(); renderNews(); refreshBrokerQuotes();}, 1000);
   setInterval(() => {if (Date.now() - lastServerSeen > 4500 || !news || Date.now() - lastNewsSeen > 75000) fetchLive();}, 5000);
   configureChart(); loadChart(); fetchLive(); loadHistory();
 }

@@ -81,6 +81,13 @@ test('gold and BTC bridges store distinct snapshots and broker candles',async t=
   assert.match((await mismatch.json()).error,/BTC source mismatch: managed_magic/);
   assert.equal(app.marketFeed.publicState().markets.BTCUSD.broker_symbol,'BTCUSD.m');
   assert.equal(app.marketFeed.history('BTCUSD')[0].symbol,'BTCUSD');
+  const brokerQuote=await (await fetch(base+'/api/market/broker-quotes')).json();
+  assert.equal(brokerQuote.quotes.BTCUSD.broker_symbol,'BTCUSD.m');
+  assert.equal(brokerQuote.quotes.BTCUSD.quote.bid,btcRaw().bid);
+  assert.equal(brokerQuote.quotes.BTCUSD.quote.ask,btcRaw().ask);
+  assert.equal(brokerQuote.quotes.BTCUSD.connection,'LIVE');
+  assert.equal(brokerQuote.quotes.XAUUSD.broker_symbol,'XAUUSD.m');
+  assert.ok(!JSON.stringify(brokerQuote).includes('account_ref'));
   const mainChart=await (await fetch(base+'/api/market/broker-candles?symbol=BTCUSD&tf=M5')).json();
   assert.equal(mainChart.source,'MT5 · JustMarkets-Demo');
   assert.equal(mainChart.broker_symbol,'BTCUSD.m');
