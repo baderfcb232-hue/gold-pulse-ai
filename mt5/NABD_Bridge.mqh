@@ -320,7 +320,11 @@ void NABDOnTimer()
    if(StringLen(InpNABDToken)<32 || StringFind(InpNABDUrl,"https://")!=0)
      {if(!g_nb_warned){Print("NABD requires an HTTPS URL and a 32+ character ingest token.");g_nb_warned=true;}return;}
    ulong now=GetTickCount64();
-   if(g_nb_last_send>0 && now-g_nb_last_send<(ulong)MathMax(3,InpNABDRefreshSeconds)*1000)return;
+   // A BTC terminal uses a one-second best-effort cadence. Gold is unchanged.
+   // Broker quotes keep their original SymbolInfoTick timestamp.
+   bool btcOneSecond=StringFind(g_symbol,"BTCUSD")==0;
+   ulong cadenceMs=(ulong)(btcOneSecond?1000:MathMax(3,InpNABDRefreshSeconds)*1000);
+   if(g_nb_last_send>0 && now-g_nb_last_send<cadenceMs)return;
    g_nb_last_send=now;
    if(!g_nb_timer_seen)
      {Print("NABD timer running. Sending the first quote before loading history and the calendar.");g_nb_timer_seen=true;}
@@ -332,13 +336,28 @@ void NABDOnTimer()
    // Empty history and an unavailable calendar are explicit; they are never fabricated.
    string candles="{\"M5\":[],\"M15\":[],\"H1\":[],\"H4\":[]}";
    string calendar="{\"status\":\"unavailable\",\"events\":[]}";
+   // BTC reuses the last CLOSED candle set between refreshes, avoiding
+   // four expensive CopyRates calls each second. Never synthesize OHLC.
+   static string cachedBtcCandles="";
+   static ulong lastBtcHistory=0;
+   bool refreshBtcHistory=!btcOneSecond || cachedBtcCandles=="" ||
+      now-lastBtcHistory>=5000;
    if(g_nb_bootstrap_done)
      {
+      if(!refreshBtcHistory)
+        {
+         candles=cachedBtcCandles;
+         calendar=g_nb_calendar;
+        }
+      else
+        {
       NBStatus("Loading economic calendar from MT5...");NBUpdateCalendar(offset);
       NBStatus("Loading M5, M15, H1 and H4 history from MT5...");
       candles="{\"M5\":"+NBCandles(PERIOD_M5,offset)+",\"M15\":"+NBCandles(PERIOD_M15,offset)+
         ",\"H1\":"+NBCandles(PERIOD_H1,offset)+",\"H4\":"+NBCandles(PERIOD_H4,offset)+"}";
       calendar=g_nb_calendar;
+      if(btcOneSecond){cachedBtcCandles=candles;lastBtcHistory=GetTickCount64();}
+        }
       if(g_nb_daily_time==0 || TimeGMT()-g_nb_daily_time>=3600)
         {
          NBStatus("Loading closed daily history for internal analysis...");
