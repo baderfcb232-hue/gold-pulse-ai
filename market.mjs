@@ -36,7 +36,7 @@ export function parseCoinbaseCandles(raw, now) {
 
 export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher = fetch,
   WebSocketImpl = globalThis.WebSocket, calendar = () => null, brokerSnapshot = () => null, brokerSnapshotBTC = () => null,
-  enabledSymbols = Object.keys(MARKET_CONFIG), goldSignalStrategy = 'EMA_LEGACY', onChange = () => {}}) {
+  enabledSymbols = Object.keys(MARKET_CONFIG), goldSignalStrategy = 'EMA_LEGACY', btcSignalStrategy = 'EMA_LEGACY', onChange = () => {}}) {
   db.exec(`CREATE TABLE IF NOT EXISTS market_cache (symbol TEXT PRIMARY KEY, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS market_signals (id TEXT PRIMARY KEY, issued_at REAL NOT NULL, data TEXT NOT NULL);`);
   const markets = {};
@@ -58,7 +58,7 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
   // independently refreshed Coinbase reference feed and its research signals.
   // Reference plans can NEVER satisfy the separate MT5 broker-source order gates.
   const btcMarket = () => {
-    const now = clock(), broker = brokerBtcMarket(brokerSnapshotBTC(), now);
+    const now = clock(), broker = brokerBtcMarket(brokerSnapshotBTC(), now, {btcStrategy: btcSignalStrategy});
     if (!broker) return markets.BTCUSD;
     const brokerAge = Math.max(0, now - broker.quote.time, now - broker.received_at);
     return brokerAge <= 120 ? broker : markets.BTCUSD;
@@ -164,7 +164,7 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
     const snap = symbol === 'XAUUSD' ? brokerSnapshot() : brokerSnapshotBTC();
     const broker = symbol === 'XAUUSD'
       ? brokerGoldMarket(snap, clock(), {goldStrategy: goldSignalStrategy})
-      : brokerBtcMarket(snap, clock());
+      : brokerBtcMarket(snap, clock(), {btcStrategy: btcSignalStrategy});
     if (!broker?.bars?.[tf]) return null;
     const now = clock(), age = Math.max(0, now - broker.quote.time);
     const fresh = broker.connection === 'LIVE' && age <= broker.quoteTtl &&
