@@ -52,29 +52,8 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
       b.dataset.tf = value; b.setAttribute('aria-pressed', String(value === tf)); return b;
     }));
   }
-  function renderBitcoinReadiness() {
-    const btc = data?.markets?.BTCUSD, current = btc?.currentSignal;
-    const live = fresh(btc), active = live && current?.expires_at > now();
-    const status = !btc ? 'غير مفعّل' : !btc.quote ? 'بانتظار السعر' :
-      !live ? 'السعر متأخر' : active ? 'توصية نشطة' : 'المراقبة شغّالة';
-    const reason = !btc ? 'سوق البيتكوين غير متاح في إعدادات الخادم.' :
-      !live ? 'لا تُصدر توصية تنفيذ من سعر قديم؛ راجع مصدر BTC أو اتصال MT5.' :
-      data?.membersOnly ? 'عرض التوصيات يتطلب حسابًا مخوّلًا.' :
-      active ? 'صدرت توصية جديدة للبيتكوين؛ راجع الدخول والوقف والهدف في السجل.' :
-      btc.analysis?.reason || 'يبحث النظام عن اكتمال شروط الدخول، دون إنشاء توصيات وهمية.';
-    put('btc-signal-status', status);
-    $('btc-signal-status').className = 'pill ' + (active ? 'good' : !live ? 'warn' : 'neutral');
-    put('btc-signal-reason', reason);
-  }
   function render() {
     const m = market(), live = fresh(m), a = m?.analysis, p = activePlan();
-    renderBitcoinReadiness();
-    const overview = document.querySelector?.('[data-panel="overview"]');
-    const bitcoinSelected = symbol === 'BTCUSD' && (overview ? !overview.hidden : true);
-    $('nav-bitcoin').classList.toggle('selected', bitcoinSelected);
-    $('nav-bitcoin').setAttribute('aria-pressed', String(bitcoinSelected));
-    document.querySelector?.('[data-view="overview"]')?.classList.toggle('selected',
-      !bitcoinSelected && (overview ? !overview.hidden : true));
     put('live-market-name', `${symbol} · ${m?.name || 'متابعة السوق'}`);
     put('live-connection', !m?.quote ? 'جلب السوق…' : live ? 'متابعة السوق متصلة' : 'السعر متأخر / انقطاع المصدر');
     $('live-connection').className = 'pill ' + (live ? 'good' : 'warn');

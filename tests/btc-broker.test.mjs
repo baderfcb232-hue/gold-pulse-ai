@@ -7,6 +7,7 @@ import {join} from 'node:path';
 import {entryFixture, eaFixture, NOW} from './fixtures.mjs';
 import {cleanSnapshot} from '../engine.mjs';
 import {brokerGoldMarket,brokerBtcMarket} from '../broker-market.mjs';
+import {createMarketFeed} from '../market.mjs';
 import {websiteTradeDecision,websiteEntryJournal} from '../website-entry.mjs';
 import {createApplication} from '../server.mjs';
 
@@ -114,4 +115,25 @@ test('BTC demo recommendation endpoint accepts only its own MT5 source and dispa
   assert.equal(wrong.status,409);
   assert.equal(await (await fetch(url,{method:'POST',
     headers:{...headers,Authorization:'Bearer incorrect-token'},body:JSON.stringify(source)})).status,401);
+});
+
+
+test('old Bitcoin MT5 snapshot cannot mask a fresh Coinbase reference, and fresh broker data returns',async()=>{
+  const db=new DatabaseSync(':memory:');
+  let now=NOW, btc=cleanSnapshot(btcRaw(),NOW);
+  const feed=createMarketFeed({db,clock:()=>now,brokerSnapshotBTC:()=>btc});
+  try{
+    assert.equal(feed.publicState().markets.BTCUSD.source,'MT5 · JustMarkets-Demo');
+    now=NOW+121;
+    const quote={price:70000,bid:69999.5,ask:70000.5,time:now};
+    assert.equal(feed.acceptQuote('BTCUSD',quote),true);
+    const market=feed.publicState().markets.BTCUSD;
+    assert.equal(market.source,'Coinbase · BTC-USD');
+    assert.equal(market.candle_kind,'EXCHANGE_AND_OBSERVATIONS');
+    assert.equal(market.broker_symbol,null);
+    assert.equal(market.connection,'LIVE');
+    assert.equal(market.quote.price,70000);
+    btc={...btc,quote_at:now,received_at:now};
+    assert.equal(feed.publicState().markets.BTCUSD.source,'MT5 · JustMarkets-Demo');
+  }finally{await feed.close();db.close();}
 });

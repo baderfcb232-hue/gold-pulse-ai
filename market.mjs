@@ -53,9 +53,19 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
   let historyFailures = 0, goldFailures = 0, btcFailures = 0;
   const history = symbol => db.prepare('SELECT data FROM market_signals ORDER BY issued_at DESC LIMIT 400').all()
     .map(x => JSON.parse(x.data)).filter(p => enabledSymbols.includes(p.symbol) && (!symbol || p.symbol === symbol)).slice(0, 100);
+  // A disconnected BTC bridge can retain its last MT5 quote for days. Keep the
+  // broker price while it is recent, but do not let that old snapshot hide the
+  // independently refreshed Coinbase reference feed and its research signals.
+  // Reference plans can NEVER satisfy the separate MT5 broker-source order gates.
+  const btcMarket = () => {
+    const now = clock(), broker = brokerBtcMarket(brokerSnapshotBTC(), now);
+    if (!broker) return markets.BTCUSD;
+    const brokerAge = Math.max(0, now - broker.quote.time, now - broker.received_at);
+    return brokerAge <= 120 ? broker : markets.BTCUSD;
+  };
   const marketFor = symbol => !markets[symbol] ? null : symbol === 'XAUUSD'
     ? brokerGoldMarket(brokerSnapshot(), clock(), {goldStrategy: goldSignalStrategy}) || markets[symbol]
-    : symbol === 'BTCUSD' ? brokerBtcMarket(brokerSnapshotBTC(), clock()) || markets[symbol] : markets[symbol];
+    : symbol === 'BTCUSD' ? btcMarket() : markets[symbol];
   const sameSource = (plan, market) => (plan.source_id || 'REFERENCE') === (market.source_id || 'REFERENCE');
   const persist = symbol => {const m = markets[symbol]; db.prepare('INSERT INTO market_cache VALUES(?,?) ON CONFLICT(symbol) DO UPDATE SET data=excluded.data')
     .run(symbol, JSON.stringify({quote: m.quote, received_at: m.received_at, candles: m.candles.slice(-1500)}));};
