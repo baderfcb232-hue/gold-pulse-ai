@@ -81,6 +81,16 @@ test('gold and BTC bridges store distinct snapshots and broker candles',async t=
   assert.match((await mismatch.json()).error,/BTC source mismatch: managed_magic/);
   assert.equal(app.marketFeed.publicState().markets.BTCUSD.broker_symbol,'BTCUSD.m');
   assert.equal(app.marketFeed.history('BTCUSD')[0].symbol,'BTCUSD');
+  const mainChart=await (await fetch(base+'/api/market/broker-candles?symbol=BTCUSD&tf=M5')).json();
+  assert.equal(mainChart.source,'MT5 · JustMarkets-Demo');
+  assert.equal(mainChart.broker_symbol,'BTCUSD.m');
+  assert.equal(mainChart.candle_kind,'BROKER_OHLC');
+  assert.equal(mainChart.quote.bid,btcRaw().bid);
+  assert.equal(mainChart.quote.ask,btcRaw().ask);
+  assert.equal(mainChart.point,btcRaw().spec.point);
+  assert.deepEqual(mainChart.candles,btcRaw().candles.M5);
+  assert.equal((await fetch(base+'/api/market/broker-candles?symbol=BTCUSD&tf=M1')).status,400);
+  assert.equal((await fetch(base+'/api/market/broker-candles?symbol=ETHUSD&tf=M5')).status,400);
   const btcCandles=await (await fetch(base+'/api/market/candles?symbol=BTCUSD&tf=M5')).json();
   assert.equal(btcCandles.source_id,markets.BTCUSD.source_id);
   assert.deepEqual(btcCandles.candles,btcRaw().candles.M5);
@@ -174,4 +184,15 @@ test('BTC Magic recovery is refused when old BTC positions exist or previous sou
     assert.throws(()=>app.ingest(next),/BTC source mismatch/,label);
     await app.close();rmSync(dir,{recursive:true,force:true});
   }
+});
+
+test('broker OHLC endpoint does not substitute Coinbase reference when MT5 is missing',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'nabd-broker-only-'));
+  const app=createApplication({dataDir:dir,clock:()=>NOW});
+  t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
+  await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
+  const url='http://127.0.0.1:'+app.server.address().port;
+  const result=await fetch(url+'/api/market/broker-candles?symbol=BTCUSD&tf=M5');
+  assert.equal(result.status,503);
+  assert.match((await result.json()).error,/No MT5 broker candles/);
 });
