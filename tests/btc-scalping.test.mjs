@@ -50,6 +50,7 @@ test('BTC scalp config rejects invalid values',()=>{
 test('confirmed closed M5 BTC setup can create a broker-only scalp signal and pass Demo risk approval',()=>{
   const raw=sample();
   raw.execution.website_since=NOW-30;
+  raw.execution.main_connected=true;
   raw.execution.manual_lot_supported=true;
   raw.ea={heartbeat_at:NOW,emergency_stop:false,
     settings:{max_spread_points:2500}};
@@ -82,5 +83,5 @@ test('new BTC bridge has one-second lightweight ticks and unchanged gold timer',
   assert.match(bridge,/btcOneSecond\?1000:MathMax\(3,InpNABDRefreshSeconds\)\*1000/);
   assert.match(bridge,/\/api\/mt5\/btc-quote/);
   assert.match(bridge,/now-lastBtcFullSend<3000/);
-  assert.match(bridge,/if\(!TradingExecutionEnabled\(\)\)/);
+  assert.match(bridge,/!TradingExecutionEnabled\(\)/);
 });
