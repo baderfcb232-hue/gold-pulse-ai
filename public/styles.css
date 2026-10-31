@@ -67,3 +67,13 @@ body{background:radial-gradient(ellipse at 68% 0,#2a1c332e,transparent 55%),var(
 .execution-technical-details[open] summary{margin-bottom:12px}
 .execution-technical-details .technical-details-content{border-inline-start:2px solid var(--border);padding-inline-start:12px;overflow-wrap:anywhere}
 
+
+/* Read-only MT5 broker OHLC; external TradingView is opt-in comparison only. */
+.broker-quote-values{display:flex;gap:9px;flex-wrap:wrap;margin:14px 0 5px}
+.broker-quote-values>span{flex:1;min-width:98px;display:flex;flex-direction:column;gap:3px;padding:9px 11px;border:1px solid var(--border);border-radius:9px;font-size:11px;color:var(--muted);background:#14101c}
+.broker-quote-values strong{font-size:16px;color:var(--ink);direction:ltr;text-align:right;font-variant-numeric:tabular-nums}
+.broker-chart-mode{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px}
+.mt5-candle-chart{height:540px;min-height:440px;position:relative;background:#0c151d;border:1px solid var(--border);border-radius:9px;overflow:hidden}
+.mt5-candle-chart canvas{display:block;width:100%;height:100%;touch-action:pan-y}
+#broker-chart-wrap[hidden],#reference-chart-wrap[hidden],#broker-quote-values[hidden]{display:none!important}
+@media(max-width:760px){.mt5-candle-chart{height:440px;min-height:350px}.broker-quote-values>span{min-width:85px;padding:8px}.broker-quote-values strong{font-size:13px}}
