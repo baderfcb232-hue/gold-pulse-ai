@@ -20,9 +20,10 @@ const headline = (serverTime, title) => ({serverTime, revision: serverTime, sour
 const deferred = () => {let resolve; const promise = new Promise(yes => {resolve = yes;}); return {promise, resolve};};
 function workspace(t, readNews) {
   let ms = 1791806400000;
-  const elements = new Map(), callbacks = new Map(), intervals = [], reads = [];
+  const elements = new Map(), callbacks = new Map(), intervals = [], reads = [], notifications = [];
   const get = id => {if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id);};
   get('headline-filter').value = 'ALL';
+  get('signal-notifications').checked = true;
   const oldDocument = globalThis.document;
   globalThis.document = {getElementById: get, createElement: () => new Element(), addEventListener() {}};
   t.after(() => {if (oldDocument === undefined) delete globalThis.document; else globalThis.document = oldDocument;});
@@ -38,10 +39,11 @@ function workspace(t, readNews) {
     return {signals: []};
   };
   initLiveWorkspace({stream: {addEventListener: (name, callback) => callbacks.set(name, callback)},
-    api, time: String, num: String, now: () => ms / 1000, notify() {}});
+    api, time: String, num: String, now: () => ms / 1000, notify: message => notifications.push(message)});
   return {reads, advance: amount => {ms += amount;}, now: () => ms / 1000,
     news: value => callbacks.get('news')({data: JSON.stringify(value)}),
-    market: () => callbacks.get('market')({data: JSON.stringify(market())}),
+    market: (next = market()) => callbacks.get('market')({data: JSON.stringify(next)}),
+    marketData: market, notifications, get,
     poll: () => intervals.find(x => x.delay === 5000).callback(),
     title: () => get('headlines-list').children[0]?.children[1]?.textContent};
 }
@@ -70,4 +72,36 @@ test('a late HTTP news response cannot replace a newer event or accept malformed
   h.news({...headline(h.now() + 1, 'Malformed event'), sources: null});
   h.news({...headline(h.now() + 1, 'Invalid time'), serverTime: null});
   assert.equal(h.title(), 'Newest event');
+});
+
+
+test('Bitcoin recommendations notify once even when the gold market is selected', async t => {
+  const h = workspace(t, now => headline(now, 'Test headline'));
+  await flush();
+  const gold = h.marketData().markets.XAUUSD, ts = h.now();
+  const btc = {symbol:'BTCUSD',name:'بيتكوين',connection:'LIVE',quoteTtl:20,
+    quote:{price:70000,time:ts},analysis:{status:'READY',checks:[],frames:{}},
+    recentSignals:[],currentSignal:{id:'btc-demo-test-1',side:'BUY',entry:70000,expires_at:ts+90}};
+  const next = {serverTime:ts+1,markets:{XAUUSD:gold,BTCUSD:btc}};
+  h.market(next);
+  assert.equal(h.notifications.length,1);
+  assert.match(h.notifications[0],/بيتكوين/);
+  assert.equal(h.get('btc-signal-status').textContent,'توصية نشطة');
+  h.market(next);
+  assert.equal(h.notifications.length,1,'same recommendation must not alert twice');
+  h.market({serverTime:ts+2,markets:{XAUUSD:gold,BTCUSD:{...btc,currentSignal:{...btc.currentSignal,id:'btc-demo-test-2'}}}});
+  assert.equal(h.notifications.length,2,'a distinct BTC plan should alert once');
+});
+
+test('stale BTC data does not produce a live recommendation notification', async t => {
+  const h = workspace(t, now => headline(now, 'Test headline'));
+  await flush();
+  const gold = h.marketData().markets.XAUUSD, ts = h.now();
+  h.market({serverTime:ts+1,markets:{XAUUSD:gold,BTCUSD:{
+    symbol:'BTCUSD',name:'بيتكوين',connection:'STALE',quoteTtl:20,
+    quote:{price:70000,time:ts-120},analysis:{status:'STALE',reason:'Price stale',checks:[],frames:{}},
+    recentSignals:[],currentSignal:{id:'expired-btc',side:'BUY',entry:70000,expires_at:ts+90}
+  }}});
+  assert.equal(h.notifications.length,0);
+  assert.equal(h.get('btc-signal-status').textContent,'السعر متأخر');
 });
