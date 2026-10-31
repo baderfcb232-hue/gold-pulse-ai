@@ -70,7 +70,11 @@ int OnInit()
    if(g_point<=0 || SymbolInfoDouble(g_symbol,SYMBOL_TRADE_TICK_SIZE)<=0)return INIT_FAILED;
    g_trade.SetExpertMagicNumber(InpMagicNumber);g_trade.SetDeviationInPoints(InpDeviationPoints);
    g_trade.SetTypeFillingBySymbol(g_symbol);g_trade.SetMarginMode();g_trade.SetAsyncMode(false);
-   if(!EventSetTimer((int)MathMax(3,InpNABDRefreshSeconds)))return INIT_FAILED;
+   // Bitcoin receives a one-second timer; gold keeps its existing cadence.
+   // A timer cannot invent a new broker tick. Execution retains its 10-second tick guard.
+   bool btcOneSecond=StringFind(g_symbol,"BTCUSD")==0;
+   int timerSeconds=btcOneSecond?1:(int)MathMax(3,InpNABDRefreshSeconds);
+   if(!EventSetTimer(timerSeconds))return INIT_FAILED;
    NBStatus("Waiting for first timer update. No trade entry.");
    Print("NABD bridge v3.10 started. AUTO and manual-lot approvals supported; main EA and explicit opt-in required.");
    return INIT_SUCCEEDED;
