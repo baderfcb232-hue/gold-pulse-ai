@@ -156,8 +156,20 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     const activity = websiteActivity[symbol], time = Number(record.time);
     if (!Number.isFinite(time) || time < (activity.lastDispatchAt ?? 0)) return;
     if (time === activity.lastDispatchAt && activity.lastResult !== 'DISPATCHED' && record.status === 'DISPATCHED') return;
+    const reportedAt = Number(record.reported_at) || null;
+    // Operational diagnostics: identify why a Demo MT5 entry was refused.
+    // Log only the market and numeric codes, never account IDs or order details.
+    if (reportedAt && ['REJECTED','SUBMITTED'].includes(record.status) &&
+        (activity.lastDispatchAt !== time || activity.lastReportAt !== reportedAt ||
+         activity.lastResult !== record.status)) {
+      console.info('NABD website MT5 result:', JSON.stringify({
+        symbol, status: record.status,
+        reason_code: Number.isInteger(record.reason_code) ? record.reason_code : null,
+        mt5_retcode: Number.isInteger(record.mt5_retcode) ? record.mt5_retcode : null
+      }));
+    }
     activity.lastDispatchAt = time;
-    activity.lastReportAt = Number(record.reported_at) || null;
+    activity.lastReportAt = reportedAt;
     activity.lastResult = record.status;
   }
   async function refreshWebsiteActivity(symbol, source, force = false) {
