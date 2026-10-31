@@ -332,6 +332,31 @@ void NABDOnTimer()
    if(!SymbolInfoTick(g_symbol,tick) || tick.bid<=0 || tick.ask<tick.bid)
      {NBStatus("Waiting for a valid broker quote. Check the symbol and broker connection.");return;}
    long offset=NBOffset();
+   // Only BTC sends a lightweight authenticated tick between normal FULL
+   // snapshots (3 seconds). No account/EA permissions or bars are fabricated.
+   static ulong lastBtcFullSend=0;
+   if(btcOneSecond && g_nb_bootstrap_done && lastBtcFullSend>0 &&
+      now-lastBtcFullSend<3000)
+     {
+      if((long)tick.time-offset>(long)TimeGMT()+5)
+        {NBStatus("BTC broker tick time ahead of UTC; waiting.");return;}
+      string quick="{\"symbol\":"+NBQ(g_symbol)+
+        ",\"account_ref\":"+NBQ((string)AccountInfoInteger(ACCOUNT_LOGIN))+
+        ",\"broker\":"+NBQ(AccountInfoString(ACCOUNT_SERVER))+
+        ",\"magic\":"+NBQ((string)InpMagicNumber)+
+        ",\"quote_at\":"+(string)((long)tick.time-offset)+
+        ",\"bid\":"+NBD(tick.bid,g_digits)+",\"ask\":"+NBD(tick.ask,g_digits)+"}";
+      string fastResponse;
+      int fastCode=NBRequest("POST","/api/mt5/btc-quote",quick,fastResponse);
+      if(fastCode!=200)
+        {
+         NBStatus("BTC fast quote declined (HTTP "+(string)fastCode+"); full sync continues.");
+         // Full snapshots continue every 3s and may repair interrupted quotes.
+        }
+      else NBStatus("BTC broker tick sent; full MT5/EA sync every 3 seconds.");
+      return;
+     }
+   if(btcOneSecond)lastBtcFullSend=now;
    // Let the real price reach the dashboard before potentially slow MT5 history/calendar calls.
    // Empty history and an unavailable calendar are explicit; they are never fabricated.
    string candles="{\"M5\":[],\"M15\":[],\"H1\":[],\"H4\":[]}";
