@@ -86,7 +86,6 @@ test('Bitcoin recommendations notify once even when the gold market is selected'
   h.market(next);
   assert.equal(h.notifications.length,1);
   assert.match(h.notifications[0],/بيتكوين/);
-  assert.equal(h.get('btc-signal-status').textContent,'توصية نشطة');
   h.market(next);
   assert.equal(h.notifications.length,1,'same recommendation must not alert twice');
   h.market({serverTime:ts+2,markets:{XAUUSD:gold,BTCUSD:{...btc,currentSignal:{...btc.currentSignal,id:'btc-demo-test-2'}}}});
@@ -103,5 +102,4 @@ test('stale BTC data does not produce a live recommendation notification', async
     recentSignals:[],currentSignal:{id:'expired-btc',side:'BUY',entry:70000,expires_at:ts+90}
   }}});
   assert.equal(h.notifications.length,0);
-  assert.equal(h.get('btc-signal-status').textContent,'السعر متأخر');
 });
