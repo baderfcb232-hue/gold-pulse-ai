@@ -138,6 +138,7 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
     const recentRows = m.candles.filter(c => c.time + step <= now), last = recentRows.at(-1)?.close;
     return {symbol, name: m.name, source: m.source, sourceUrl: m.sourceUrl, quote: m.quote,
       source_id: m.source_id || 'REFERENCE', broker_symbol: m.broker_symbol || null,
+      point: m.broker_mode ? m.point : null, digits: m.broker_mode ? m.digits : null,
       default_tf: defaultTf, chart_tfs: m.chart_tfs || ['M1', 'M5', 'M15'],
       revision: m.revision, received_at: m.received_at || null, checked_at: m.checked_at,
       connection: m.broker_mode ? m.connection : !m.quote ? 'NO_DATA' : fresh ? 'LIVE' : 'STALE', quoteAge: age,
@@ -155,6 +156,27 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
   }
   const publicState = () => ({revision, serverTime: clock(), refresh_seconds: 1,
     markets: Object.fromEntries(Object.keys(markets).map(s => [s, publicMarket(s)]))});
+  // Chart-only source: closed OHLC from the SAME MT5 broker as trade execution.
+  // Never switch this endpoint to Coinbase, even when the broker feed is stale.
+  const brokerCandles = (symbol, tf) => {
+    if (!['XAUUSD', 'BTCUSD'].includes(symbol) || !['M5','M15','H1','H4'].includes(tf) || !markets[symbol])
+      return null;
+    const snap = symbol === 'XAUUSD' ? brokerSnapshot() : brokerSnapshotBTC();
+    const broker = symbol === 'XAUUSD'
+      ? brokerGoldMarket(snap, clock(), {goldStrategy: goldSignalStrategy})
+      : brokerBtcMarket(snap, clock());
+    if (!broker?.bars?.[tf]) return null;
+    const now = clock(), age = Math.max(0, now - broker.quote.time);
+    const fresh = broker.connection === 'LIVE' && age <= broker.quoteTtl &&
+      now - broker.received_at <= broker.quoteTtl;
+    return {symbol, tf, source: broker.source, source_id: broker.source_id,
+      broker_symbol: broker.broker_symbol, candle_kind: 'BROKER_OHLC',
+      connection: fresh ? 'LIVE' : 'STALE', quote: broker.quote,
+      point: broker.point, digits: broker.digits,
+      received_at: broker.received_at, quoteAge: age,
+      // Broker supplies closed OHLC; no synthetic candles from the reference feed.
+      candles: broker.bars[tf].slice(-320)};
+  };
   const candles = (symbol, tf) => {
     const m = marketFor(symbol); if (!m || !MARKET_TF[tf]) return null;
     if (m.broker_mode) return m.bars[tf] ? {symbol, tf, source: m.source, source_id: m.source_id,
@@ -240,7 +262,7 @@ export function createMarketFeed({db, clock = () => Date.now() / 1000, fetcher =
     }
     onChange();
   }
-  return {publicState, candles, history, acceptQuote, acceptHistory,
+  return {publicState, candles, brokerCandles, history, acceptQuote, acceptHistory,
     start() {if (running || stopped) return; running = true; tick(); timer = setInterval(tick, 1000); timer.unref();},
     async close() {stopped = true; clearInterval(timer); controller.abort();
       if (socket) {try {socket.close();} catch {}} await Promise.allSettled([...pending]);

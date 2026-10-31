@@ -36,7 +36,7 @@ export function brokerInstrumentMarket(snapshot, now, {goldStrategy = 'EMA_LEGAC
   return {
     symbol: canonical, name: gold ? 'الذهب' : 'بيتكوين', source, source_id: sourceId,
     sourceUrl: null, broker_symbol: snapshot.symbol, broker_mode: true,
-    tickSize: snapshot.spec.tick_size, quoteTtl: defaults.quoteTtl,
+    tickSize: snapshot.spec.tick_size, point: snapshot.spec.point, digits: snapshot.spec.digits, quoteTtl: defaults.quoteTtl,
     cadence_seconds: 3, candle_kind: 'BROKER_OHLC', transport: 'MT5 Bridge',
     quote: {price: (snapshot.bid + snapshot.ask) / 2, bid: snapshot.bid, ask: snapshot.ask, time: snapshot.quote_at},
     received_at: snapshot.received_at, checked_at: snapshot.received_at,

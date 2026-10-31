@@ -439,6 +439,13 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       if (path === '/api/state' && req.method === 'GET') return send(req, res, 200, protectSignals('state', publicState(), await canReadSignals(req)));
       if (path === '/api/market' && req.method === 'GET') return send(req, res, 200, protectSignals('market', marketState(), await canReadSignals(req)));
       if (path === '/api/news' && req.method === 'GET') return send(req, res, 200, newsFeed.publicState());
+      if (path === '/api/market/broker-candles' && req.method === 'GET') {
+        const symbol = url.searchParams.get('symbol') || 'XAUUSD', tf = url.searchParams.get('tf') || 'M5';
+        if (!['XAUUSD','BTCUSD'].includes(symbol) || !['M5','M15','H1','H4'].includes(tf))
+          return send(req,res,400,{error:'Invalid MT5 symbol or timeframe'});
+        const result = marketFeed.brokerCandles(symbol,tf);
+        return send(req,res,result ? 200 : 503,result || {error:'No MT5 broker candles available'});
+      }
       if (path === '/api/market/candles' && req.method === 'GET') {
         const data = marketFeed.candles(url.searchParams.get('symbol') || 'XAUUSD', url.searchParams.get('tf') || 'M1');
         return send(req, res, data ? 200 : 400, data || {error: 'Invalid market or timeframe'});
