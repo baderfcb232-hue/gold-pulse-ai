@@ -142,3 +142,36 @@ test('old Bitcoin MT5 snapshot cannot mask a fresh Coinbase reference, and fresh
     assert.equal(feed.publicState().markets.BTCUSD.source,'MT5 · JustMarkets-Demo');
   }finally{await feed.close();db.close();}
 });
+
+test('opt-in recovery only rebinds stale same-account BTC Demo Magic, preserving gold',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'nabd-btc-rebind-'));
+  const old=btcRaw();old.execution.managed_magic='26092309';
+  const first=createApplication({dataDir:dir,clock:()=>NOW});
+  first.ingest(goldRaw());first.ingest(old);
+  await first.close();
+  let now=NOW+600;
+  const app=createApplication({dataDir:dir,clock:()=>now,config:{btcMagicRebindEnabled:true}});
+  t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
+  const goldSource=app.marketFeed.publicState().markets.XAUUSD.source_id;
+  const next=btcRaw();next.quote_at=now;
+  assert.doesNotThrow(()=>app.ingest(next));
+  assert.equal(app.marketFeed.publicState().markets.XAUUSD.source_id,goldSource);
+  assert.equal(app.db.prepare('SELECT json_extract(data,\'$.execution.managed_magic\') AS magic FROM btc_snapshot').get().magic,'26092302');
+  const wrong=btcRaw();wrong.execution.managed_magic='26092303';wrong.quote_at=now;
+  assert.throws(()=>app.ingest(wrong),/BTC source mismatch/);
+  const differentAccount=btcRaw();differentAccount.account_ref='ANOTHER_ACCOUNT';differentAccount.quote_at=now;
+  assert.throws(()=>app.ingest(differentAccount),/account_ref/);
+});
+test('BTC Magic recovery is refused when old BTC positions exist or previous source is recent',async t=>{
+  for(const [label,oldPositions,age] of [['open BTC',true,600],['recent previous feed',false,30]]){
+    const dir=mkdtempSync(join(tmpdir(),'nabd-btc-rebind-block-'));
+    const start=createApplication({dataDir:dir,clock:()=>NOW});
+    const old=btcRaw();old.execution.managed_magic='26092309';
+    if(oldPositions)old.positions=entryFixture().positions;
+    start.ingest(old);await start.close();
+    const now=NOW+age,app=createApplication({dataDir:dir,clock:()=>now,config:{btcMagicRebindEnabled:true}});
+    const next=btcRaw();next.quote_at=now;
+    assert.throws(()=>app.ingest(next),/BTC source mismatch/,label);
+    await app.close();rmSync(dir,{recursive:true,force:true});
+  }
+});

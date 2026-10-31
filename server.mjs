@@ -59,13 +59,15 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   let btcSnapshot = null;
   try { const row = db.prepare('SELECT data FROM btc_snapshot WHERE id=1').get(); if (row) btcSnapshot = JSON.parse(row.data); } catch {}
   let lastSourceBTC = btcSnapshot ? `${btcSnapshot.account_ref}|${btcSnapshot.broker}|${btcSnapshot.symbol}|${btcSnapshot.execution.managed_magic}` : null;
+  let btcMagicRebindDone = false;
   let lastSource = snapshot ? `${snapshot.account_ref}|${snapshot.broker}|${snapshot.symbol}|${snapshot.execution.managed_magic}` : null;
   const cfg = {...defaults, signalSource: process.env.SIGNAL_SOURCE || 'EA',
     goldOnly: process.env.NABD_GOLD_ONLY === 'true',
     publicationEnabled: process.env.SIGNAL_PUBLICATION_ENABLED === 'true',
     demoRecommendationExecution: process.env.DEMO_RECOMMENDATION_EXECUTION === 'true',
     goldSignalStrategy: process.env.NABD_GOLD_SIGNAL_STRATEGY || 'EMA_LEGACY',
-    scalpDemoAutoExecution: process.env.NABD_SCALP_DEMO_AUTOTRADE === 'true', ...config};
+    scalpDemoAutoExecution: process.env.NABD_SCALP_DEMO_AUTOTRADE === 'true',
+    btcMagicRebindEnabled: process.env.NABD_BTC_MAGIC_REBIND_ONCE === 'true', ...config};
   if (!['EA','DASHBOARD'].includes(cfg.signalSource)) throw new Error('SIGNAL_SOURCE must be EA or DASHBOARD');
   if (typeof cfg.publicationEnabled !== 'boolean') throw new Error('publicationEnabled must be a boolean');
   if (typeof cfg.goldOnly !== 'boolean') throw new Error('goldOnly must be a boolean');
@@ -329,16 +331,38 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     if (/^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(next.symbol)) {
       const sourceBTC = `${next.account_ref}|${next.broker}|${next.symbol}|${next.execution.managed_magic}`;
       if (lastSourceBTC && sourceBTC !== lastSourceBTC) {
-        // Report FIELD NAMES only (never account IDs, tokens or Magic values).
-        // Do not automatically rebind an old source to a different EA/account.
-        const changed = [
-          ['account_ref', btcSnapshot?.account_ref !== next.account_ref],
-          ['broker', btcSnapshot?.broker !== next.broker],
-          ['symbol', btcSnapshot?.symbol !== next.symbol],
-          ['managed_magic', btcSnapshot?.execution.managed_magic !== next.execution.managed_magic]
-        ].filter(([, differs]) => differs).map(([name]) => name);
-        throw new Error('BTC source mismatch: ' + (changed.join(', ') || 'identity') +
-          '. Align BTC EA and bridge with the stored MT5 source.');
+        // Never rebind identities implicitly or to an unrelated account, symbol,
+        // or broker. Operators may opt in briefly to recover a stale BTC Demo
+        // snapshot from an earlier Magic. Gold snapshots/positions are untouched.
+        const safeBtcRebind = cfg.btcMagicRebindEnabled === true && !btcMagicRebindDone &&
+          btcSnapshot &&
+          btcSnapshot.account_ref === next.account_ref &&
+          btcSnapshot.broker === next.broker &&
+          btcSnapshot.symbol === next.symbol &&
+          btcSnapshot.execution?.managed_magic !== '26092302' &&
+          next.execution.managed_magic === '26092302' &&
+          btcSnapshot.execution?.demo === true && next.execution.demo === true &&
+          next.terminal_connected === true &&
+          Array.isArray(btcSnapshot.positions) && btcSnapshot.positions.length === 0 &&
+          Array.isArray(next.positions) && next.positions.length === 0 &&
+          Number.isFinite(btcSnapshot.received_at) &&
+          clock() - btcSnapshot.received_at >= 300 &&
+          Number.isFinite(next.quote_at) && clock() - next.quote_at <= 20 &&
+          next.quote_at >= btcSnapshot.quote_at;
+        if (!safeBtcRebind) {
+          // Report FIELD NAMES only (never account IDs, tokens or Magic values).
+          const changed = [
+            ['account_ref', btcSnapshot?.account_ref !== next.account_ref],
+            ['broker', btcSnapshot?.broker !== next.broker],
+            ['symbol', btcSnapshot?.symbol !== next.symbol],
+            ['managed_magic', btcSnapshot?.execution.managed_magic !== next.execution.managed_magic]
+          ].filter(([, differs]) => differs).map(([name]) => name);
+          throw new Error('BTC source mismatch: ' + (changed.join(', ') || 'identity') +
+            '. Align BTC EA and bridge with the stored MT5 source.');
+        }
+        btcMagicRebindDone = true;
+        audit('BTC_DEMO_MAGIC_REBOUND', {scope:'BTC_ONLY', noBtcPositions:true});
+        console.info('NABD BTC demo Magic rebound safely; gold snapshot unchanged.');
       }
       // A late MT5 request must never roll the stored broker price or trading state backwards.
       // It is not malformed: acknowledge it as ignored so the bridge continues normally.
