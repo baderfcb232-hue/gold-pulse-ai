@@ -19,6 +19,17 @@ export function drawBrokerCandles(canvas, payload, levels = []) {
     ctx.beginPath();ctx.moveTo(x,y(c.high));ctx.lineTo(x,y(c.low));ctx.stroke();
     const bodyTop=y(Math.max(c.open,c.close)),bodyBottom=y(Math.min(c.open,c.close));
     ctx.fillRect(x-Math.min(5,step*.34),bodyTop,Math.max(2,Math.min(10,step*.68)),Math.max(1,bodyBottom-bodyTop));});
+  // Indicator overlays use only the broker's closed candle prices.
+  const closing=(payload?.candles||[]).filter(c=>Number.isFinite(c.close)).map(c=>c.close);
+  const ema=(period)=>{let prev=null;const k=2/(period+1);return closing.map(v=>(prev=prev===null?v:v*k+prev*(1-k)));};
+  const visibleStart=Math.max(0,closing.length-rows.length);
+  for (const [period,color] of [[8,'#77d8fd'],[21,'#b79aff'],[200,'#e8be6c']]) {
+    const line=ema(period);
+    if (closing.length<period) continue;
+    ctx.beginPath();ctx.setLineDash([]);ctx.strokeStyle=color;ctx.lineWidth=1.4;
+    rows.forEach((c,i)=>{const yy=y(line[visibleStart+i]);if(i===0)ctx.moveTo(left+step*(i+.5),yy);else ctx.lineTo(left+step*(i+.5),yy);});
+    ctx.stroke();
+  }
   const labels=[...levels];
   if(Number.isFinite(payload?.quote?.bid))labels.push({name:'Bid',value:payload.quote.bid,color:'#73d9b7'});
   if(Number.isFinite(payload?.quote?.ask))labels.push({name:'Ask',value:payload.quote.ask,color:'#ed9f65'});
