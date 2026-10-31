@@ -16,7 +16,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   let lastServerSeen = 0, lastNewsSeen = 0, fetched = false, historyFetched = false, historyRows = [], historyStamp = '', newsStamp = '';
   let initialized = false;
   let chartSourceKey = '', referenceChart = false, brokerChartData = null, brokerChartKey = '', brokerChartLoading = false;
-  let lastBrokerFetch = 0, quotePolling = false, lastQuoteStamp = '';
+  let lastBrokerFetch = 0, quotePolling = false, lastQuoteStamp = '', cachedBrokerQuote = null;
   const seenSignals = new Set();
   const market = () => data?.markets?.[symbol];
   const fresh = m => Boolean(m?.quote && m.connection === 'LIVE' && now() - m.quote.time <= m.quoteTtl && Date.now() - lastServerSeen < 12000);
@@ -62,7 +62,10 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     try {
       const response = await api('/api/market/broker-quotes');
       const q = response?.quotes?.[symbol], m = market();
-      if (!m || m.candle_kind !== 'BROKER_OHLC' || !q || q.source_id !== m.source_id) return;
+      if (!m || m.candle_kind !== 'BROKER_OHLC' || !q || q.source_id !== m.source_id ||
+          !Number.isFinite(q.quote?.time) || !Number.isFinite(q.quote?.price) ||
+          q.quote.time > response.serverTime + 5 || q.quote.time < m.quote.time) return;
+      cachedBrokerQuote = {...q, symbol, point: q.point || m.point};
       const stamp = symbol + ':' + q.quote.time + ':' + q.quote.bid + ':' + q.quote.ask;
       if (stamp !== lastQuoteStamp) {
         lastQuoteStamp = stamp;
@@ -126,6 +129,18 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
       row.title = `${frame?.count || 0} شمعة مغلقة · ${live ? 'سياق حالي' : 'آخر سياق متاح'}`; return row;}));
     renderPlan(m, p || (live && a?.setup?.expires_at > now() ? a.setup : null), Boolean(p));
     $('scalp-recent').replaceChildren(...(m?.recentSignals?.length ? m.recentSignals.slice(0, 3).map(p => compactPlan(p)) : [empty('لم تصدر فرصة مؤكدة بعد. شروط المراقبة تظهر فوق عند توافق الاتجاه.')]));
+    // The broker's fast quote snapshot can be newer than the SSE analysis
+    // payload. Preserve that exact broker tick during each one-second repaint;
+    // do not change analysis readiness or create a synthetic price.
+    const q = cachedBrokerQuote;
+    if (broker && q?.symbol === symbol && q.source_id === m.source_id &&
+        q.quote.time >= m.quote.time && q.quote.time <= now() + 5) {
+      put('live-price',fmt(q.quote.price));
+      put('live-ask',fmt(q.quote.ask));put('live-bid',fmt(q.quote.bid));
+      put('live-spread',Number.isFinite(q.point) && q.point > 0 ?
+        num((q.quote.ask-q.quote.bid)/q.point,1)+' نقطة' : fmt(q.quote.ask-q.quote.bid)+' USD');
+      put('live-update-age','عمر آخر تيك حقيقي '+Math.max(0,Math.floor(now()-q.quote.time))+' ثانية');
+    }
   }
   function compactPlan(p) {
     const row = node('div', 'recent-plan'); row.append(node('strong', p.side === 'BUY' ? 'buy' : 'sell', `${side(p.side)} · ${fmt(p.entry)}`),

@@ -56,6 +56,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       action TEXT NOT NULL, ticket TEXT NOT NULL, fraction REAL NOT NULL, status TEXT NOT NULL, result TEXT);`);
   let snapshot = null;
   try { const row = db.prepare('SELECT data FROM snapshot WHERE id=1').get(); if (row) snapshot = JSON.parse(row.data); } catch {}
+  let btcFastQuote = null; // Quote-only overlay. Never replaces positions, EA heartbeat or broker OHLC.
   let btcSnapshot = null;
   try { const row = db.prepare('SELECT data FROM btc_snapshot WHERE id=1').get(); if (row) btcSnapshot = JSON.parse(row.data); } catch {}
   let lastSourceBTC = btcSnapshot ? `${btcSnapshot.account_ref}|${btcSnapshot.broker}|${btcSnapshot.symbol}|${btcSnapshot.execution.managed_magic}` : null;
@@ -113,9 +114,19 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       } catch {if (!res.destroyed) res.end(); clients.delete(res);}
     }
   };
+  // The full bridge snapshot is authoritative for execution/account state.
+  // A one-second BTC quote can improve display/analysis only while the full
+  // MT5 snapshot is still fresh; a quote alone cannot keep an EA 'alive'.
+  const latestBtcSnapshot = () => {
+    if (!btcSnapshot || !btcFastQuote || clock() - btcSnapshot.received_at > 10 ||
+        btcFastQuote.quote_at < btcSnapshot.quote_at ||
+        clock() - btcFastQuote.received_at > 10) return btcSnapshot;
+    return {...btcSnapshot,bid:btcFastQuote.bid,ask:btcFastQuote.ask,
+      quote_at:btcFastQuote.quote_at,received_at:btcFastQuote.received_at};
+  };
   const marketFeed = createMarketFeed({db, clock, ...feedOptions, calendar: () => snapshot?.calendar || null,
     enabledSymbols: cfg.goldOnly ? ['XAUUSD'] : undefined,
-    brokerSnapshot: () => snapshot, brokerSnapshotBTC: () => cfg.goldOnly ? null : btcSnapshot,
+    brokerSnapshot: () => snapshot, brokerSnapshotBTC: () => cfg.goldOnly ? null : latestBtcSnapshot(),
     goldSignalStrategy: cfg.goldSignalStrategy, btcSignalStrategy: cfg.btcSignalStrategy,
     onChange: () => {researchWorker.reviewCandidates(); emit('market', marketState);}});
   const newsFeed = createNewsFeed({db, clock, ...feedOptions, onChange: () => emit('news', newsFeed.publicState)});
@@ -305,9 +316,10 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   // reference price as a trade-ready MT5 quote. No account identifiers or orders.
   function btcHealth() {
     const now = clock(), market = marketFeed.publicState().markets.BTCUSD;
-    const age = btcSnapshot ? Math.max(0, now - btcSnapshot.quote_at) : null;
-    const receiptAge = btcSnapshot ? Math.max(0, now - btcSnapshot.received_at) : null;
-    const terminal = btcSnapshot?.terminal_connected === true;
+    const quoted = latestBtcSnapshot();
+    const age = quoted ? Math.max(0, now - quoted.quote_at) : null;
+    const receiptAge = quoted ? Math.max(0, now - quoted.received_at) : null;
+    const terminal = quoted?.terminal_connected === true;
     const mt5FeedFresh = Boolean(btcSnapshot && terminal &&
       age <= defaults.quoteTtl && receiptAge <= defaults.quoteTtl);
     const sourceMatches = market?.source_id?.startsWith('MT5:') === true;
@@ -502,11 +514,11 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           return {symbol,source_id,broker_symbol:snap.symbol,
             quote:{price:(snap.bid+snap.ask)/2,bid:snap.bid,ask:snap.ask,time:snap.quote_at},
             received_at:snap.received_at,quoteAge:age,point:snap.spec.point,
-            connection:snap.terminal_connected && age<=defaults.quoteTtl && receiptAge<=defaults.quoteTtl
+            connection:snap.terminal_connected && age<=10 && receiptAge<=10
               ? 'LIVE' : 'STALE'};
         };
         return send(req,res,200,{serverTime:clock(),quotes:{
-          XAUUSD:quote(snapshot,'XAUUSD'),BTCUSD:cfg.goldOnly?null:quote(btcSnapshot,'BTCUSD')}});
+          XAUUSD:quote(snapshot,'XAUUSD'),BTCUSD:cfg.goldOnly?null:quote(latestBtcSnapshot(),'BTCUSD')}});
       }
       if (path === '/api/market/broker-candles' && req.method === 'GET') {
         const symbol = url.searchParams.get('symbol') || 'XAUUSD', tf = url.searchParams.get('tf') || 'M5';
@@ -551,6 +563,27 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         const cols = ['id','source','issued_at','symbol','side','entry','sl','tp1','tp2','status','tp1_hit','exit','r','tracking'];
         const csv = '\uFEFF' + [cols.join(','), ...unifiedSignalRows().map(s => cols.map(k => escapeCsv(s[k])).join(','))].join('\r\n');
         return send(req, res, 200, csv, 'text/csv; charset=utf-8', {'Content-Disposition': 'attachment; filename="nabd-signals.csv"'});
+      }
+      // Tiny BTC-only update, sent between 3-second full account/EA snapshots.
+      // Authenticated, source-fenced and not a trade-execution endpoint.
+      if (path === '/api/mt5/btc-quote' && req.method === 'POST') {
+        if (!bridge(req)) return send(req,res,401,{error:'Invalid bridge token'});
+        const q=await body(req,1200), now=clock();
+        if (cfg.goldOnly || !btcSnapshot || !q || q.symbol!==btcSnapshot.symbol ||
+            q.account_ref!==btcSnapshot.account_ref || q.broker!==btcSnapshot.broker ||
+            q.magic!==btcSnapshot.execution.managed_magic)
+          return send(req,res,409,{error:'BTC quote source mismatch'});
+        if (!btcSnapshot.execution.demo || !/just.?markets/i.test(btcSnapshot.broker) ||
+            !btcSnapshot.terminal_connected || now-btcSnapshot.received_at>10)
+          return send(req,res,409,{error:'Full Demo MT5 heartbeat required'});
+        if (![q.quote_at,q.bid,q.ask].every(Number.isFinite) || q.bid<=0 ||
+            q.ask<q.bid || q.quote_at>now+5 || now-q.quote_at>20)
+          return send(req,res,400,{error:'Invalid or stale broker tick'});
+        if (q.quote_at<Math.max(btcSnapshot.quote_at,btcFastQuote?.quote_at||0))
+          return send(req,res,200,{ok:true,ignored:true});
+        btcFastQuote={bid:q.bid,ask:q.ask,quote_at:q.quote_at,received_at:now};
+        marketFeed.recalculate();
+        return send(req,res,200,{ok:true});
       }
       if (['/api/mt5', '/api/update'].includes(path) && req.method === 'POST') {
         if (!bridge(req)) return send(req, res, 401, {error: 'Invalid bridge token'});
@@ -760,7 +793,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       }
       send(req, res, 404, {error: 'Not found'});
     } catch (e) {
-      if (req.method === 'POST' && ['/api/mt5', '/api/update'].includes(req.url?.split('?')[0]))
+      if (req.method === 'POST' && ['/api/mt5', '/api/update','/api/mt5/btc-quote'].includes(req.url?.split('?')[0]))
         console.warn('MT5 snapshot rejected:', text(e.message, 300));
       if (req.url?.startsWith('/api/')) return send(req, res, 400, {error: text(e.message, 300)});
       console.error('Request failed:', e.message); send(req, res, 500, {error: 'Server error'});

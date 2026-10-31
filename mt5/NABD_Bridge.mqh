@@ -320,7 +320,11 @@ void NABDOnTimer()
    if(StringLen(InpNABDToken)<32 || StringFind(InpNABDUrl,"https://")!=0)
      {if(!g_nb_warned){Print("NABD requires an HTTPS URL and a 32+ character ingest token.");g_nb_warned=true;}return;}
    ulong now=GetTickCount64();
-   if(g_nb_last_send>0 && now-g_nb_last_send<(ulong)MathMax(3,InpNABDRefreshSeconds)*1000)return;
+   // A BTC terminal uses a one-second best-effort cadence. Gold is unchanged.
+   // Broker quotes keep their original SymbolInfoTick timestamp.
+   bool btcOneSecond=StringFind(g_symbol,"BTCUSD")==0;
+   ulong cadenceMs=(ulong)(btcOneSecond?1000:MathMax(3,InpNABDRefreshSeconds)*1000);
+   if(g_nb_last_send>0 && now-g_nb_last_send<cadenceMs)return;
    g_nb_last_send=now;
    if(!g_nb_timer_seen)
      {Print("NABD timer running. Sending the first quote before loading history and the calendar.");g_nb_timer_seen=true;}
@@ -328,17 +332,57 @@ void NABDOnTimer()
    if(!SymbolInfoTick(g_symbol,tick) || tick.bid<=0 || tick.ask<tick.bid)
      {NBStatus("Waiting for a valid broker quote. Check the symbol and broker connection.");return;}
    long offset=NBOffset();
+   // Only BTC sends a lightweight authenticated tick between normal FULL
+   // snapshots (3 seconds). No account/EA permissions or bars are fabricated.
+   static ulong lastBtcFullSend=0;
+   if(btcOneSecond && g_nb_bootstrap_done && lastBtcFullSend>0 &&
+      now-lastBtcFullSend<3000)
+     {
+      if((long)tick.time-offset>(long)TimeGMT()+5)
+        {NBStatus("BTC broker tick time ahead of UTC; waiting.");return;}
+      string quick="{\"symbol\":"+NBQ(g_symbol)+
+        ",\"account_ref\":"+NBQ((string)AccountInfoInteger(ACCOUNT_LOGIN))+
+        ",\"broker\":"+NBQ(AccountInfoString(ACCOUNT_SERVER))+
+        ",\"magic\":"+NBQ((string)InpMagicNumber)+
+        ",\"quote_at\":"+(string)((long)tick.time-offset)+
+        ",\"bid\":"+NBD(tick.bid,g_digits)+",\"ask\":"+NBD(tick.ask,g_digits)+"}";
+      string fastResponse;
+      int fastCode=NBRequest("POST","/api/mt5/btc-quote",quick,fastResponse);
+      if(fastCode!=200)
+        {
+         NBStatus("BTC fast quote declined (HTTP "+(string)fastCode+"); full sync continues.");
+         // Full snapshots continue every 3s and may repair interrupted quotes.
+        }
+      else NBStatus("BTC broker tick sent; full MT5/EA sync every 3 seconds.");
+      return;
+     }
+   if(btcOneSecond)lastBtcFullSend=now;
    // Let the real price reach the dashboard before potentially slow MT5 history/calendar calls.
    // Empty history and an unavailable calendar are explicit; they are never fabricated.
    string candles="{\"M5\":[],\"M15\":[],\"H1\":[],\"H4\":[]}";
    string calendar="{\"status\":\"unavailable\",\"events\":[]}";
+   // BTC reuses the last CLOSED candle set between refreshes, avoiding
+   // four expensive CopyRates calls each second. Never synthesize OHLC.
+   static string cachedBtcCandles="";
+   static ulong lastBtcHistory=0;
+   bool refreshBtcHistory=!btcOneSecond || cachedBtcCandles=="" ||
+      now-lastBtcHistory>=5000;
    if(g_nb_bootstrap_done)
      {
+      if(!refreshBtcHistory)
+        {
+         candles=cachedBtcCandles;
+         calendar=g_nb_calendar;
+        }
+      else
+        {
       NBStatus("Loading economic calendar from MT5...");NBUpdateCalendar(offset);
       NBStatus("Loading M5, M15, H1 and H4 history from MT5...");
       candles="{\"M5\":"+NBCandles(PERIOD_M5,offset)+",\"M15\":"+NBCandles(PERIOD_M15,offset)+
         ",\"H1\":"+NBCandles(PERIOD_H1,offset)+",\"H4\":"+NBCandles(PERIOD_H4,offset)+"}";
       calendar=g_nb_calendar;
+      if(btcOneSecond){cachedBtcCandles=candles;lastBtcHistory=GetTickCount64();}
+        }
       if(g_nb_daily_time==0 || TimeGMT()-g_nb_daily_time>=3600)
         {
          NBStatus("Loading closed daily history for internal analysis...");
