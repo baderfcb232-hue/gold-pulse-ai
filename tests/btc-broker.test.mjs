@@ -234,3 +234,34 @@ test('independent BTC health separates broker quotes from stale reference data',
   assert.equal(status.executableSignalPresent,false);
   assert.equal(status.demoExecutionReady,false);
 });
+
+test('one-second BTC ticks are broker fenced and cannot refresh stale full EA permissions',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'nabd-btc-fast-'));
+  let now=NOW;
+  const token='btc-fast-test-private-token-xxxxxxxxxxx';
+  const app=createApplication({dataDir:dir,clock:()=>now,ingestToken:token});
+  t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
+  await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
+  const base='http://127.0.0.1:'+app.server.address().port;
+  const raw=btcRaw();app.ingest(raw);
+  const postQuote=async(q,secret=token)=>fetch(base+'/api/mt5/btc-quote',{method:'POST',
+    headers:{Authorization:'Bearer '+secret,'Content-Type':'application/json'},body:JSON.stringify(q)});
+  now=NOW+1;
+  const quote={symbol:raw.symbol,account_ref:raw.account_ref,broker:raw.broker,
+    magic:raw.execution.managed_magic,quote_at:now,bid:raw.bid+1,ask:raw.ask+1};
+  assert.equal((await postQuote(quote,'not-authenticated')).status,401);
+  assert.equal((await postQuote({...quote,magic:'other'})).status,409);
+  assert.equal((await postQuote({...quote,quote_at:now+10})).status,400);
+  assert.equal((await postQuote(quote)).status,200);
+  const fast=await (await fetch(base+'/api/market/broker-quotes')).json();
+  assert.equal(fast.quotes.BTCUSD.quote.bid,quote.bid);
+  assert.equal(fast.quotes.BTCUSD.quote.ask,quote.ask);
+  assert.equal(fast.quotes.BTCUSD.quote.time,now);
+  assert.equal(fast.quotes.XAUUSD.quote.bid,raw.bid===0?0:fixture().bid);
+  assert.equal(app.marketFeed.publicState().markets.BTCUSD.quote.bid,quote.bid);
+  now=NOW+13;
+  assert.equal((await postQuote({...quote,quote_at:now})).status,409);
+  const expired=await (await fetch(base+'/api/market/broker-quotes')).json();
+  assert.equal(expired.quotes.BTCUSD.quote.bid,raw.bid);
+  assert.equal(expired.quotes.BTCUSD.connection,'STALE');
+});
