@@ -34,7 +34,7 @@ input bool            InpRespectNextLevel       = true;
 
 //--- risk and execution
 input group "Risk and execution"
-input bool            InpDemoWebsiteNoDailyLimits = false;      // Demo website only: no daily loss/trade count cap
+input bool            InpDemoWebsiteNoDailyLimits = false;      // Keep daily loss protection; do not enable to remove the trade-count cap
 input bool            InpDemoBrokerMinimumLot   = false;
 input int             InpMaxConcurrentPositions = 5;         // Demo: combined cap across managed gold/BTC positions
 input double          InpMaxOpenRiskPercent     = 2.0;       // Demo: aggregate worst-case loss to SL across positions        // Demo only: allow broker minimum within daily loss limit
@@ -44,7 +44,7 @@ input double          InpStopBufferAtr           = 0.20;
 input double          InpMinStopAtr             = 0.50;
 input double          InpMaxStopAtr             = 3.00;
 input double          InpMaxMarginUsePercent    = 25.0;
-input int             InpMaxTradesPerDay        = 3;
+input int             InpMaxTradesPerDay        = 0;          // 0 = UNLIMITED daily entries; positive number = daily cap
 input double          InpMaxDailyLossPercent    = 2.0;
 input int             InpMaxSpreadPoints        = 2500;
 input int             InpDeviationPoints        = 30;
@@ -305,7 +305,7 @@ int OnInit()
       return(INIT_FAILED);
      }
    if(!MathIsValidNumber(InpRiskPercent) || InpRiskPercent<=0.0 || InpRiskPercent>100.0 ||
-      InpMaxTradesPerDay<1 || !MathIsValidNumber(InpMaxDailyLossPercent) ||
+      InpMaxTradesPerDay<0 || !MathIsValidNumber(InpMaxDailyLossPercent) ||
       InpMaxDailyLossPercent<=0.0 || InpMaxDailyLossPercent>100.0 ||
       !MathIsValidNumber(InpMaxMarginUsePercent) ||
       InpMaxMarginUsePercent<=0.0 || InpMaxMarginUsePercent>100.0 ||
@@ -707,7 +707,7 @@ bool PlaceSignal(const SignalData &signal)
      }
    double minimum=SymbolInfoDouble(g_symbol,SYMBOL_VOLUME_MIN);
    double step=SymbolInfoDouble(g_symbol,SYMBOL_VOLUME_STEP);
-   int remaining=DemoWebsiteNoDailyLimitsEnabled() ? 1 : InpMaxTradesPerDay-CountTodayEntries();
+   int remaining=(DemoWebsiteNoDailyLimitsEnabled() || InpMaxTradesPerDay==0) ? 1 : InpMaxTradesPerDay-CountTodayEntries();
    int legs=SPPlanLegCount(DemoWebsiteNoDailyLimitsEnabled() ? 1 : (InpUseSmallProfit ? InpMaxBasketPositions : 1),
                           remaining,IsHedgingAccount(),total_volume,minimum);
    double volume=SPVolumePerLeg(total_volume,legs,minimum,step);
@@ -1255,7 +1255,7 @@ int CountTodayEntries()
   {
    datetime now=ServerNow();
    if(!HistorySelect(StartOfDay(now),now))
-      return(InpMaxTradesPerDay); // Fail closed when the history cannot be read.
+      return(InpMaxTradesPerDay); // DailyRiskLimitReached() separately blocks orders when history is unavailable.
 
    int count=0;
    int total=HistoryDealsTotal();
@@ -1321,8 +1321,11 @@ double GetTodayNet()
 bool DailyRiskLimitReached(string &reason)
   {
    if(DemoWebsiteNoDailyLimitsEnabled()){reason="";return false;}
+   // Do not bypass the 2% daily loss guard when unlimited daily entries are enabled.
+   if(!HistorySelect(StartOfDay(ServerNow()),ServerNow()))
+     {reason="Daily history unavailable; cannot validate daily loss";return(true);}
    int entries=CountTodayEntries();
-   if(entries>=InpMaxTradesPerDay)
+   if(InpMaxTradesPerDay>0 && entries>=InpMaxTradesPerDay)
      {
       reason=StringFormat("daily trade limit reached (%d/%d)",entries,InpMaxTradesPerDay);
       return(true);
@@ -1554,8 +1557,8 @@ void UpdateChartPanel()
                              g_cycle_net_valid ? DoubleToString(g_cycle_net,2) : "unavailable",
                              (int)MathMax(0,InpCycleCooldownSeconds-(ServerNow()-g_last_cycle_end)),
                              g_cycle_closing ? "YES" : "NO");
-   string text=StringFormat("NABD BTC integrated Demo v4.01\nSymbol: %s | State: %s\nTrend %s | RSI %.2f | ATR %.*f\nSpread %.1f pts | Today trades %d/%d | Today net %.2f\nRisk %.2f%% per cycle | RR %.2f | News filter %s\nEmergency key: %s",
-                            g_symbol,state,trend,rsi,g_digits,atr,spread,CountTodayEntries(),InpMaxTradesPerDay,
+   string text=StringFormat("NABD BTC integrated Demo v4.01\nSymbol: %s | State: %s\nTrend %s | RSI %.2f | ATR %.*f\nSpread %.1f pts | Today trades %d/%s | Today net %.2f\nRisk %.2f%% per cycle | RR %.2f | News filter %s\nEmergency key: %s",
+                            g_symbol,state,trend,rsi,g_digits,atr,spread,CountTodayEntries(),InpMaxTradesPerDay==0?"unlimited":IntegerToString(InpMaxTradesPerDay),
                             GetTodayNet(),InpRiskPercent,InpRewardRisk,InpUseNewsFilter ? "ON" : "OFF",g_emergency_key);
    Comment(text+cycle+"\nMode: "+(InpNABDWebsiteRecommendations?"NABD website recommendations":"Native local scalp")+"\nBridge: "+g_integrated_status);
   }
