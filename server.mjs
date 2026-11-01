@@ -22,6 +22,7 @@ import {demoTradeDecision} from './demo-trade.mjs';
 import {automaticRiskSizing} from './automatic-risk.mjs';
 import {validateManualLot} from './trade-lot.mjs';
 import {websiteTradeDecision, entrySourceKey} from './website-entry.mjs';
+import {linkExecutionTrace, recommendationCode} from './execution-trace.mjs';
 import {brokerGoldMarket, brokerBtcMarket} from './broker-market.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -149,6 +150,27 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       .map(p => ({...p, telegram_delivery: delivered.get(p.id)?.state || null}));
   }
 
+  // Correlate the exact recommendation ID with its durable bridge approval and
+  // MT5 EA outcome. Only operators may see account-bound execution traces.
+  async function tracedSignalRows() {
+    const rows = unifiedSignalRows();
+    if (!commandJournal?.websiteEntries || !commandJournal?.websiteDecisions) return rows;
+    try {
+      const sources = [snapshot, btcSnapshot].filter(Boolean);
+      const perSource = await Promise.all(sources.map(async source => {
+        const key = entrySourceKey(source);
+        const symbol = /^BTCUSD/i.test(source.symbol) ? 'BTCUSD' : 'XAUUSD';
+        const [entries, decisions] = await Promise.all([
+          commandJournal.websiteEntries(key), commandJournal.websiteDecisions(key)]);
+        return {entries: entries.map(record => ({...record,symbol})),
+          decisions: decisions.map(record => ({...record,symbol}))};
+      }));
+      return linkExecutionTrace(rows, perSource.flatMap(x=>x.entries), perSource.flatMap(x=>x.decisions));
+    } catch (e) {
+      console.warn('Website recommendation execution trace temporarily unavailable:', e.message);
+      return rows; // Never fabricate an execution result if the journal is unavailable.
+    }
+  }
   const websiteActivity = Object.fromEntries(['XAUUSD','BTCUSD'].map(symbol => [symbol,
     {lastPollAt:null,lastDispatchAt:null,lastReportAt:null,lastResult:null,journalState:'NOT_CHECKED',readAt:null,source:null}]));
   function rememberWebsiteActivity(symbol, record) {
@@ -163,7 +185,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         (activity.lastDispatchAt !== time || activity.lastReportAt !== reportedAt ||
          activity.lastResult !== record.status)) {
       console.info('NABD website MT5 result:', JSON.stringify({
-        symbol, status: record.status,
+        symbol, signal_code: recommendationCode(record.plan_id || record.plan?.id),
+        approval_id: Number(record.id) || null, status: record.status,
         reason_code: Number.isInteger(record.reason_code) ? record.reason_code : null,
         mt5_retcode: Number.isInteger(record.mt5_retcode) ? record.mt5_retcode : null
       }));
@@ -595,7 +618,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       }
       if (path === '/api/signals' && req.method === 'GET') {
         if (!await canReadSignals(req)) return send(req, res, 401, {error: 'سجّل الدخول بحساب مؤكد ومخوّل لمشاهدة التوصيات.'});
-        return send(req, res, 200, {signals: unifiedSignalRows(), kind: 'EXPERIMENTAL_SHADOW_OBSERVATIONS'});
+        return send(req, res, 200, {signals: operator(req) ? await tracedSignalRows() : unifiedSignalRows(), kind: 'EXPERIMENTAL_SHADOW_OBSERVATIONS'});
       }
       if (path === '/api/signals.csv' && req.method === 'GET') {
         if (!await canReadSignals(req)) return send(req, res, 401, {error: 'تسجيل الدخول مطلوب لتصدير سجل التوصيات.'});
@@ -696,7 +719,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           btc: !cfg.goldOnly && btcSnapshot ? {account:btcSnapshot.account,positions:btcSnapshot.positions,lastUpdate:btcSnapshot.received_at,
             riskSizing: automaticRiskSizing(btcSnapshot, marketFeed.publicState().markets.BTCUSD?.currentSignal, now),
             tradeSizing:commandJournal?.getTradeSizing ? await commandJournal.getTradeSizing(entrySourceKey(btcSnapshot)) : {mode:'AUTO',lot:null},
-            websiteEntries:commandJournal?.websiteEntries ? await commandJournal.websiteEntries(entrySourceKey(btcSnapshot)) : []} : null,
+            websiteEntries:commandJournal?.websiteEntries ? await commandJournal.websiteEntries(entrySourceKey(btcSnapshot)) : [],
+            websiteDecisions:commandJournal?.websiteDecisions ? await commandJournal.websiteDecisions(entrySourceKey(btcSnapshot)) : []} : null,
           deals: db.prepare('SELECT data FROM deals ORDER BY time DESC LIMIT 1000').all().map(x => JSON.parse(x.data)),
           commands: commandJournal ? await commandJournal.list(clock()) : db.prepare('SELECT * FROM commands ORDER BY id DESC LIMIT 100').all(),
           lastUpdate: snapshot?.received_at ?? null});
@@ -790,6 +814,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         const id=Number(record.id);
         if (!Number.isSafeInteger(id) || id<=0) throw new Error('Invalid website approval identifier');
         rememberWebsiteActivity(symbol, record);
+        console.info('NABD website MT5 dispatch:', JSON.stringify({
+          symbol, signal_code: recommendationCode(p.id), approval_id: id, status: 'DISPATCHED'}));
         const fields=['NBWEB1',chosen.account_ref,chosen.symbol,chosen.execution.managed_magic,
           p.side,p.entry,p.sl,p.tp,Math.floor(p.issued_at),Math.floor(p.expires_at),p.bar_time,id,
           ...(p.manual_lot == null ? [] : [p.manual_lot])];
