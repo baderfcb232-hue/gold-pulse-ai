@@ -2,7 +2,7 @@ import {positionSize, ema, botHeartbeatFresh, BOT_CONTROL_TTL} from '/engine.mjs
 import {initLiveWorkspace} from '/live.js';
 import {createStateConnection} from '/state-connection.js';
 import {requestJson} from '/http.js';
-import {controlBlockers} from '/control-readiness.js';
+import {controlBlockers, marketControlStatus} from '/control-readiness.js';
 import {createCommandTracker, commandProgress, demoExecutionMessage} from '/command-feedback.js';
 const $ = id => document.getElementById(id);
 const e = (tag, cls, content) => {const x = document.createElement(tag); if (cls) x.className = cls; if (content != null) x.textContent = String(content); return x;};
@@ -24,8 +24,9 @@ let controlMarket='XAUUSD';
 const controlName=()=>controlMarket==='BTCUSD'?'البيتكوين':'الذهب';
 const controlState=()=>state?.controls?.[controlMarket]||null;
 const controlAccount=()=>controlMarket==='BTCUSD'?privateData?.btc:privateData;
-const controlLive=()=>{const s=controlState();return !!s && s.connection==='LIVE' && now()-s.lastUpdate<=20 && s.terminalConnected;};
-const selectedFresh=()=>{const s=controlState();return !!s && now()-s.bridgeReceivedAt<=10 && botHeartbeatFresh(s.bot?.heartbeat_at,s.execution?.main_connected,now(),BOT_CONTROL_TTL);};
+const selectedStatus=()=>marketControlStatus(state?.controls,controlMarket,now());
+const controlLive=()=>selectedStatus().live;
+const selectedFresh=()=>selectedStatus().fresh;
 let memberIdentity = null, memberCsrf = '';
 const price = v => v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('en-US',{minimumFractionDigits:state?.spec?.digits ?? 2,maximumFractionDigits:state?.spec?.digits ?? 2});
 const num = (v, digits = 2) => v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('en-US',{maximumFractionDigits:digits});
@@ -33,7 +34,7 @@ const time = (t, detailed = false) => t ? new Intl.DateTimeFormat('ar-PS',{timeZ
 const now = () => (Date.now() + clockOffset) / 1000;
 const badge = (s, cls='neutral') => e('span','pill '+cls,s);
 const empty = text => e('p','empty-inline',text);
-function toast(message, error=false) {const box=e('div','toast'+(error?' error':'')); const b=e('button','', '×');b.setAttribute('aria-label','إغلاق التنبيه');b.onclick=()=>box.remove();box.append(b,e('span','',message));$('toasts').append(box);setTimeout(()=>box.remove(),9000);}
+function toast(message, error=false) {if([...$('toasts').children].some(x=>x.dataset.message===message))return;const box=e('div','toast'+(error?' error':'')); box.dataset.message=message; const b=e('button','', '×');b.setAttribute('aria-label','إغلاق التنبيه');b.onclick=()=>box.remove();box.append(b,e('span','',message));$('toasts').append(box);setTimeout(()=>box.remove(),9000);}
 async function api(path, options={}) {
   return requestJson(path,{...options,headers:options.body?{'Content-Type':'application/json',...options.headers}:options.headers});
 }
@@ -262,7 +263,7 @@ function renderCommandProgress(){
 function getControlBlockers(action){
   const c=controlState(),x=c?.execution;
   const reasons=controlBlockers({action,authenticated,persistent:state?.storage?.remoteControlAvailable===true,
-    live:controlLive() || (action==='PAUSE' && !!c?.terminalConnected),fresh:selectedFresh(),
+    live:controlLive() || (action==='PAUSE' && selectedStatus().bridgeLive),fresh:selectedFresh(),
     remoteControl:!!x?.remote_control,enabled:!!x?.enabled});
   if(x?.control_protocol!==2)reasons.push('حدّث ملف '+controlName()+' إلى NABD 4.01 وزامن VPS لتفعيل التحكم المستقل.');
   if(activeCommandBusy())reasons.push('يوجد أمر قيد الإرسال أو التأكيد؛ انتظر تحديث سجله.');
@@ -272,24 +273,26 @@ function getControlBlockers(action){
   }
   if(action==='CLOSE_ALL' && authenticated && controlAccount()?.positions?.length===0 && now()-controlAccount().lastUpdate<=10)
     reasons.push('لا توجد صفقات مفتوحة للبوت المرتبط لإغلاقها.');
-  return reasons;
+  return reasons.map(reason=>controlName()+': '+reason);
 }
 function renderExecution(){
   const c=controlState(),x=c?.execution;
   $('control-market').disabled=activeCommandBusy();
-  put('control-connection-summary',!selectedFresh()?'حالة MT5 غير حديثة؛ ننتظر تحديث البوت.':x?.paused?'دخول صفقات جديدة موقوف':x?.enabled?'الدخول التلقائي مسموح عند اكتمال الشروط':'التنفيذ غير مفعّل داخل MT5');
-  put('demo-execution-status',c?demoExecutionMessage({...c,demoExecution:c.websiteExecution}):'ننتظر بيانات MT5 لـ'+controlName());
-  // Never hide the update package based only on a remote execution flag:
-  // it does not prove that the updated compiled EA is installed on the VPS.
+  const selected=selectedStatus();
+  put('control-connection-summary',selected.summary+' · '+(!selected.fresh?'التحكم ينتظر تحديث البوت':x?.paused?'دخول جديد موقوف':x?.enabled?'الدخول التلقائي مسموح عند اكتمال الشروط':'التنفيذ غير مفعّل داخل MT5'));
+  put('demo-execution-status',controlName()+': '+(c?demoExecutionMessage({...c,demoExecution:c.websiteExecution}):'ننتظر بيانات MT5'));
   $('control-download-mt5').hidden=false;
-  const goldReady=effectiveConnection()==='LIVE' && mainFresh() && !!state?.signalSourceReady;
-  const bridge=state?.websiteBridge?.connection||'NOT_OBSERVED';
-  const goldNote=!goldReady?'الذهب: بيانات MT5 أو نبض البوت غير حديثة':state?.websiteExecution?.ready?'الذهب: خطة جديدة جاهزة لإرسال Demo':'الذهب: الاتصال حي؛ '+(state?.websiteExecution?.reason||'ننتظر شروط التوصية');
-  const btc=privateData?.btc;
-  const btcNote=!btc?'البيتكوين: لم تُؤكد بيانات جسر BTC في حساب المشغّل':(!Number.isFinite(btc.lastUpdate)||now()-btc.lastUpdate>15)?'البيتكوين: تحديث جسر BTC متأخر':'البيتكوين: وصل تحديث MT5؛ تنفيذ الصفقة يحتاج فحص شروطها';
-  put('mt5-market-readiness',goldNote+' | '+btcNote+' | جسر الذهب: '+bridge+' | تحميل ملفات MT5 لا يعني تركيبها على VPS.');
+  const marketRows=['XAUUSD',...(!state?.goldOnly?['BTCUSD']:[])].map(symbol=>{
+    const status=marketControlStatus(state?.controls,symbol,now());
+    return e('p',status.fresh?'control-explanation':'subtle',status.summary);
+  });
+  replace('market-control-status',...marketRows);
+  put('mt5-market-readiness',['XAUUSD','BTCUSD'].map(symbol=>{
+    const c=state?.controls?.[symbol];
+    return (symbol==='BTCUSD'?'البيتكوين':'الذهب')+': جسر التنفيذ '+(c?.websiteBridge?.connection||'NOT_OBSERVED');
+  }).join(' | '));
   renderCommandProgress();
-  put('execution-badge',!selectedFresh()?'حالة البوت غير متاحة':x?.enabled?(x.demo?'حساب تجريبي':'حساب حقيقي'):'التنفيذ المحلي غير مفعّل');
+  put('execution-badge',controlName()+' · '+(!selectedFresh()?'حالة البوت غير متاحة':x?.enabled?(x.demo?'حساب تجريبي':'حساب حقيقي'):'التنفيذ المحلي غير مفعّل'));
   $('execution-badge').className='pill '+(x?.enabled?'warn':'neutral');
   put('execution-description',x?(x.demo && x.website_no_daily_limits ? `Demo · حدود الخسارة وعدد الدخولات اليومية معطّلة · ستوب التوصية والهدف الأول · حساب اللوت يبدأ من ${num(x.risk_percent)}% مع السماح بأقل لوت · ${x.paused?'الدخول موقوف':'الدخول مفعّل'}` : `${x.paused?'دخول الصفقات موقوف':'إدارة البوت من MT5'} · هدف الربح الصغير ${num(x.small_profit_target)} ${state?.spec?.currency||''} · مخاطرة الإعداد المحلي ${num(x.risk_percent)}% · ${x.remote_control?'التحكم من الموقع متاح':'التحكم من الموقع غير مفعّل'}`):'إعدادات التنفيذ تظهر عند وصول ربط البوت.');
   // Always explain disabled controls. The actual command is blocked by
@@ -377,6 +380,9 @@ document.querySelectorAll('.login-trigger').forEach(b=>b.onclick=async()=>{if(au
 document.querySelectorAll('.dialog-close').forEach(b=>b.onclick=()=>b.closest('dialog').close());
 $('login-form').onsubmit=async event=>{event.preventDefault();const form=event.currentTarget;try{await api('/api/login',{method:'POST',body:JSON.stringify({token:form.elements.token.value})});privateEpoch++;privateReadAllowed=true;form.reset();$('login-dialog').close();await loadPrivate();toast('تم تسجيل الدخول.');}catch(err){put('login-error',err.message);}};
 $('command-confirm').onclick=async()=>{
+  if(!pendingCommand || commandSending)return;
+  $('command-confirm').disabled=true;
+  try{await stateConnection.refresh();}finally{$('command-confirm').disabled=false;}
   if(!pendingCommand || commandSending)return;
   const issues=getControlBlockers(pendingCommand.action);
   if(issues.length){$('command-dialog').close();pendingCommand=null;toast(issues.join(' · '),true);return;}

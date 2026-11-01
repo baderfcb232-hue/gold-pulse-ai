@@ -29,3 +29,28 @@ test('unauthenticated and offline control provides all applicable reasons', () =
   const blockers = controlBlockers({action:'CLOSE_ALL'});
   assert.equal(blockers.length, 6);
 });
+
+import {marketControlStatus} from '../public/control-readiness.js';
+const time=1000;
+const connected={connection:'LIVE',terminalConnected:true,bridgeReceivedAt:time,lastUpdate:time,
+  bot:{heartbeat_at:time},execution:{main_connected:true}};
+test('stale gold price does not block live BTC controls and still permits gold pause',()=>{
+  const controls={XAUUSD:{...connected,connection:'STALE',lastUpdate:time-120000},BTCUSD:connected};
+  const gold=marketControlStatus(controls,'XAUUSD',time);
+  const btc=marketControlStatus(controls,'BTCUSD',time);
+  assert.equal(gold.live,false);assert.equal(gold.fresh,true);assert.equal(gold.bridgeLive,true);
+  assert.match(gold.summary,/البوت متصل.*السعر قديم/);
+  assert.equal(btc.live,true);assert.equal(btc.fresh,true);
+  assert.match(btc.summary,/البيتكوين.*السعر حديث/);
+  assert.deepEqual(controlBlockers({...ready,action:'PAUSE',live:gold.bridgeLive,fresh:gold.fresh}),[]);
+  assert.deepEqual(controlBlockers({...ready,live:btc.live,fresh:btc.fresh}),[]);
+});
+test('each market fails closed for missing, disconnected, stale or future bridge updates',()=>{
+  for(const c of [null,{...connected,terminalConnected:false},{...connected,bridgeReceivedAt:time-11},
+    {...connected,bridgeReceivedAt:time+6},{...connected,bridgeReceivedAt:null}]){
+    const s=marketControlStatus({BTCUSD:c},'BTCUSD',time);
+    assert.equal(s.live,false);assert.equal(s.fresh,false);assert.equal(s.bridgeLive,false);
+  }
+  const stale=marketControlStatus({BTCUSD:{...connected,bot:{heartbeat_at:time-6}}},'BTCUSD',time);
+  assert.equal(stale.fresh,false);assert.match(stale.summary,/ننتظر نبض البوت/);
+});
