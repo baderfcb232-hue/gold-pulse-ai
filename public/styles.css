@@ -77,3 +77,9 @@ body{background:radial-gradient(ellipse at 68% 0,#2a1c332e,transparent 55%),var(
 .mt5-candle-chart canvas{display:block;width:100%;height:100%;touch-action:pan-y}
 #broker-chart-wrap[hidden],#reference-chart-wrap[hidden],#broker-quote-values[hidden]{display:none!important}
 @media(max-width:760px){.mt5-candle-chart{height:440px;min-height:350px}.broker-quote-values>span{min-width:85px;padding:8px}.broker-quote-values strong{font-size:13px}}
+
+/* Always show why an MT5 control cannot execute, especially on touch screens. */
+.control-action-hints{display:grid;gap:5px;margin:12px 0;overflow-wrap:anywhere}
+.control-action-hints p{font-size:12px;line-height:1.7;color:var(--muted);margin:0}
+.bot-controls .button[data-control-state="blocked"]{border-style:dashed;cursor:help}
+.bot-controls .button[data-control-state="ready"]{border-style:solid}
