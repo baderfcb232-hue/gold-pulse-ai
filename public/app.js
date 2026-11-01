@@ -2,7 +2,7 @@ import {positionSize, ema, botHeartbeatFresh, BOT_CONTROL_TTL} from '/engine.mjs
 import {initLiveWorkspace} from '/live.js';
 import {createStateConnection} from '/state-connection.js';
 import {requestJson} from '/http.js';
-import {controlBlockers, marketControlStatus, marketControlWarnings} from '/control-readiness.js?v=market-status-2';
+import {controlBlockers, marketControlStatus, marketControlWarnings, closeButtonDisplay} from '/control-readiness.js?v=stable-close-1';
 import {createCommandTracker, commandProgress, demoExecutionMessage} from '/command-feedback.js?v=mobile-controls-3';
 const $ = id => document.getElementById(id);
 const e = (tag, cls, content) => {const x = document.createElement(tag); if (cls) x.className = cls; if (content != null) x.textContent = String(content); return x;};
@@ -308,10 +308,14 @@ function renderExecution(){
     const readyText=action==='PAUSE'?'جاهز: يوقف الدخول الجديد فقط دون إغلاق الصفقات.'
       :action==='RESUME'?'جاهز: يسمح بتنفيذ توصية جديدة عند استيفاء الشروط؛ لا يفتح صفقة فورًا.'
       :'جاهز لإغلاق صفقات البوت المفتوحة على هذا الرمز بعد التأكيد.';
-    const hint=issues.length ? issues[0]+(issues.length>1?' · اضغط لمعرفة بقية الأسباب.':'')
-      :readyText;
+    const closeDisplay=action==='CLOSE_ALL'
+      ? closeButtonDisplay({authenticated,positions:controlAccount()?.positions,issues}) : null;
+    const hint=closeDisplay?.hint || (issues.length
+      ? issues[0]+(issues.length>1?' · اضغط لمعرفة بقية الأسباب.':'')
+      : readyText);
     put(hintId,hint);
     button.dataset.controlState=issues.length?'blocked':'ready';
+    if(closeDisplay)button.dataset.positionState=closeDisplay.positionState;
     if(id==='pause-bot')button.textContent=x?.paused?'الدخول موقوف':'إيقاف دخول جديد';
     if(id==='resume-bot')button.textContent=x?.paused===false?'الدخول التلقائي مسموح':'تشغيل الدخول التلقائي';
   }
