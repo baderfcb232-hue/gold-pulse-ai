@@ -54,3 +54,25 @@ test('each market fails closed for missing, disconnected, stale or future bridge
   const stale=marketControlStatus({BTCUSD:{...connected,bot:{heartbeat_at:time-6}}},'BTCUSD',time);
   assert.equal(stale.fresh,false);assert.match(stale.summary,/ننتظر نبض البوت/);
 });
+
+import {marketControlWarnings} from '../public/control-readiness.js';
+
+test('a stale gold price alone never generates a global MT5 outage alert', () => {
+  const controls = {
+    XAUUSD: {...connected, connection:'STALE', lastUpdate:time-3600},
+    BTCUSD: connected
+  };
+  assert.deepEqual(marketControlWarnings(controls,time),[]);
+});
+test('warnings name only the market with a stale bridge or stale bot heartbeat', () => {
+  const gold = {...connected,bridgeReceivedAt:time-61};
+  const btc = connected;
+  let warnings = marketControlWarnings({XAUUSD:gold,BTCUSD:btc},time);
+  assert.equal(warnings.length,1);
+  assert.equal(warnings[0].key,'bridge:XAUUSD');
+  assert.match(warnings[0].message,/الذهب/);
+  warnings=marketControlWarnings({XAUUSD:connected,BTCUSD:{...btc,bot:{heartbeat_at:time-6}}},time);
+  assert.equal(warnings.length,1);
+  assert.equal(warnings[0].key,'bot:BTCUSD');
+  assert.match(warnings[0].message,/البيتكوين/);
+});
