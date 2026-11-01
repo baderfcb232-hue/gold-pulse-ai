@@ -88,6 +88,15 @@ test('website signals dispatch immediately from tracking even when scanner retur
   assert.equal(decision.plan.tp,p.tp1);
 });
 
+test('news, calendar, old bars and failed risk checks still block fresh history dispatch',()=>{
+ const f=decisionFixture(),p=f.market.currentSignal;
+ for(const status of ['NEWS_BLOCK','WARMING','GAP','BLOCKED','STALE']){
+   const m={...f.market,currentSignal:null,recentSignals:[p],
+     analysis:{...f.market.analysis,status}};
+   assert.equal(websiteTradeDecision({...f,market:m}).reason,'WAITING_WEBSITE_PLAN');
+ }
+});
+
 test('website execution never treats stale or Coinbase/reference history as a new trade',()=>{
   for (const alter of [
     p => ({...p,issued_at:NOW-76}),
