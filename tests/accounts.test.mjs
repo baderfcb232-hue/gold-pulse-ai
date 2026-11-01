@@ -7,7 +7,7 @@ import {join} from 'node:path';
 import {createApplication} from '../server.mjs';
 import {sqliteAuthStore} from '../auth-store.mjs';
 import {totp, totpStep, encrypt, decrypt, hashPassword, checkPassword} from '../auth-crypto.mjs';
-import {backupStorage, exportAuthBackup} from '../auth-backup.mjs';
+import {backupStorage, exportAuthBackup, readAuthBackup} from '../auth-backup.mjs';
 import {createAuthMailer} from '../auth-mail.mjs';
 import {samplePlan, fixture} from './fixtures.mjs';
 
@@ -163,9 +163,12 @@ test('deletion requests end sessions without letting users disable the site owne
 
 test('encrypted external backups restore atomically, reject tampering and invalidate sessions', async t => {
   const h = await setup(t), admin = await h.owner(); await h.verify('backup@example.test'); const member = await h.login('backup@example.test');
+  assert.equal((await h.request('/api/auth/mt5-accounts', {broker:'JustMarkets',server:'JustMarkets-Demo2',login:'87654321',environment:'demo',acknowledge:true},member)).status,201);
   assert.equal(typeof await exportAuthBackup(h.store, h.backup.key, h.now), 'string');
   const exported = await h.request('/api/admin/backup/download', {password: PASSWORD}, admin); assert.equal(exported.status, 200, h.errors.map(e => e.stack).join('\n'));
   assert.equal(exported.body.backup.includes('backup@example.test'), false); assert.equal(exported.body.backup.includes('scrypt'), false);
+  assert.equal(exported.body.backup.includes('87654321'), false);
+  assert.equal(readAuthBackup(exported.body.backup,h.backup.key).tables.nabd_member_mt5_accounts.length,1);
   const restore = {backup: exported.body.backup, password: PASSWORD, confirm: 'RESTORE'};
   assert.equal((await h.request('/api/admin/restore', {...restore, backup: restore.backup.slice(0, -2) + 'AA', code: '000000'}, admin)).status, 400);
   await h.request('/api/admin/users/update', {id: member.body.user.id, status: 'disabled', recommendations: false}, admin);
@@ -178,6 +181,7 @@ test('encrypted external backups restore atomically, reject tampering and invali
   assert.equal((await h.request('/api/admin/restore', restore, admin)).status, 200); assert.ok(h.copies.length >= 2);
   assert.equal((await h.request('/api/auth/me', undefined, admin)).body.user, null);
   assert.equal((await h.login('backup@example.test')).status, 200);
+  assert.equal((await h.store.query('SELECT login FROM nabd_member_mt5_accounts')).rows[0].login,'87654321');
 });
 
 test('verification and sessions expire, while repeated recovery requests are limited', async t => {
@@ -283,4 +287,15 @@ test('MT5 Demo registration is owner-scoped, CSRF protected, and never grants tr
   const html = await fetch(h.base + '/account').then(response => response.text());
   assert.match(html, /member-mt5-form/);
   assert.match(html, /لا يوجد اتصال MT5 أو تداول تلقائي/);
+});
+
+test('old encrypted identity backups remain readable without MT5 registrations', async t => {
+  const h = await setup(t);
+  const tables = {};
+  for (const name of ['nabd_users', 'nabd_auth_audit', 'nabd_auth_settings'])
+    tables[name] = (await h.store.query('SELECT * FROM ' + name)).rows;
+  const oldArchive = encrypt(JSON.stringify({version:1,created_at:h.now(),tables}),h.backup.key);
+  const recovered = readAuthBackup(oldArchive,h.backup.key);
+  assert.deepEqual(recovered.tables.nabd_member_mt5_accounts,[]);
+  assert.equal(recovered.version,1);
 });
