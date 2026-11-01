@@ -1,0 +1,52 @@
+name: NABD Demo EA package checks
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mt5/NABD_BTC_4_01.mq5'
+      - 'mt5/NABD_GOLD_4_01.mq5'
+      - '.github/workflows/demo-ea-package.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - name: Run complete NABD backend and bridge integration tests
+        run: npm test
+      - name: Verify self-contained MQL and Demo risk defaults
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for sym in ("BTC", "GOLD"):
+              p = Path("mt5") / f"NABD_{sym}_4_01.mq5"
+              s = p.read_text(encoding="utf-8")
+              assert '#include <Trade/Trade.mqh>' in s
+              assert '#include "NABD_' not in s
+              assert 'InpDemoWebsiteNoDailyLimits = false;' in s
+              assert 'InpDemoBrokerMinimumLot   = false;' in s
+              assert 'ACCOUNT_TRADE_MODE_DEMO &&' in s
+              assert 'InpRiskPercent            = 0.50;' in s
+              assert 'InpMaxDailyLossPercent    = 2.0;' in s
+              assert 'InpMaxTradesPerDay        = 3;' in s
+              for required in (
+                  'NBProcessWebsiteRecommendation()', 'NABDProcessWebsiteApproval()',
+                  'g_website_attempt_deal_ticket', 'deal_ticket', 'NABDKey("WDT")',
+                  'WEBSITE_SUBMITTED', 'WEBSITE_BLOCKED', 'IsSuccessfulRetcode'):
+                  assert required in s, (sym, required)
+              assert s.count('{') == s.count('}'), sym
+              print(sym, "Demo-only EA static checks passed; bytes:", p.stat().st_size)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NABD-JustMarkets-Demo-EAs
+          path: |
+            mt5/NABD_BTC_4_01.mq5
+            mt5/NABD_GOLD_4_01.mq5
+          retention-days: 30
