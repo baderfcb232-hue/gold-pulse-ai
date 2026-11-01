@@ -273,6 +273,48 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
       if (path === '/api/auth/logout' && req.method === 'POST') {
         await store.query('DELETE FROM nabd_sessions WHERE hash=?', [u.session_hash]); return result({ok: true}, 200, {'Set-Cookie': clearCookies()});
       }
+      // Phase 1: member-scoped, read-only MT5 account registration. Not an active MT5 link.
+      // Never accept or store brokerage passwords or investor passwords here.
+      if (path === '/api/auth/mt5-accounts' && req.method === 'GET') {
+        const accounts = (await store.query(`SELECT id,broker,server_name,login,environment,status,created_at
+          FROM nabd_member_mt5_accounts WHERE user_id=? ORDER BY created_at DESC`, [u.id])).rows;
+        return result({accounts, tradingEnabled: false, connectionEnabled: false, phase: 'REGISTRATION_ONLY'});
+      }
+      if (path === '/api/auth/mt5-accounts' && req.method === 'POST') {
+        if (!b || typeof b !== 'object' || Array.isArray(b) ||
+            Object.keys(b).some(name => !['broker','server','login','environment','acknowledge'].includes(name)))
+          fail(400, 'أدخل معلومات الحساب فقط، بدون كلمات مرور أو بيانات إضافية.');
+        if (b.broker !== 'JustMarkets' || b.environment !== 'demo' ||
+            typeof b.server !== 'string' || !/^JustMarkets-Demo[0-9]{0,5}$/.test(b.server) ||
+            typeof b.login !== 'string' || !/^[1-9][0-9]{3,15}$/.test(b.login) ||
+            b.acknowledge !== true)
+          fail(400, 'هذه المرحلة تقبل رقم حساب JustMarkets Demo وسيرفره فقط، مع تأكيد أن التسجيل لا يفعّل التداول.');
+        let id;
+        await store.transaction(async q => {
+          const existing = (await q('SELECT id FROM nabd_member_mt5_accounts WHERE user_id=? LIMIT 1', [u.id])).rows;
+          if (existing.length) fail(409, 'يمكن تسجيل حساب Demo واحد حاليًا. احذف طلبك السابق أولًا.');
+          const occupied = (await q('SELECT id FROM nabd_member_mt5_accounts WHERE broker=? AND server_name=? AND login=? LIMIT 1',
+            [b.broker, b.server, b.login])).rows;
+          if (occupied.length) fail(409, 'الحساب غير متاح للتسجيل حاليًا.');
+          id = randomUUID();
+          await q(`INSERT INTO nabd_member_mt5_accounts
+            (id,user_id,broker,server_name,login,environment,status,created_at)
+            VALUES(?,?,?,?,?,?,'PENDING_SETUP',?)`,
+            [id, u.id, b.broker, b.server, b.login, 'demo', clock()]);
+          await audit(q, u.id, 'MT5_REGISTRATION_CREATED', id);
+        });
+        return result({ok: true, id, status: 'PENDING_SETUP', connectionEnabled: false, tradingEnabled: false,
+          message: 'تم تسجيل بيانات حساب Demo فقط. الربط والتداول غير مفعّلين بعد.'}, 201);
+      }
+      if (path === '/api/auth/mt5-accounts/remove' && req.method === 'POST') {
+        if (!b || typeof b.id !== 'string' || !/^[a-f0-9-]{36}$/.test(b.id)) fail(400, 'معرّف الحساب غير صالح.');
+        await store.transaction(async q => {
+          const removed = await q('DELETE FROM nabd_member_mt5_accounts WHERE id=? AND user_id=? RETURNING id', [b.id, u.id]);
+          if (!removed.rows.length) fail(404, 'الحساب غير موجود ضمن حساباتك.');
+          await audit(q, u.id, 'MT5_REGISTRATION_REMOVED', b.id);
+        });
+        return result({ok: true});
+      }
       if (path === '/api/auth/profile' && req.method === 'POST') {
         const name = clean(b.name, 80); if (name.length < 2 || typeof b.notifications !== 'boolean') fail(400, 'بيانات الملف غير صالحة.');
         await store.query('UPDATE nabd_users SET name=?,notifications=? WHERE id=?', [name, b.notifications ? 1 : 0, u.id]);
