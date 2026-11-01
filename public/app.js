@@ -298,9 +298,20 @@ function renderExecution(){
   // confirmCommand(), rechecked before POST, and revalidated on the server.
   for(const [id,action] of [['pause-bot','PAUSE'],['resume-bot','RESUME'],['close-all','CLOSE_ALL']]){
     const button=$(id),issues=getControlBlockers(action);
-    button.disabled=activeCommandBusy()||issues.length>0;
+    button.disabled=activeCommandBusy();
     button.setAttribute('aria-disabled',String(issues.length>0));
     button.title=issues.join(' · ')||'سيُطلب التأكيد قبل إرسال الأمر إلى MT5.';
+    // On mobile, a natively disabled button swallows taps and hides its reason.
+    // Keep it tappable for a safe explanation; confirmCommand and the API
+    // independently reject all blocked actions. Busy commands remain disabled.
+    const hintId={'pause-bot':'pause-hint','resume-bot':'resume-hint','close-all':'close-hint'}[id];
+    const readyText=action==='PAUSE'?'جاهز: يوقف الدخول الجديد فقط دون إغلاق الصفقات.'
+      :action==='RESUME'?'جاهز: يسمح بتنفيذ توصية جديدة عند استيفاء الشروط؛ لا يفتح صفقة فورًا.'
+      :'جاهز لإغلاق صفقات البوت المفتوحة على هذا الرمز بعد التأكيد.';
+    const hint=issues.length ? issues[0]+(issues.length>1?' · اضغط لمعرفة بقية الأسباب.':'')
+      :readyText;
+    put(hintId,hint);
+    button.dataset.controlState=issues.length?'blocked':'ready';
     if(id==='pause-bot')button.textContent=x?.paused?'الدخول موقوف':'إيقاف دخول جديد';
     if(id==='resume-bot')button.textContent=x?.paused===false?'الدخول التلقائي مسموح':'تشغيل الدخول التلقائي';
   }
@@ -308,7 +319,7 @@ function renderExecution(){
   notice.textContent=issues.length?issues.join(' · '):'اختر الأمر ثم أكّد إرساله. النتيجة تظهر بعد رد MT5.';
   document.querySelectorAll('.position .actions button').forEach(button=>{
     const blockers=getControlBlockers(button.dataset.action||'CLOSE_POSITION');
-    button.disabled=activeCommandBusy()||blockers.length>0;
+    button.disabled=activeCommandBusy();
     button.setAttribute('aria-disabled',String(blockers.length>0));
     button.title=blockers.join(' · ')||'سيُطلب التأكيد قبل إرسال الأمر إلى MT5.';
   });
