@@ -1,0 +1,23 @@
+name: Verify NABD Telegram test delivery
+on:
+  pull_request:
+    branches: [main]
+jobs:
+  verify-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check one-time test delivery without trading
+        shell: bash
+        run: |
+          for attempt in {1..8}; do
+            if curl --fail --silent --show-error --max-time 15 https://gold-pulse-ai.onrender.com/healthz > health.json; then
+              node -e "const h=require('./health.json'); const d=h.publication?.telegram?.testDelivery; console.log(JSON.stringify({serviceOk:h.ok,test:d?{id:d.id,state:d.state,message_id:d.message_id}:null})); if(d?.id==='nabd-route-check-20261101-001'){if(d.state==='SENT')process.exit(0);if(d.state==='FAILED'||d.state==='REJECTED_CHANNEL')process.exit(2)} process.exit(1)" && exit 0
+              status=$?
+              if [ "$status" -eq 2 ]; then exit 2; fi
+            fi
+            sleep 10
+          done
+          echo "Test message could not be confirmed in healthz" >&2
+          exit 1
