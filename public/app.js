@@ -3,7 +3,7 @@ import {initLiveWorkspace} from '/live.js';
 import {createStateConnection} from '/state-connection.js';
 import {requestJson} from '/http.js';
 import {controlBlockers, marketControlStatus, marketControlWarnings} from '/control-readiness.js?v=market-status-2';
-import {createCommandTracker, commandProgress, demoExecutionMessage} from '/command-feedback.js';
+import {createCommandTracker, commandProgress, demoExecutionMessage} from '/command-feedback.js?v=mobile-controls-3';
 const $ = id => document.getElementById(id);
 const e = (tag, cls, content) => {const x = document.createElement(tag); if (cls) x.className = cls; if (content != null) x.textContent = String(content); return x;};
 const put = (id, value) => {$(id).textContent = value ?? '—';};
