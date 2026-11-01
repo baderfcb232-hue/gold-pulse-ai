@@ -171,6 +171,20 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       return rows; // Never fabricate an execution result if the journal is unavailable.
     }
   }
+  // Same durable source-bound website claims drive both the execution wire and
+  // the trade Telegram channel. An analytical history row is never a live order.
+  const approvedWebsitePlans = new Map();
+  function rememberApprovedWebsitePlan(symbol, source, record) {
+    if (!source || !record?.plan?.id || !['DISPATCHED','SUBMITTED','REJECTED'].includes(record.status)) return;
+    let state = approvedWebsitePlans.get(symbol);
+    if (!state || state.source !== source) {
+      state = {source, plans:new Map()};
+      approvedWebsitePlans.set(symbol, state);
+    }
+    state.plans.set(record.plan.id, {...record.plan,
+      website_approval_id:Number(record.id), website_dispatch_at:Number(record.time)});
+    while (state.plans.size > 40) state.plans.delete(state.plans.keys().next().value);
+  }
   const websiteActivity = Object.fromEntries(['XAUUSD','BTCUSD'].map(symbol => [symbol,
     {lastPollAt:null,lastDispatchAt:null,lastReportAt:null,lastResult:null,journalState:'NOT_CHECKED',readAt:null,source:null}]));
   function rememberWebsiteActivity(symbol, record) {
@@ -198,6 +212,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   async function refreshWebsiteActivity(symbol, source, force = false) {
     const activity = websiteActivity[symbol];
     if (activity.source !== source) {
+      approvedWebsitePlans.delete(symbol);
       activity.source = source; activity.readAt = null;
       activity.lastDispatchAt = activity.lastReportAt = activity.lastResult = null;
     }
@@ -206,6 +221,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     activity.readAt = clock();
     try {
       const rows = await commandJournal.websiteEntries(source);
+      for (const record of rows) rememberApprovedWebsitePlan(symbol, source, record);
       rememberWebsiteActivity(symbol, rows[0]); activity.journalState = 'READY';
     } catch {activity.journalState = 'ERROR';}
   }
@@ -217,17 +233,24 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   function telegramCandidates() {
     if (!cfg.publicationEnabled) return [];
     if (snapshot?.execution.website_recommendations || btcSnapshot?.execution.website_recommendations) {
-      // Mirror the durable recommendation stores shown in /api/signals.
-      // A plan may leave currentSignal before Telegram's next poll.
-      // Delivery itself filters old/expired plans and claims each signal ID once.
-      const records = [...signalRows(), ...marketFeed.history(),
-        ...Object.values(marketFeed.publicState().markets).map(m => m.currentSignal)];
-      const unique = new Map();
-      for (const p of records) {
-        if (!p?.id || !['XAUUSD', 'BTCUSD'].includes(p.symbol) || unique.has(p.id)) continue;
-        unique.set(p.id, p);
+      // Only an already CLAIMED, source-bound MT5 Demo plan is trade-notified.
+      // Unclaimed market history and Coinbase research remain in the website,
+      // explicitly analytical and NOT executable. No synthetic recommendation.
+      const plans = [];
+      for (const [symbol, selected] of [['XAUUSD', snapshot], ['BTCUSD', btcSnapshot]]) {
+        if (!selected?.execution?.website_recommendations) continue;
+        const state = approvedWebsitePlans.get(symbol);
+        if (!state || state.source !== entrySourceKey(selected)) continue;
+        for (const p of state.plans.values()) {
+          if (p.broker_symbol !== selected.symbol || p.symbol !== symbol ||
+              p.source !== `MT5 · ${selected.broker}` || p.status !== 'TRACKING' ||
+              !(p.website_dispatch_at > 0) || p.issued_at > p.website_dispatch_at + 5) continue;
+          plans.push({...p, expires_at: Math.min(p.expires_at, p.website_dispatch_at + 15,
+              p.issued_at + 75), telegramExecutionStatus:'DISPATCHED',
+              claimedSuccessRate:null,costMeaning:'NOT_VERIFIED'});
+        }
       }
-      return [...unique.values()].map(p => ({...p, claimedSuccessRate: null, costMeaning: 'NOT_VERIFIED'}));
+      return plans;
     }
     if (telegramPolicy === 'STRICT') {const p = publicationReview().plan; return p ? [p] : [];}
     const a = sourceAnalysis(snapshot, clock(), cfg);
@@ -813,6 +836,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         if (!record) return send(req,res,200,'','text/plain; charset=utf-8');
         const id=Number(record.id);
         if (!Number.isSafeInteger(id) || id<=0) throw new Error('Invalid website approval identifier');
+        rememberApprovedWebsitePlan(symbol, source, record);
         rememberWebsiteActivity(symbol, record);
         console.info('NABD website MT5 dispatch:', JSON.stringify({
           symbol, signal_code: recommendationCode(p.id), approval_id: id, status: 'DISPATCHED'}));
