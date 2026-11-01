@@ -76,3 +76,22 @@ test('warnings name only the market with a stale bridge or stale bot heartbeat',
   assert.equal(warnings[0].key,'bot:BTCUSD');
   assert.match(warnings[0].message,/البيتكوين/);
 });
+
+import {closeButtonDisplay} from '../public/control-readiness.js';
+
+test('close-all appearance stays stable when heartbeat changes but positions remain empty', () => {
+  const lost = closeButtonDisplay({authenticated:true,positions:[],issues:['حالة بوت MT5 قديمة']});
+  const restored = closeButtonDisplay({authenticated:true,positions:[],issues:[]});
+  assert.deepEqual(lost, restored);
+  assert.equal(restored.positionState,'empty');
+  assert.match(restored.hint,/لا توجد صفقات/);
+});
+test('close-all appearance follows verified position count without bypassing actual blockers', () => {
+  const blocked = closeButtonDisplay({authenticated:true,positions:[{ticket:'123'}],issues:['جسر MT5 متأخر']});
+  const readyDisplay = closeButtonDisplay({authenticated:true,positions:[{ticket:'123'}],issues:[]});
+  assert.deepEqual(blocked, readyDisplay);
+  assert.equal(blocked.positionState,'open');
+  assert.deepEqual(controlBlockers({...ready,fresh:false}),['حالة بوت MT5 قديمة أو غير متاحة.']);
+  const unknown=closeButtonDisplay({authenticated:true,positions:null,issues:['الربط غير متاح']});
+  assert.equal(unknown.positionState,'unknown');
+});
