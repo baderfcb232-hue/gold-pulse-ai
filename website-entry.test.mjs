@@ -305,6 +305,8 @@ test('bridge and EA carry same claimed website order ID and broker deal referenc
     const ea=readFileSync(join(import.meta.dirname,'mt5',`NABD_${instrument}_4_01.mq5`),'utf8');
     assert.match(ea,/g_trade\.ResultDeal\(\)/);
     assert.match(ea,/GlobalVariableGet\(NABDKey\("WA"\)\)/);
+    assert.match(ea,/GlobalVariableSet\(NABDKey\("WDT"\)/);
+    assert.match(ea,/NBMainValue\("WDT"\)/);
   }
   assert.match(main,/NABDKey\("WDT"\)/);
   assert.match(bridge,/deal_ticket/);
