@@ -194,9 +194,17 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   function telegramCandidates() {
     if (!cfg.publicationEnabled) return [];
     if (snapshot?.execution.website_recommendations || btcSnapshot?.execution.website_recommendations) {
-      return [snapshot?.execution.website_recommendations ? marketFeed.publicState().markets.XAUUSD?.currentSignal : null,
-        btcSnapshot?.execution.website_recommendations ? marketFeed.publicState().markets.BTCUSD?.currentSignal : null]
-        .filter(Boolean).map(p => ({...p,claimedSuccessRate:null,costMeaning:'NOT_VERIFIED'}));
+      // Mirror the durable recommendation stores shown in /api/signals.
+      // A plan may leave currentSignal before Telegram's next poll.
+      // Delivery itself filters old/expired plans and claims each signal ID once.
+      const records = [...signalRows(), ...marketFeed.history(),
+        ...Object.values(marketFeed.publicState().markets).map(m => m.currentSignal)];
+      const unique = new Map();
+      for (const p of records) {
+        if (!p?.id || !['XAUUSD', 'BTCUSD'].includes(p.symbol) || unique.has(p.id)) continue;
+        unique.set(p.id, p);
+      }
+      return [...unique.values()].map(p => ({...p, claimedSuccessRate: null, costMeaning: 'NOT_VERIFIED'}));
     }
     if (telegramPolicy === 'STRICT') {const p = publicationReview().plan; return p ? [p] : [];}
     const a = sourceAnalysis(snapshot, clock(), cfg);
