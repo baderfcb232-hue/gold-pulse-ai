@@ -485,7 +485,8 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
           LEFT JOIN nabd_mt5_monitor_workers w ON w.account_id=a.id
           ORDER BY h.requested_at DESC LIMIT 100`)).rows;
         const accounts=rows.map(({worker_id,mt5_online,...a}) => ({
-          ...a,monitoring_status:a.status === 'APPROVED'
+          ...a,worker_provisioned:Boolean(worker_id),
+          monitoring_status:a.status === 'APPROVED'
             ? monitorStatus({worker_id,mt5_online,last_seen_at:a.last_seen_at},clock()) : 'NOT_APPROVED'
         }));
         return result({accounts,workerConnected:false,tradingEnabled:false,phase:'READ_ONLY_MONITORING'});
