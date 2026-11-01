@@ -1687,7 +1687,12 @@ bool NABDWebsitePlanValid(const double now,const double since,const double issue
       (direction!=1 && direction!=-1) || (ask-bid)/point>max_spread)return false;
    if(direction>0 ? !(sl<entry && entry<tp && bid>sl && bid<tp && bid-sl>stop_distance && tp-bid>stop_distance)
                   : !(tp<entry && entry<sl && ask<sl && ask>tp && sl-ask>stop_distance && ask-tp>stop_distance))return false;
-   return MathAbs((direction>0?ask:bid)-entry)<=MathAbs(entry-sl)*0.15;
+   // Favorable BTC price improvement preserves or reduces fixed SL risk.
+   // Adverse movement remains limited to 15%; better prices up to 30% are
+   // allowed only while broker stop/spread checks above remain valid.
+   double drift=((direction>0?ask:bid)-entry)*(direction>0?1.0:-1.0);
+   double risk=MathAbs(entry-sl);
+   return drift<=risk*0.15 && drift>=-risk*0.30;
   }
 // END WEBSITE_PLAN_GUARD
 void NABDWebsiteBlocked(const double id,const string reason,const int code,const uint retcode=0)
