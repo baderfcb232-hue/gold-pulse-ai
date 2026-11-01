@@ -232,3 +232,55 @@ test('accounts health check fails closed and recovers without losing logins afte
   const restored=await h.request('/api/auth/status');
   assert.equal(restored.body.ready,true);assert.equal(restored.body.database,'CONNECTED');
 });
+
+test('MT5 Demo registration is owner-scoped, CSRF protected, and never grants trading privileges', async t => {
+  const h = await setup(t);
+  await h.verify('mt5-one@example.test'); await h.verify('mt5-two@example.test');
+  const one = await h.login('mt5-one@example.test'), two = await h.login('mt5-two@example.test');
+  const path = '/api/auth/mt5-accounts', details = {
+    broker: 'JustMarkets', server: 'JustMarkets-Demo2', login: '12345678',
+    environment: 'demo', acknowledge: true
+  };
+  assert.equal((await h.request(path)).status, 401);
+  assert.equal((await h.request(path, details)).status, 401);
+  assert.equal((await h.request(path, details, one, {'X-NABD-CSRF': ''})).status, 403);
+  assert.equal((await h.request(path, details, one, {Origin:'https://untrusted.example'})).status, 403);
+  assert.equal((await h.request(path, {...details, password:'broker-secret'}, one)).status, 400);
+  assert.equal((await h.request(path, {...details, environment:'real'}, one)).status, 400);
+  assert.equal((await h.request(path, {...details, server:'JustMarkets-Live'}, one)).status, 400);
+  assert.equal((await h.request(path, {...details, login:12345678}, one)).status, 400);
+  assert.equal((await h.request(path, {...details, acknowledge:false}, one)).status, 400);
+  const created = await h.request(path, details, one);
+  assert.equal(created.status, 201, h.errors.map(e => e.stack).join('\n'));
+  assert.equal(created.body.status, 'PENDING_SETUP');
+  assert.equal(created.body.connectionEnabled, false);
+  assert.equal(created.body.tradingEnabled, false);
+  const mine = await h.request(path, undefined, one);
+  assert.equal(mine.body.accounts.length, 1);
+  assert.equal(mine.body.accounts[0].login, details.login);
+  assert.equal(mine.body.accounts[0].status, 'PENDING_SETUP');
+  assert.equal('user_id' in mine.body.accounts[0], false);
+  assert.equal('password' in mine.body.accounts[0], false);
+  const others = await h.request(path, undefined, two);
+  assert.deepEqual(others.body.accounts, []);
+  assert.equal((await h.request(path, details, two)).status, 409);
+  assert.equal((await h.request(path, {...details, login:'34567890'}, one)).status, 409);
+  const twoCreated = await h.request(path, {...details, login:'34567890'}, two);
+  assert.equal(twoCreated.status, 201);
+  assert.equal((await h.request(path + '/remove', {id: twoCreated.body.id}, one)).status, 404);
+  assert.equal((await h.request(path + '/remove', {id: created.body.id}, two)).status, 404);
+  assert.equal((await h.request(path + '/remove', {id: created.body.id}, one, {'X-NABD-CSRF':''})).status, 403);
+  assert.equal((await h.request(path, undefined, one)).body.accounts.length, 1);
+  assert.equal((await h.request(path + '/remove', {id:created.body.id}, one)).status, 200);
+  assert.deepEqual((await h.request(path, undefined, one)).body.accounts, []);
+  assert.equal((await h.request(path, undefined, two)).body.accounts.length, 1);
+  assert.equal((await h.request(path + '/remove', {id:created.body.id}, one)).status, 404);
+  assert.equal((await h.request('/api/account', undefined, one)).status, 401);
+  assert.equal((await h.request('/api/commands', {action:'RESUME'}, one)).status, 401);
+  assert.equal((await h.request('/api/bridge/next', undefined, one)).status, 401);
+  const schema = await h.store.query('PRAGMA table_info(nabd_member_mt5_accounts)');
+  assert.equal(schema.rows.some(column => /password|secret|token/i.test(column.name)), false);
+  const html = await fetch(h.base + '/account').then(response => response.text());
+  assert.match(html, /member-mt5-form/);
+  assert.match(html, /لا يوجد اتصال MT5 أو تداول تلقائي/);
+});
