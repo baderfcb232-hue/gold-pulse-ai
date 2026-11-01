@@ -138,7 +138,7 @@ test('dashboard control module is served as JavaScript and can be imported by ap
   assert.match(await feedback.text(),/export function createCommandTracker/);
   const appResponse=await fetch(base+'/app.js');
   assert.equal(appResponse.status,200);
-  assert.match(await appResponse.text(),/from '\/control-readiness\.js'/);
+  assert.match(await appResponse.text(),/from '\/control-readiness\.js(?:\?v=[^']+)?'/);
 });
 
 
