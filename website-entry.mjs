@@ -104,12 +104,14 @@ export function websiteEntryJournal(pool) {
         ?details.reason_code:null;
       const retcode=Number.isInteger(details.mt5_retcode)&&details.mt5_retcode>=0&&details.mt5_retcode<=999999
         ?details.mt5_retcode:null;
+      const ticket=typeof details.deal_ticket==='string' &&
+        /^(?:[1-9][0-9]{0,19})$/.test(details.deal_ticket) ? details.deal_ticket : null;
       await pool.query(`UPDATE nabd_website_entries SET status=$3,reported_at=$4,
-        reason_code=$5,mt5_retcode=$6
+        reason_code=$5,mt5_retcode=$6,deal_ticket=$7
         WHERE source_key=$1 AND id=$2 AND status='DISPATCHED'`,
-        [source,id,status,now,reason,retcode]);
+        [source,id,status,now,reason,retcode,status==='SUBMITTED'?ticket:null]);
     },
-    websiteEntries: async source => (await pool.query(`SELECT id,time,expires,status,plan,reported_at,reason_code,mt5_retcode
+    websiteEntries: async source => (await pool.query(`SELECT id,time,expires,status,plan,reported_at,reason_code,mt5_retcode,deal_ticket
       FROM nabd_website_entries WHERE source_key=$1 ORDER BY id DESC LIMIT 30`,[source])).rows
       .map(r => ({...r,id:Number(r.id),plan:JSON.parse(r.plan)}))
   };
