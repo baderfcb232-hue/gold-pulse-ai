@@ -68,7 +68,6 @@ test('website execution rejects unsafe account, stale source, old plans, foreign
     ['WAITING_WEBSITE_PLAN',f=>f.market.currentSignal=null],
     ['WEBSITE_SOURCE_MISMATCH',f=>f.market.currentSignal.source_id='REFERENCE'],
     ['WEBSITE_SOURCE_MISMATCH',f=>f.market.currentSignal.broker_symbol='XAUUSD.other'],
-    ['WEBSITE_PLAN_CHANGED',f=>f.analysisPlan.bar_time-=300],
     ['WAITING_NEW_WEBSITE_PLAN',f=>f.snapshot.execution.website_since=NOW+1],
     ['INVALID_PLAN',f=>{f.snapshot.execution.website_since=NOW-100;f.market.currentSignal.issued_at=NOW-80;}],['INVALID_PLAN',f=>f.market.currentSignal.sl=f.market.currentSignal.entry],
     ['INVALID_PLAN',f=>f.market.currentSignal.expires_at=NOW],['INVALID_PLAN',f=>f.market.currentSignal.tp1=NaN],
@@ -76,6 +75,62 @@ test('website execution rejects unsafe account, stale source, old plans, foreign
     ['BELOW_MINIMUM_VOLUME',f=>f.snapshot.account.equity=1],['INSUFFICIENT_MARGIN',f=>f.snapshot.account.free_margin=0]
   ]){const f=decisionFixture();change(f);assert.equal(websiteTradeDecision(f).reason,reason,reason);}
 });
+test('website signals dispatch immediately from tracking even when scanner returns to SCANNING',()=>{
+  const f=decisionFixture(),p=f.market.currentSignal;
+  f.market={...f.market,currentSignal:null,recentSignals:[p],
+    analysis:{...f.market.analysis,status:'SCANNING',plan:null,reason:'M15 now neutral'}};
+  f.analysisPlan=null;
+  const decision=websiteTradeDecision(f);
+  assert.equal(decision.reason,'WEBSITE_READY');
+  assert.equal(decision.plan.id,p.id);
+  assert.equal(decision.plan.entry,p.entry);
+  assert.equal(decision.plan.sl,p.sl);
+  assert.equal(decision.plan.tp,p.tp1);
+});
+
+test('website execution never treats stale or Coinbase/reference history as a new trade',()=>{
+  for (const alter of [
+    p => ({...p,issued_at:NOW-76}),
+    p => ({...p,source:'Coinbase',source_id:'REFERENCE'}),
+    p => ({...p,broker_symbol:'BTCUSD.m'}),
+    p => ({...p,expires_at:NOW-1}),
+    p => ({...p,status:'EXPIRED'})
+  ]) {
+    const f=decisionFixture(),p=f.market.currentSignal;
+    f.market={...f.market,currentSignal:null,recentSignals:[alter(p)],
+      analysis:{...f.market.analysis,status:'SCANNING',plan:null}};
+    assert.equal(websiteTradeDecision(f).reason,'WAITING_WEBSITE_PLAN');
+  }
+});
+
+test('demo execution accepts no second trend-scan approval for already published plan',()=>{
+  const f=decisionFixture();
+  f.analysisPlan={...f.analysisPlan,bar_time:f.analysisPlan.bar_time-300,side:'SELL'};
+  f.market.analysis={...f.market.analysis,status:'SCANNING',strategy:'NABD-GOLD-SCALP-M5M15-V1'};
+  assert.equal(websiteTradeDecision(f).reason,'WEBSITE_READY');
+});
+
+test('authenticated Demo bridge claims new site tracking recommendation during SCANNING exactly once',async t=>{
+  const {app,post}=await setup(t);
+  const original=app.marketFeed.publicState.bind(app.marketFeed);
+  const first=original().markets.XAUUSD;
+  assert.ok(first.currentSignal);
+  assert.ok(first.recentSignals?.length);
+  app.marketFeed.publicState=()=> {
+    const state=original();
+    state.markets.XAUUSD={...state.markets.XAUUSD,currentSignal:null,
+      analysis:{...state.markets.XAUUSD.analysis,status:'SCANNING',reason:'M15 neutral'}};
+    return state;
+  };
+  assert.equal(app.publicState().websiteExecution.reason,'WEBSITE_READY');
+  const calls=await Promise.all(Array.from({length:4},async()=> (await post()).text()));
+  assert.equal(calls.filter(Boolean).length,1,'one durable MT5 approval despite simultaneous bridge polls');
+  const wire=calls.find(Boolean).split('|');
+  assert.equal(wire[0],'NBWEB1');
+  assert.equal(wire[4],first.recentSignals[0].side);
+  assert.equal(await (await post()).text(),'','never repeat same signal');
+});
+
 test('a fresh distinct website recommendation remains eligible with an earlier position',()=>{
   const f=decisionFixture();
   f.snapshot.positions=[{ticket:'444',side:'BUY',volume:0.01,entry:f.market.currentSignal.entry-1,
