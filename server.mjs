@@ -844,7 +844,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         if (!record) return send(req,res,200,'','text/plain; charset=utf-8');
         const id=Number(record.id);
         if (!Number.isSafeInteger(id) || id<=0) throw new Error('Invalid website approval identifier');
-        rememberApprovedWebsitePlan(symbol, source, record);
+        rememberApprovedWebsitePlan(symbol, source, {...record, plan:p});
         rememberWebsiteActivity(symbol, record);
         console.info('NABD website MT5 dispatch:', JSON.stringify({
           symbol, signal_code: recommendationCode(p.id), approval_id: id, status: 'DISPATCHED'}));
