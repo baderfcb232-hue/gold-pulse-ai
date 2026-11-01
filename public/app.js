@@ -238,6 +238,15 @@ function renderAutomaticRisk(){
   box.replaceChildren(...parts);
   renderWebsiteEntries(box);
 }
+function websiteBlockReason(reason){
+  const names={
+    SPREAD_TOO_WIDE:'سبريد البيتكوين أعلى من الحد المسموح',
+    PRICE_MOVED:'سعر البيتكوين ابتعد عن الدخول المحدد',
+    ENTRY_OUT_OF_RANGE:'السعر تجاوز حدود الوقف أو الهدف',
+    INVALID_BROKER_QUOTE:'سعر Bid/Ask من الوسيط غير صالح'
+  };
+  return names[reason] || reason || 'غير معروف';
+}
 function renderWebsiteEntries(box){
   const entries=[...(privateData?.websiteEntries||[]).map(x=>({...x,market:'الذهب'})),...(privateData?.btc?.websiteEntries||[]).map(x=>({...x,market:'بيتكوين'}))].sort((a,b)=>(b.time||0)-(a.time||0));
   if(entries.length){box.append(e('h3','','إرسال توصيات نبض إلى MT5 — الذهب والبيتكوين'));
@@ -254,7 +263,7 @@ function renderWebsiteEntries(box){
   if(decisions.length){
     box.append(e('h3','','توصيات لم تُرسل للتنفيذ — سبب المنع'));
     for(const d of decisions.slice(0,8))
-      box.append(e('p','subtle',`${d.market} · توصية #${d.signal_code||'—'} · ${time(d.updated_at,true)} · ${d.reason||'غير معروف'} · لم يصدر أمر MT5`));
+      box.append(e('p','subtle',`${d.market} · توصية #${d.signal_code||'—'} · ${time(d.updated_at,true)} · ${websiteBlockReason(d.reason)} · لم يصدر أمر MT5`));
   }
 }
 function activeCommandBusy(){return commandSending || commandTracker.busy() ||

@@ -94,6 +94,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     candidates: () => [sourceAnalysis(snapshot, clock(), cfg).plan,
       ...Object.values(marketFeed.publicState().markets).map(m => m.currentSignal)], ...researchOptions});
   const clients = new Set(), sessions = new Map(), attempts = new Map();
+  const btcGuardReports = new Set(); // One diagnostic per recommendation and reason.
   const membersOnly = config.membersOnlySignals !== false;
   const canReadSignals = async req => !membersOnly || operator(req) || await accounts.canReadSignals(req);
   const protectSignals = (event, value, allowed) => {
@@ -830,6 +831,19 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
             q.issued_at <= clock()+5 && clock()-q.issued_at <= 75 &&
             q.source===`MT5 · ${chosen.broker}` && q.broker_symbol===chosen.symbol &&
             q.symbol===symbol);
+        // Capture broker-side BTC price and spread at the exact failed poll.
+        // This contains no account identifiers or tokens; the UI keeps one
+        // explicit rejection code per recommendation instead of a vague label.
+        if (symbol==='BTCUSD' && candidate && !decision.ready && decision.diagnostics) {
+          const key=recommendationCode(candidate.id)+':'+decision.reason;
+          if (!btcGuardReports.has(key)) {
+            if (btcGuardReports.size>=200) btcGuardReports.delete(btcGuardReports.values().next().value);
+            btcGuardReports.add(key);
+            console.info('NABD BTC website price rejection:',JSON.stringify({
+              signal_code:recommendationCode(candidate.id),reason:decision.reason,
+              ...decision.diagnostics}));
+          }
+        }
         if (candidate && commandJournal?.recordWebsiteDecision) {
           try {
             await commandJournal.recordWebsiteDecision(source,candidate,

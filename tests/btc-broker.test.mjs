@@ -8,7 +8,7 @@ import {entryFixture, eaFixture, NOW} from './fixtures.mjs';
 import {cleanSnapshot} from '../engine.mjs';
 import {brokerGoldMarket,brokerBtcMarket} from '../broker-market.mjs';
 import {createMarketFeed} from '../market.mjs';
-import {websiteTradeDecision,websiteEntryJournal} from '../website-entry.mjs';
+import {websiteTradeDecision,websiteEntryJournal,btcWebsiteQuoteGuard} from '../website-entry.mjs';
 import {createApplication} from '../server.mjs';
 
 function btcRaw(){
@@ -56,6 +56,42 @@ test('BTC website Demo approval uses its own frozen source, stop, target and cos
   assert.equal(websiteTradeDecision({...params,market:{...broker,currentSignal:{...plan,source:'Coinbase'}}}).reason,'WEBSITE_SOURCE_MISMATCH');
   assert.equal(websiteTradeDecision({...params,market:{...broker,currentSignal:{...plan,broker_symbol:'XAUUSD.m'}}}).reason,'WEBSITE_SOURCE_MISMATCH');
   assert.equal(websiteTradeDecision({...params,snapshot:{...s,execution:{...s.execution,demo:false}}}).reason,'NOT_JUSTMARKETS_DEMO');
+});
+test('BTC price/spread guard separates exact failures and accepts safe favorable repricing',()=>{
+  const buy={side:'BUY',entry:70001,sl:69901,tp1:70101};
+  const sell={side:'SELL',entry:70000,sl:70100,tp1:69900};
+  const snap=(bid,ask,maxSpread=2500)=>({bid,ask,spec:{point:0.01},
+    ea:{settings:{max_spread_points:maxSpread}}});
+  const reason=(s,p)=>btcWebsiteQuoteGuard(s,p)?.reason || 'READY';
+  assert.equal(reason(snap(70000,70001),buy),'READY');
+  // The broker's maximum spread is also limited by the EA's own point limit.
+  assert.equal(reason(snap(70000,70027),buy),'SPREAD_TOO_WIDE');
+  assert.equal(reason(snap(70000,70001,10),buy),'SPREAD_TOO_WIDE');
+  assert.equal(reason(snap(70016,70017),buy),'PRICE_MOVED','adverse BUY drift >15%');
+  assert.equal(reason(snap(69980,69981),buy),'READY','better BUY price >15% is safe');
+  assert.equal(reason(snap(69960,69961),buy),'PRICE_MOVED','better BUY price >30% still limited');
+  assert.equal(reason(snap(69800,69801),buy),'ENTRY_OUT_OF_RANGE','stop breached');
+  assert.equal(reason(snap(70019,70020),sell),'READY','better SELL price >15% is safe');
+  assert.equal(reason(snap(69982,69983),sell),'PRICE_MOVED','adverse SELL drift >15%');
+  assert.equal(reason(snap(70120,70121),sell),'ENTRY_OUT_OF_RANGE');
+  const invalid=snap(70000,70001);invalid.spec.point=0;
+  assert.equal(reason(invalid,buy),'INVALID_BROKER_QUOTE');
+});
+test('BTC website decision preserves the broker signal while exposing distinct price diagnostics',()=>{
+  const s=cleanSnapshot(btcRaw(),NOW);
+  const broker=brokerBtcMarket(s,NOW),plan={...broker.analysis.plan,id:'btc-diagnostic',status:'TRACKING'};
+  const f={enabled:true,snapshot:s,market:{...broker,currentSignal:plan},
+    analysisPlan:broker.analysis.plan,costs:{ready:true},durable:true,now:NOW};
+  const risk=Math.abs(plan.entry-plan.sl), adverse=plan.side==='BUY'?1:-1;
+  const moved={...s,bid:s.bid+adverse*risk*.16,ask:s.ask+adverse*risk*.16};
+  const outcome=websiteTradeDecision({...f,snapshot:moved});
+  assert.equal(outcome.reason,'PRICE_MOVED');
+  assert.equal(outcome.diagnostics.entry,plan.entry);
+  assert.ok(Number.isFinite(outcome.diagnostics.max_spread_points));
+  const unsafeSpread={...s,ask:s.bid+s.spec.point*2501};
+  assert.equal(websiteTradeDecision({...f,snapshot:unsafeSpread}).reason,'SPREAD_TOO_WIDE');
+  const favorable={...s,bid:s.bid-adverse*risk*.2,ask:s.ask-adverse*risk*.2};
+  assert.equal(websiteTradeDecision({...f,snapshot:favorable}).reason,'WEBSITE_READY');
 });
 test('gold and BTC bridges store distinct snapshots and broker candles',async t=>{
   const dir=mkdtempSync(join(tmpdir(),'nabd-btc-broker-'));

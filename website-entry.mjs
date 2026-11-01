@@ -5,10 +5,39 @@ import {validateManualLot,stopLossEstimate} from './trade-lot.mjs';
 export const entrySourceKey = s => createHash('sha256').update(JSON.stringify([
   s.account_ref, s.broker, s.symbol, s.execution.managed_magic])).digest('hex');
 
+// BTC entry validation shares the broker's spread cap with its MT5 EA.
+// A favorable price change cannot increase the planned stop-loss risk, so BTC
+// permits up to 30% of its stop distance in that direction; adverse slippage
+// stays capped at 15%. Both caps are checked again by the updated BTC EA.
+export function btcWebsiteQuoteGuard(snapshot, plan) {
+  const s = snapshot, p = plan;
+  const bid = s?.bid, ask = s?.ask, point = s?.spec?.point;
+  if (![bid,ask,point].every(Number.isFinite) || bid <= 0 || ask < bid || point <= 0)
+    return {reason:'INVALID_BROKER_QUOTE',diagnostics:{bid,ask,point}};
+  const spreadPoints = (ask-bid)/point;
+  const brokerCap = Math.max(1,Math.floor((ask+bid)*0.5*0.001/point));
+  const setting = s?.ea?.settings?.max_spread_points;
+  const spreadLimit = Number.isFinite(setting) && setting > 0 ? Math.min(brokerCap,setting) : brokerCap;
+  const buy = p.side === 'BUY', quote = buy ? ask : bid, exit = buy ? bid : ask;
+  const risk = Math.abs(p.entry-p.sl);
+  // Positive drift is worse for the trade; negative drift improves the entry.
+  const drift = (quote-p.entry)*(buy ? 1 : -1);
+  const diagnostics = {bid,ask,entry:p.entry,sl:p.sl,tp:p.tp1,spread_points:spreadPoints,
+    max_spread_points:spreadLimit,price_drift:drift,max_adverse_move:risk*0.15,
+    max_favorable_move:risk*0.30};
+  if (spreadPoints > spreadLimit) return {reason:'SPREAD_TOO_WIDE',diagnostics};
+  if (buy ? exit <= p.sl || exit >= p.tp1 : exit >= p.sl || exit <= p.tp1)
+    return {reason:'ENTRY_OUT_OF_RANGE',diagnostics};
+  if (drift > risk*0.15 || drift < -risk*0.30)
+    return {reason:'PRICE_MOVED',diagnostics};
+  return null;
+}
+
 // A website plan can execute only against its own account's MT5 broker feed.
 // Gold and BTC never share a quote source. Demo-only, explicitly opted-in.
 export function websiteTradeDecision({enabled, snapshot: s, market: m, analysisPlan: a, costs, durable, now, requiredStrategy = null, tradeSizing = null}) {
-  const no = reason => ({ready: false, reason, plan: null});
+  const no = (reason,diagnostics) => ({ready: false, reason, plan: null,
+    ...(diagnostics ? {diagnostics} : {})});
   if (!enabled) return no('DISABLED');
   if (!s?.execution?.website_recommendations) return no('MT5_WEBSITE_UPDATE_REQUIRED');
   if (!durable) return no('DURABLE_ENTRY_JOURNAL_REQUIRED');
@@ -62,12 +91,17 @@ export function websiteTradeDecision({enabled, snapshot: s, market: m, analysisP
       ![p.issued_at,p.expires_at,p.bar_time].every(Number.isFinite) || p.issued_at > now + 5 || now - p.issued_at > 75 ||
       p.expires_at <= now || p.bar_time > now || now - (p.bar_time + 300) > 300 || p.bar_time + 300 > now + 5)
     return no('INVALID_PLAN');
-  const price = buy ? s.ask : s.bid, exit = buy ? s.bid : s.ask, risk = Math.abs(p.entry - p.sl);
-  const maxSpread = canonical === 'BTCUSD'
-    ? Math.max(1, Math.floor((s.ask + s.bid) / 2 * .001 / s.spec.point)) : 80;
-  if (!Number.isFinite(s.spec?.point) || s.spec.point <= 0 ||
-      Math.abs(price - p.entry) > risk * .15 || (s.ask - s.bid) / s.spec.point > Math.min(maxSpread, s.ea?.settings?.max_spread_points || maxSpread) ||
-      (buy ? exit <= p.sl || exit >= tp : exit >= p.sl || exit <= tp)) return no('PRICE_OR_SPREAD_MOVED');
+  if (canonical === 'BTCUSD') {
+    const rejected = btcWebsiteQuoteGuard(s,p);
+    if (rejected) return no(rejected.reason,rejected.diagnostics);
+  } else {
+    // The existing gold path is deliberately unchanged.
+    const price = buy ? s.ask : s.bid, exit = buy ? s.bid : s.ask, risk = Math.abs(p.entry - p.sl);
+    if (!Number.isFinite(s.spec?.point) || s.spec.point <= 0 ||
+        Math.abs(price - p.entry) > risk * .15 ||
+        (s.ask - s.bid) / s.spec.point > Math.min(80,s.ea?.settings?.max_spread_points || 80) ||
+        (buy ? exit <= p.sl || exit >= tp : exit >= p.sl || exit <= tp)) return no('PRICE_OR_SPREAD_MOVED');
+  }
   if (!costs?.ready) return no('WAITING_COSTS');
   let manualLot = null;
   if (tradeSizing?.mode === 'FIXED') {
