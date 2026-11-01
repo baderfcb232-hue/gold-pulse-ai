@@ -71,3 +71,12 @@ test('website execution shows the actual polling channel and never treats a subm
   assert.match(demoExecutionMessage(s),/توقف طلب التوصيات/);
   assert.match(demoExecutionMessage(s),/منع MT5/);
 });
+
+test('MT5 confirmed RESUME is permission only, never shown as an opened trade', () => {
+  const result=commandProgress({action:'RESUME',status:'CONFIRMED',time:100},110);
+  assert.match(result.title,/السماح بالدخول التلقائي/);
+  assert.match(result.detail,/لم يفتح صفقة/);
+  const pause=commandProgress({action:'PAUSE',status:'CONFIRMED',time:100},110);
+  assert.match(pause.title,/إيقاف الدخول الجديد/);
+  assert.match(pause.detail,/إدارة الصفقات الحالية/);
+});
