@@ -94,6 +94,37 @@ async function memberMt5Accounts() {
         remove.disabled = false;
       }
     };
+    const state = account.hosting_status || 'NOT_REQUESTED';
+    const labels = {
+      NOT_REQUESTED: 'لم تطلب الاستضافة المركزية بعد',
+      REQUESTED: 'طلب الاستضافة قيد مراجعة الإدارة · لا يوجد اتصال',
+      APPROVED: 'تمت الموافقة الإدارية على التجهيز · لا يوجد اتصال أو تداول',
+      REJECTED: 'لم تتم الموافقة على الطلب · يمكنك تقديم طلب جديد'
+    };
+    details.append(node('p', 'subtle', labels[state] || 'الاستضافة غير مفعّلة'));
+    if (state === 'NOT_REQUESTED' || state === 'REJECTED') {
+      const hosting = node('div', 'mt5-hosting-consent');
+      const label = node('label', 'check-label');
+      const checkbox = node('input');
+      checkbox.type = 'checkbox';
+      label.append(checkbox, node('span', '', 'أوافق على إرسال طلب استضافة Demo لإدارة نبض. أفهم أن الربط والتداول غير مفعّلين.'));
+      const request = node('button', 'button ghost', 'طلب استضافة الحساب من نبض');
+      request.type = 'button';
+      request.onclick = async () => {
+        if (!checkbox.checked) {message('وافق على شرح طلب الاستضافة أولًا.', true); return;}
+        request.disabled = true;
+        try {
+          const answer = await api('/api/auth/mt5-hosting/request', {id: account.id, consent: true});
+          message(answer.message);
+          await memberMt5Accounts();
+        } catch (error) {
+          message(error.message, true);
+          request.disabled = false;
+        }
+      };
+      hosting.append(label, request);
+      details.append(hosting);
+    }
     row.append(details, remove);
     return row;
   }));
@@ -138,6 +169,51 @@ async function users() {
 form('user-search', async () => {usersPage = 0; await users();});
 $('users-prev').onclick = () => {usersPage = Math.max(0, usersPage - 1); users().catch(error => message(error.message, true));};
 $('users-next').onclick = () => {usersPage++; users().catch(error => message(error.message, true));};
+const mt5HostingLabels = {
+  REQUESTED: 'بانتظار المراجعة',
+  APPROVED: 'موافق عليه للتجهيز فقط — غير متصل',
+  REJECTED: 'لم تتم الموافقة'
+};
+async function adminMt5Hosting() {
+  const response = await api('/api/admin/mt5-hosting');
+  const list = $('admin-mt5-hosting');
+  const requests = response.accounts || [];
+  if (!requests.length) {
+    list.replaceChildren(node('p', 'subtle', 'لا توجد طلبات استضافة MT5 حتى الآن.'));
+    return;
+  }
+  list.replaceChildren(...requests.map(request => {
+    const row = node('div', 'mt5-registration-row');
+    const info = node('div');
+    info.append(node('strong', '', request.member_name + ' · ' + request.member_email),
+      node('p', 'subtle', request.broker + ' · Demo · حساب ' + request.login + ' · ' + request.server_name),
+      node('p', 'mt5-inactive', mt5HostingLabels[request.status] || 'غير معروف'),
+      node('p', 'subtle', 'تاريخ الطلب: ' + date(request.requested_at)));
+    const actions = node('div', 'mt5-admin-actions');
+    if (request.status === 'REQUESTED') {
+      for (const [decision, label] of [['APPROVE', 'الموافقة على التجهيز'], ['REJECT', 'رفض الطلب']]) {
+        const button = node('button', 'button ghost', label);
+        button.type = 'button';
+        button.onclick = async () => {
+          if (!confirm('هذا قرار إداري فقط ولا يربط حساب MT5 ولا يفعّل التداول. تأكيد ' + label + '؟')) return;
+          button.disabled = true;
+          try {
+            await api('/api/admin/mt5-hosting/review', {id: request.account_id, decision});
+            message('تم تسجيل القرار. ربط MT5 والتداول ما زالا غير مفعّلين.');
+            await adminMt5Hosting();
+          } catch (error) {
+            message(error.message, true);
+            button.disabled = false;
+          }
+        };
+        actions.append(button);
+      }
+    }
+    row.append(info, actions);
+    return row;
+  }));
+}
+$('admin-mt5-hosting-refresh').onclick = () => adminMt5Hosting().catch(error => message(error.message, true));
 const events = {REGISTER: 'إنشاء حساب', EMAIL_VERIFIED: 'تأكيد البريد', LOGIN: 'تسجيل دخول', PASSWORD_RESET: 'استعادة كلمة المرور', PASSWORD_CHANGED: 'تغيير كلمة المرور', MFA_ENABLED: 'تفعيل التحقق بخطوتين', DELETION_REQUESTED: 'طلب حذف', USER_UPDATED: 'تحديث مستخدم', RESET_SENT: 'إرسال رابط استعادة', BACKUP_CREATED: 'نسخ خارجي', BACKUP_EXPORTED: 'تصدير نسخة مشفرة', BACKUP_RESTORED: 'استعادة نسخة'};
 async function audit() {const response = await api('/api/admin/audit'); $('admin-audit').replaceChildren(...response.events.map(event => {const row = node('div', 'audit-row'); row.append(node('strong', '', events[event.event] || event.event), node('p', '', date(event.time)), node('p', '', `المنفّذ: ${event.actor || 'النظام'}${event.subject ? ' · الحساب: ' + event.subject : ''}`)); return row;}));}
 $('refresh-audit').onclick = () => audit().catch(error => message(error.message, true));
@@ -175,7 +251,7 @@ async function initialize() {
   }
   if (page === 'admin') {
     if (!response.adminReady) {if (member?.role === 'admin') $('admin-guard-note').textContent = 'حسابك مسؤول. أكمل تفعيل التحقق بخطوتين من صفحة حسابي ثم افتح الإدارة.'; return;}
-    $('admin-guard').hidden = true; $('admin-content').hidden = false; await Promise.all([overview(), users(), audit()]);
+    $('admin-guard').hidden = true; $('admin-content').hidden = false; await Promise.all([overview(), users(), audit(), adminMt5Hosting()]);
   }
 }
 initialize().catch(error => {message(error.status === 503 ? 'خدمة الحسابات بانتظار التهيئة أو غير متاحة مؤقتًا. الرئيسية والأسعار والأخبار متاحة.' : error.message, true); if (page === 'account') $('account-guard').hidden = false;});
