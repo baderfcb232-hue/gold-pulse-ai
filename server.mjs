@@ -147,7 +147,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     for (const row of rows) if (row?.id && !byId.has(row.id)) byId.set(row.id, row);
     const delivered = db.prepare('SELECT state FROM telegram_delivery WHERE id=?');
     return [...byId.values()].sort((a,b) => b.issued_at - a.issued_at).slice(0,200)
-      .map(p => ({...p, telegram_delivery: delivered.get(p.id)?.state || null}));
+      .map(p => ({...p, recommendation_code: recommendationCode(p.id), telegram_delivery: delivered.get(p.id)?.state || null}));
   }
 
   // Correlate the exact recommendation ID with its durable bridge approval and
@@ -713,14 +713,14 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         const riskSizing = automaticRiskSizing(snapshot, localPlan || recentGold, now);
         return send(req, res, 200, {account: snapshot?.account ?? null, positions: snapshot?.positions ?? [],
           riskSizing,
-          websiteEntries: snapshot && commandJournal?.websiteEntries ? await commandJournal.websiteEntries(entrySourceKey(snapshot)) : [],
-          websiteDecisions: snapshot && commandJournal?.websiteDecisions ? await commandJournal.websiteDecisions(entrySourceKey(snapshot)) : [],
+          websiteEntries: snapshot && commandJournal?.websiteEntries ? (await commandJournal.websiteEntries(entrySourceKey(snapshot))).map(record => ({...record,signal_code:recommendationCode(record.plan_id || record.plan?.id)})) : [],
+          websiteDecisions: snapshot && commandJournal?.websiteDecisions ? (await commandJournal.websiteDecisions(entrySourceKey(snapshot))).map(record => ({...record,signal_code:recommendationCode(record.plan_id)})) : [],
           tradeSizing: snapshot && commandJournal?.getTradeSizing ? await commandJournal.getTradeSizing(entrySourceKey(snapshot)) : {mode:'AUTO',lot:null},
           btc: !cfg.goldOnly && btcSnapshot ? {account:btcSnapshot.account,positions:btcSnapshot.positions,lastUpdate:btcSnapshot.received_at,
             riskSizing: automaticRiskSizing(btcSnapshot, marketFeed.publicState().markets.BTCUSD?.currentSignal, now),
             tradeSizing:commandJournal?.getTradeSizing ? await commandJournal.getTradeSizing(entrySourceKey(btcSnapshot)) : {mode:'AUTO',lot:null},
-            websiteEntries:commandJournal?.websiteEntries ? await commandJournal.websiteEntries(entrySourceKey(btcSnapshot)) : [],
-            websiteDecisions:commandJournal?.websiteDecisions ? await commandJournal.websiteDecisions(entrySourceKey(btcSnapshot)) : []} : null,
+            websiteEntries:commandJournal?.websiteEntries ? (await commandJournal.websiteEntries(entrySourceKey(btcSnapshot))).map(record => ({...record,signal_code:recommendationCode(record.plan_id || record.plan?.id)})) : [],
+            websiteDecisions:commandJournal?.websiteDecisions ? (await commandJournal.websiteDecisions(entrySourceKey(btcSnapshot))).map(record => ({...record,signal_code:recommendationCode(record.plan_id)})) : []} : null,
           deals: db.prepare('SELECT data FROM deals ORDER BY time DESC LIMIT 1000').all().map(x => JSON.parse(x.data)),
           commands: commandJournal ? await commandJournal.list(clock()) : db.prepare('SELECT * FROM commands ORDER BY id DESC LIMIT 100').all(),
           lastUpdate: snapshot?.received_at ?? null});
