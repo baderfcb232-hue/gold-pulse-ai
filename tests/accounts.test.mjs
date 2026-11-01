@@ -286,7 +286,7 @@ test('MT5 Demo registration is owner-scoped, CSRF protected, and never grants tr
   assert.equal(schema.rows.some(column => /password|secret|token/i.test(column.name)), false);
   const html = await fetch(h.base + '/account').then(response => response.text());
   assert.match(html, /member-mt5-form/);
-  assert.match(html, /لا يوجد اتصال MT5 أو تداول تلقائي/);
+  assert.match(html, /الموافقة الإدارية لا تعني ربط MT5 أو بدء التداول/);
 });
 
 test('old encrypted identity backups remain readable without MT5 registrations', async t => {
