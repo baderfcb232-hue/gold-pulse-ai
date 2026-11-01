@@ -34,7 +34,7 @@ test('legacy Telegram restores broker and reference delivery without costs or D1
   assert.equal(app.db.prepare('SELECT COUNT(*) AS n FROM commands').get().n, 0);
 });
 
-test('website Telegram mirrors new stored broker and reference plans even when currentSignal is empty', async t => {
+test('website trade channel never posts historical broker or reference plans without journal dispatch', async t => {
   let now = NOW;
   const sent = [], dir = mkdtempSync(join(tmpdir(), 'nabd-website-telegram-'));
   const app = createApplication({dataDir: dir, clock: () => now, config: {publicationEnabled: true},
@@ -58,9 +58,7 @@ test('website Telegram mirrors new stored broker and reference plans even when c
     XAUUSD: {currentSignal: null}, BTCUSD: {currentSignal: null}}});
   now += 2;
   await app.telegram.publish();
-  assert.equal(sent.length, 2);
-  assert.ok(sent.some(message => message.includes('BTCUSD') && message.includes('BTCUSD.m')));
-  assert.ok(sent.some(message => message.includes('XAUUSD') && message.includes('REFERENCE')));
+  assert.equal(sent.length, 0, 'historical broker plans and Coinbase research are not executable orders');
   await app.telegram.publish();
-  assert.equal(sent.length, 2, 'never resend the same recommendation ID');
+  assert.equal(sent.length, 0, 'no journal claim means no trading notification');
 });

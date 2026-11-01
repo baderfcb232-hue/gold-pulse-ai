@@ -156,6 +156,7 @@ datetime g_website_enabled_at = 0;
 // Diagnostics for the *current* website entry attempt only, never reused as a trade signal.
 int      g_website_attempt_code = 0;
 uint     g_website_attempt_retcode = 0;
+ulong    g_website_attempt_deal_ticket = 0;
 
 //--- function declarations
 bool   CreateIndicatorHandles();
@@ -675,7 +676,7 @@ bool BuildSignal(SignalData &signal)
 //+------------------------------------------------------------------+
 bool PlaceSignal(const SignalData &signal)
   {
-   g_website_attempt_code=0;g_website_attempt_retcode=0;
+   g_website_attempt_code=0;g_website_attempt_retcode=0;g_website_attempt_deal_ticket=0;
    if(!ExecutionPermissionsAvailable() ||
       (!DemoWebsiteNoDailyLimitsEnabled() && HasOwnPosition()) ||
       (DemoWebsiteNoDailyLimitsEnabled() && !ConcurrentWebsiteEntryAllowed()) ||
@@ -716,6 +717,11 @@ bool PlaceSignal(const SignalData &signal)
 
    string side=(signal.direction>0 ? "BUY" : "SELL");
    string comment=StringFormat("NABD_GOLD_%s",side);
+   // The broker Deal/History comment carries the exact website approval ID
+   // for operator audit. The source-specific EA magic is still authoritative.
+   if(InpNABDWebsiteRecommendations && GlobalVariableCheck(NABDKey("WA")) &&
+      GlobalVariableGet(NABDKey("WA"))>0)
+      comment=StringFormat("NABD_GOLD_W%.0f",GlobalVariableGet(NABDKey("WA")));
    // Minimum-lot fallback is demo-only and remains capped by the daily allowance.
    double budget=ExecutionRiskBudget(order_type,signal.entry,signal.stop_loss);
    double risk_per_leg=budget/legs;
@@ -757,6 +763,9 @@ bool PlaceSignal(const SignalData &signal)
       uint retcode=g_trade.ResultRetcode();
       g_website_attempt_retcode=retcode;
       bool ok=request_ok && IsSuccessfulRetcode(retcode);
+      // A broker deal ticket (not the order acceptance) is actual fill evidence.
+      if(ok && retcode==TRADE_RETCODE_DONE && g_trade.ResultDeal()>0)
+         g_website_attempt_deal_ticket=g_trade.ResultDeal();
       if(!ok)g_website_attempt_code=121;
       string result_text=StringFormat("side=%s,leg=%d/%d,volume=%.4f,retcode=%u,%s",
                                       side,leg+1,legs,volume,retcode,g_trade.ResultRetcodeDescription());
@@ -1677,6 +1686,7 @@ void NABDWebsiteBlocked(const double id,const string reason,const int code,const
   {
    // Publish all rejection details BEFORE the result id so the bridge never
    // associates an earlier order's MT5 retcode with a later recommendation.
+   GlobalVariableSet(NABDKey("WDT"),0.0);
    GlobalVariableSet(NABDKey("WRC"),(double)code);
    GlobalVariableSet(NABDKey("WRT"),(double)retcode);
    GlobalVariableSet(NABDKey("WR"),1.0);GlobalVariableSet(NABDKey("WI"),id);GlobalVariablesFlush();
@@ -1693,6 +1703,7 @@ void NABDProcessWebsiteApproval()
    if(!GlobalVariableSetOnCondition(NABDKey("WC"),id,previous))return;
    GlobalVariablesFlush(); // Claim BEFORE validation/order; never retry an uncertain entry.
    GlobalVariableSet(NABDKey("WI"),0.0); // Result identifier is published LAST after validation/submission.
+   GlobalVariableSet(NABDKey("WDT"),0.0);
    GlobalVariableSet(NABDKey("WRC"),0.0);GlobalVariableSet(NABDKey("WRT"),0.0);
    if(!TradingExecutionEnabled()){NABDWebsiteBlocked(id,"trading execution switch is off",101);return;}
    if(!ExecutionPermissionsAvailable()){NABDWebsiteBlocked(id,"terminal/account trade permissions unavailable",102);return;}
@@ -1734,6 +1745,7 @@ void NABDProcessWebsiteApproval()
         g_website_attempt_code>0?g_website_attempt_code:115,g_website_attempt_retcode);
       return;
      }
+   GlobalVariableSet(NABDKey("WDT"),(double)g_website_attempt_deal_ticket);
    GlobalVariableSet(NABDKey("WRC"),0.0);
    GlobalVariableSet(NABDKey("WRT"),(double)g_website_attempt_retcode);
    GlobalVariableSet(NABDKey("WR"),2.0);GlobalVariableSet(NABDKey("WI"),id);GlobalVariablesFlush();
@@ -1997,7 +2009,8 @@ void NBProcessWebsiteRecommendation()
       if(NBRequest("POST","/api/bridge/website-result","{"+source+",\"id\":"+NBD(result_id,0)+
        ",\"status\":"+NBQ(result==2?"SUBMITTED":"REJECTED")+
        ",\"reason_code\":"+NBD(NBMainValue("WRC"),0)+
-       ",\"mt5_retcode\":"+NBD(NBMainValue("WRT"),0)+"}",response)==200)reported_id=result_id;
+       ",\"mt5_retcode\":"+NBD(NBMainValue("WRT"),0)+
+       ",\"deal_ticket\":"+NBQ(NBD(NBMainValue("WDT"),0))+"}",response)==200)reported_id=result_id;
    // A local terminal with Algo Trading off must never claim a recommendation
    // that belongs to an executable copy on the MetaTrader VPS.
    if(!TradingExecutionEnabled())return;

@@ -24,6 +24,7 @@ export async function createCommandJournal(connectionString) {
       ALTER TABLE nabd_command_journal ADD COLUMN IF NOT EXISTS symbol text;
       ALTER TABLE nabd_website_entries ADD COLUMN IF NOT EXISTS reason_code integer;
       ALTER TABLE nabd_website_entries ADD COLUMN IF NOT EXISTS mt5_retcode integer;
+      ALTER TABLE nabd_website_entries ADD COLUMN IF NOT EXISTS deal_ticket text;
       CREATE TABLE IF NOT EXISTS nabd_trade_sizing (
         source_key text PRIMARY KEY, mode text NOT NULL CHECK(mode IN ('AUTO','FIXED')),
         lot double precision, updated_at double precision NOT NULL)`);

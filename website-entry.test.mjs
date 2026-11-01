@@ -27,7 +27,7 @@ function sqliteJournal(file=':memory:'){
   const db=new DatabaseSync(file);
   db.exec(`CREATE TABLE IF NOT EXISTS nabd_website_entries(id INTEGER PRIMARY KEY AUTOINCREMENT,
     source_key TEXT,plan_id TEXT,time REAL,expires REAL,status TEXT,plan TEXT,reported_at REAL,
-    reason_code INTEGER,mt5_retcode INTEGER,UNIQUE(source_key,plan_id));
+    reason_code INTEGER,mt5_retcode INTEGER,deal_ticket TEXT,UNIQUE(source_key,plan_id));
     CREATE TABLE IF NOT EXISTS nabd_website_decisions(
       source_key TEXT,plan_id TEXT,time REAL,reason TEXT,status TEXT,updated_at REAL,
       PRIMARY KEY(source_key,plan_id))`);
@@ -139,13 +139,15 @@ test('bridge diagnostics restore the durable result and expire polling freshness
   assert.equal(restored.lastResult,'REJECTED');assert.equal(restored.lastReportAt,NOW-99);
   setNow(NOW+16);assert.equal(app.publicState().websiteBridge.connection,'STALE');
 });
-test('website publication health follows the active website plan instead of the absent legacy EA plan',async t=>{
-  const {app,base}=await setup(t);
+test('website trade channel only becomes ready AFTER the exact journal dispatch, never on research history alone',async t=>{
+  const {app,base,post}=await setup(t);
   assert.equal(app.publicState().currentSignal.source,'MT5 · JustMarkets-Demo');
   const health=await (await fetch(base+'/healthz')).json();
   assert.equal(health.publication.telegram.source,'NABD_WEBSITE');
-  assert.equal(health.publication.telegram.reason,'READY');
-  assert.notEqual(health.publication.detail,'ننتظر خطة جديدة مكتملة من مصدر التداول.');
+  assert.equal(health.publication.telegram.reason,'WAITING_WEBSITE_PLAN');
+  assert.equal((await post()).status,200);
+  const dispatched=await (await fetch(base+'/healthz')).json();
+  assert.equal(dispatched.publication.telegram.reason,'READY');
 });
 test('durable plan claims survive journal reopening and a result from a different account cannot modify them',async t=>{
   const dir=mkdtempSync(join(tmpdir(),'nabd-entry-journal-')),file=join(dir,'journal.sqlite');
@@ -252,4 +254,60 @@ test('operator traces a published recommendation by stable ID through MT5 dispat
   assert.equal(publicResponse.status,401,'operator trade execution details are private');
   assert.equal((await post()).status,200);
   assert.equal(await (await post()).text(),'','same recommendation cannot dispatch twice');
+});
+
+test('MT5 fills require matching exact broker deal ticket in fresh JustMarkets Demo history',async t=>{
+  const {app,base,post,source,raw}=await setup(t);
+  const headers={Authorization:'Bearer '+ADMIN};
+  const p=app.marketFeed.publicState().markets.XAUUSD.currentSignal;
+  const response=await post(),wire=(await response.text()).split('|');
+  assert.equal(wire[0],'NBWEB1');
+  const id=Number(wire[11]);
+  assert.equal((await post('/api/bridge/website-result',
+    {...source,id,status:'SUBMITTED',mt5_retcode:10009,deal_ticket:'98765432'})).status,200);
+  const read=async()=> (await (await fetch(base+'/api/signals',{headers})).json()).signals.find(s=>s.id===p.id).execution_trace;
+  assert.equal((await read()).status,'SUBMITTED');
+  assert.equal((await read()).broker_fill_confirmed,false);
+  const deal={ticket:'98765432',position_id:'1234',time:NOW,side:p.side,
+    entry_type:'IN',volume:0.01,price:p.entry,profit:0,commission:0,swap:0,fee:0};
+  raw.deals=[{...deal,ticket:'11111111'}];
+  app.ingest(raw);
+  assert.equal((await read()).broker_fill_confirmed,false,'another broker deal cannot confirm this trade');
+  raw.deals=[{...deal,side:p.side==='BUY'?'SELL':'BUY'}];
+  app.ingest(raw);
+  assert.equal((await read()).broker_fill_confirmed,false,'opposite side cannot confirm this trade');
+  raw.deals=[deal];
+  app.ingest(raw);
+  const confirmed=await read();
+  assert.equal(confirmed.status,'FILLED');
+  assert.equal(confirmed.broker_fill_confirmed,true);
+  assert.equal(confirmed.broker_deal_ticket,'98765432');
+  const account=await (await fetch(base+'/api/account',{headers})).json();
+  assert.equal(account.websiteEntries[0].broker_fill_confirmed,true);
+  assert.equal(account.websiteEntries[0].broker_deal_ticket,'98765432');
+});
+
+test('old EA SUBMITTED without deal ticket stays unverified; never invent a broker fill',async t=>{
+  const {app,base,post,source}=await setup(t),p=app.marketFeed.publicState().markets.XAUUSD.currentSignal;
+  const wire=(await (await post()).text()).split('|');
+  const id=Number(wire[11]);
+  assert.equal((await post('/api/bridge/website-result',{...source,id,status:'SUBMITTED'})).status,200);
+  const result=(await (await fetch(base+'/api/signals',{headers:{Authorization:'Bearer '+ADMIN}})).json())
+    .signals.find(s=>s.id===p.id).execution_trace;
+  assert.equal(result.status,'SUBMITTED');
+  assert.equal(result.broker_fill_confirmed,false);
+});
+
+test('bridge and EA carry same claimed website order ID and broker deal reference',()=>{
+  const main=readFileSync(join(import.meta.dirname,'mt5','NABD_Link.mqh'),'utf8');
+  const bridge=readFileSync(join(import.meta.dirname,'mt5','NABD_Bridge.mqh'),'utf8');
+  for (const instrument of ['BTC','GOLD']) {
+    const ea=readFileSync(join(import.meta.dirname,'mt5',`NABD_${instrument}_4_01.mq5`),'utf8');
+    assert.match(ea,/g_trade\.ResultDeal\(\)/);
+    assert.match(ea,/GlobalVariableGet\(NABDKey\("WA"\)\)/);
+    assert.match(ea,/GlobalVariableSet\(NABDKey\("WDT"\)/);
+    assert.match(ea,/NBMainValue\("WDT"\)/);
+  }
+  assert.match(main,/NABDKey\("WDT"\)/);
+  assert.match(bridge,/deal_ticket/);
 });
