@@ -9,3 +9,10 @@
 .mt5-registration-row p{overflow-wrap:anywhere;margin:5px 0}
 .mt5-inactive{color:var(--gold);font-size:13px}
 .member-mt5-card form[hidden]{display:none}
+
+/* Central MT5 hosting is an opt-in provisioning request, not an active connection. */
+.mt5-hosting-consent{display:grid;gap:10px;margin-top:12px;max-width:520px}
+.mt5-hosting-consent .check-label{color:var(--muted)}
+.mt5-admin-actions{display:flex;gap:8px;flex-wrap:wrap}
+.mt5-admin-actions .button{white-space:normal}
+#admin-mt5-hosting{display:grid;gap:12px;margin:16px 0}

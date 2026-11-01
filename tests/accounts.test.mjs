@@ -286,7 +286,7 @@ test('MT5 Demo registration is owner-scoped, CSRF protected, and never grants tr
   assert.equal(schema.rows.some(column => /password|secret|token/i.test(column.name)), false);
   const html = await fetch(h.base + '/account').then(response => response.text());
   assert.match(html, /member-mt5-form/);
-  assert.match(html, /لا يوجد اتصال MT5 أو تداول تلقائي/);
+  assert.match(html, /الموافقة الإدارية لا تعني ربط MT5 أو بدء التداول/);
 });
 
 test('old encrypted identity backups remain readable without MT5 registrations', async t => {
@@ -298,4 +298,97 @@ test('old encrypted identity backups remain readable without MT5 registrations',
   const recovered = readAuthBackup(oldArchive,h.backup.key);
   assert.deepEqual(recovered.tables.nabd_member_mt5_accounts,[]);
   assert.equal(recovered.version,1);
+});
+
+test('central hosting requests are opt-in, tenant-isolated, and require MFA admin review', async t => {
+  const h = await setup(t);
+  await h.verify('hosting-a@example.test');
+  await h.verify('hosting-b@example.test');
+  const a = await h.login('hosting-a@example.test'), b = await h.login('hosting-b@example.test');
+  const admin = await h.owner();
+  const spec = {broker:'JustMarkets',server:'JustMarkets-Demo2',environment:'demo',acknowledge:true};
+  const aRegistered = await h.request('/api/auth/mt5-accounts',{...spec,login:'12345678'},a);
+  const bRegistered = await h.request('/api/auth/mt5-accounts',{...spec,login:'98765432'},b);
+  assert.equal(aRegistered.status,201);
+  assert.equal(bRegistered.status,201);
+  const path='/api/auth/mt5-hosting/request';
+  assert.equal((await h.request(path,{id:aRegistered.body.id,consent:true})).status,401);
+  assert.equal((await h.request(path,{id:bRegistered.body.id,consent:true},a)).status,404);
+  assert.equal((await h.request(path,{id:aRegistered.body.id,consent:false},a)).status,400);
+  assert.equal((await h.request(path,{id:aRegistered.body.id,consent:true,password:'secret'},a)).status,400);
+  assert.equal((await h.request(path,{id:aRegistered.body.id,consent:true},a,{'X-NABD-CSRF':''})).status,403);
+  assert.equal((await h.request(path,{id:aRegistered.body.id,consent:true},a,{Origin:'https://evil.example'})).status,403);
+  const request=await h.request(path,{id:aRegistered.body.id,consent:true},a);
+  assert.equal(request.status,202,h.errors.map(e=>e.stack).join('\n'));
+  assert.equal(request.body.tradingEnabled,false);
+  assert.equal(request.body.connectionEnabled,false);
+  assert.equal((await h.request(path,{id:aRegistered.body.id,consent:true},a)).status,409);
+  const mine=await h.request('/api/auth/mt5-accounts',undefined,a);
+  const someoneElse=await h.request('/api/auth/mt5-accounts',undefined,b);
+  assert.equal(mine.body.accounts[0].hosting_status,'REQUESTED');
+  assert.equal(someoneElse.body.accounts[0].hosting_status,'NOT_REQUESTED');
+  assert.equal('member_email' in mine.body.accounts[0],false);
+  assert.equal((await h.request('/api/admin/mt5-hosting',undefined,a)).status,403);
+  assert.equal((await h.request('/api/admin/mt5-hosting/review',{id:aRegistered.body.id,decision:'APPROVE'},a)).status,403);
+  const queue=await h.request('/api/admin/mt5-hosting',undefined,admin);
+  assert.equal(queue.status,200);
+  assert.equal(queue.body.accounts.length,1);
+  assert.equal(queue.body.accounts[0].member_email,'hosting-a@example.test');
+  assert.equal(queue.body.workerConnected,false);
+  assert.equal(queue.body.tradingEnabled,false);
+  const reviewPath='/api/admin/mt5-hosting/review';
+  assert.equal((await h.request(reviewPath,{id:aRegistered.body.id,decision:'APPROVE'},admin,{'X-NABD-CSRF':''})).status,403);
+  assert.equal((await h.request(reviewPath,{id:bRegistered.body.id,decision:'APPROVE'},admin)).status,409);
+  assert.equal((await h.request(reviewPath,{id:aRegistered.body.id,decision:'APPROVE',trade:true},admin)).status,400);
+  const approved=await h.request(reviewPath,{id:aRegistered.body.id,decision:'APPROVE'},admin);
+  assert.equal(approved.status,200,h.errors.map(e=>e.stack).join('\n'));
+  assert.equal(approved.body.tradingEnabled,false);
+  assert.equal(approved.body.workerConnected,false);
+  assert.equal((await h.request(reviewPath,{id:aRegistered.body.id,decision:'REJECT'},admin)).status,409);
+  assert.equal((await h.request('/api/auth/mt5-accounts',undefined,a)).body.accounts[0].hosting_status,'APPROVED');
+  assert.equal((await h.request('/api/account',undefined,a)).status,401);
+  assert.equal((await h.request('/api/commands',{action:'RESUME'},a)).status,401);
+  // Removing a member account cascades to its hosting request, without touching another user.
+  assert.equal((await h.request('/api/auth/mt5-accounts/remove',{id:aRegistered.body.id},a)).status,200);
+  assert.deepEqual((await h.request('/api/admin/mt5-hosting',undefined,admin)).body.accounts,[]);
+  const audit=(await h.request('/api/admin/audit',undefined,admin)).body.events;
+  assert.ok(audit.some(e=>e.event==='MT5_HOSTING_REQUESTED'));
+  assert.ok(audit.some(e=>e.event==='MT5_HOSTING_APPROVED'));
+});
+
+test('rejected hosting requests can be resubmitted, but cannot be reviewed twice', async t => {
+  const h=await setup(t);await h.verify('hosting-retry@example.test');
+  const user=await h.login('hosting-retry@example.test'),admin=await h.owner();
+  const created=await h.request('/api/auth/mt5-accounts',{
+    broker:'JustMarkets',server:'JustMarkets-Demo',login:'44446666',environment:'demo',acknowledge:true
+  },user);
+  assert.equal(created.status,201);
+  const path='/api/auth/mt5-hosting/request', id=created.body.id;
+  assert.equal((await h.request(path,{id,consent:true},user)).status,202);
+  assert.equal((await h.request('/api/admin/mt5-hosting/review',{id,decision:'REJECT'},admin)).status,200);
+  assert.equal((await h.request('/api/auth/mt5-accounts',undefined,user)).body.accounts[0].hosting_status,'REJECTED');
+  assert.equal((await h.request(path,{id,consent:true},user)).status,202);
+  assert.equal((await h.request('/api/auth/mt5-accounts',undefined,user)).body.accounts[0].hosting_status,'REQUESTED');
+  assert.equal((await h.request('/api/admin/mt5-hosting/review',{id,decision:'APPROVE'},admin)).status,200);
+});
+
+test('encrypted backups include central hosting requests and v2 archives still decode', async t => {
+  const h=await setup(t);await h.verify('hosting-backup@example.test');
+  const user=await h.login('hosting-backup@example.test');
+  const registered=await h.request('/api/auth/mt5-accounts',{
+    broker:'JustMarkets',server:'JustMarkets-Demo',login:'55557777',environment:'demo',acknowledge:true
+  },user);
+  await h.request('/api/auth/mt5-hosting/request',{id:registered.body.id,consent:true},user);
+  const archive=await exportAuthBackup(h.store,h.backup.key,h.now);
+  assert.equal(archive.includes('55557777'),false);
+  const decoded=readAuthBackup(archive,h.backup.key);
+  assert.equal(decoded.version,3);
+  assert.equal(decoded.tables.nabd_mt5_hosting_requests.length,1);
+  const oldTables={};
+  for(const name of ['nabd_users','nabd_auth_audit','nabd_auth_settings','nabd_member_mt5_accounts'])
+    oldTables[name]=(await h.store.query('SELECT * FROM '+name)).rows;
+  const v2=encrypt(JSON.stringify({version:2,created_at:h.now(),tables:oldTables}),h.backup.key);
+  const oldDecoded=readAuthBackup(v2,h.backup.key);
+  assert.equal(oldDecoded.version,2);
+  assert.deepEqual(oldDecoded.tables.nabd_mt5_hosting_requests,[]);
 });
