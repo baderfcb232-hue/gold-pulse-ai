@@ -18,6 +18,13 @@ function passwordInput(value) {
   return value;
 }
 const cookieValue = (req, name) => (req.headers.cookie || '').split(';').map(x => x.trim()).find(x => x.startsWith(name + '='))?.slice(name.length + 1) || '';
+// A fresh read-only heartbeat never grants a trade permission.
+const monitorStatus = (worker, at) => {
+  if (!worker?.worker_id) return 'NOT_ISSUED';
+  if (worker.last_seen_at == null) return 'AWAITING_WORKER';
+  if (Number(worker.last_seen_at) > at + 5 || at - Number(worker.last_seen_at) > 45) return 'STALE';
+  return Number(worker.mt5_online) === 1 ? 'OBSERVED_DEMO' : 'MT5_OFFLINE';
+};
 const userView = u => ({id: u.id, email: u.email, name: u.name, role: u.role, status: u.status,
   verified: Boolean(u.verified_at), created_at: Number(u.created_at), last_login: u.last_login && Number(u.last_login),
   notifications: Boolean(u.notifications), recommendations: Boolean(u.recommendations), mfa: Boolean(u.totp_secret)});
@@ -167,7 +174,7 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
   }
 
   async function handle(req, path, url, body) {
-    if (!path.startsWith('/api/auth/') && !path.startsWith('/api/admin/')) return null;
+    if (!path.startsWith('/api/auth/') && !path.startsWith('/api/admin/') && path !== '/api/worker/mt5-heartbeat') return null;
     await ready;
     if (path === '/api/auth/status' && req.method === 'GET') {
       if (!online) await ensureOnline();
@@ -178,8 +185,49 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
     if (online && !healthy) await probeDatabase();
     if (!online || !healthy)
       return result({error: 'خدمة الحسابات غير متاحة مؤقتًا؛ جارٍ إعادة الاتصال بقاعدة البيانات.', ...status()}, 503);
-    if (req.method === 'POST' && req.headers.origin !== new URL(base).origin) return result({error: 'Origin rejected'}, 403);
+    if (req.method === 'POST' && path !== '/api/worker/mt5-heartbeat' && req.headers.origin !== new URL(base).origin) return result({error: 'Origin rejected'}, 403);
     try {
+      if (path === '/api/worker/mt5-heartbeat' && req.method === 'POST') {
+        // This endpoint is limited to read-only account presence. A worker token
+        // can NEVER call operator trade APIs, poll signals or dispatch orders.
+        const token = req.headers['x-nabd-worker-token'];
+        if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token))
+          fail(401, 'Invalid monitoring worker credentials');
+        const packet = await body(req);
+        if (!packet || typeof packet !== 'object' || Array.isArray(packet) ||
+            Object.keys(packet).some(name => !['account_id','worker_id','broker','server','login','environment','terminal_connected','demo_mode'].includes(name)) ||
+            typeof packet.account_id !== 'string' || !/^[a-f0-9-]{36}$/.test(packet.account_id) ||
+            typeof packet.worker_id !== 'string' || !/^[a-f0-9-]{36}$/.test(packet.worker_id) ||
+            typeof packet.login !== 'string' || !/^[1-9][0-9]{3,15}$/.test(packet.login) ||
+            typeof packet.server !== 'string' || packet.server.length > 60 ||
+            packet.broker !== 'JustMarkets' || packet.environment !== 'demo' ||
+            typeof packet.terminal_connected !== 'boolean' || typeof packet.demo_mode !== 'boolean')
+          fail(400, 'Invalid read-only MT5 monitoring report');
+        const identity = (await store.query(`SELECT w.account_id,w.worker_id,
+          a.broker,a.server_name,a.login,a.environment
+          FROM nabd_mt5_monitor_workers w
+          JOIN nabd_member_mt5_accounts a ON a.id=w.account_id
+          JOIN nabd_mt5_hosting_requests h ON h.account_id=a.id
+          JOIN nabd_users owner ON owner.id=a.user_id
+          WHERE w.account_id=? AND w.token_hash=? AND h.status='APPROVED'
+            AND owner.status='active' AND owner.verified_at IS NOT NULL`,
+          [packet.account_id, digest(token)])).rows[0];
+        if (!identity || identity.worker_id !== packet.worker_id)
+          fail(401, 'Invalid monitoring worker credentials');
+        if (identity.broker !== packet.broker || identity.server_name !== packet.server ||
+            identity.login !== packet.login || identity.environment !== packet.environment ||
+            !packet.demo_mode) {
+          // A real account or a wrong MT5 login must not appear as connected.
+          await store.query(`UPDATE nabd_mt5_monitor_workers SET last_seen_at=?, mt5_online=0
+            WHERE account_id=? AND token_hash=?`, [clock(), identity.account_id, digest(token)]);
+          fail(409, 'MT5 Demo identity does not match the registered account');
+        }
+        await store.query(`UPDATE nabd_mt5_monitor_workers SET last_seen_at=?, mt5_online=?
+          WHERE account_id=? AND token_hash=?`,
+          [clock(), packet.terminal_connected ? 1 : 0, identity.account_id, digest(token)]);
+        return result({ok:true,monitoringOnly:true,tradeAllowed:false,
+          observed:packet.terminal_connected});
+      }
       const adminPrincipal = path.startsWith('/api/admin/') ? await authenticated(req, req.method === 'POST', true) : null;
       const b = req.method === 'POST' ? await body(req) : {};
       if (req.method === 'POST' && Buffer.byteLength(JSON.stringify(b)) > (path === '/api/admin/restore' ? 24 * 1024 * 1024 : 16000)) fail(413, 'الطلب أكبر من الحد المسموح.');
@@ -276,12 +324,18 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
       // Phase 1: member-scoped, read-only MT5 account registration. Not an active MT5 link.
       // Never accept or store brokerage passwords or investor passwords here.
       if (path === '/api/auth/mt5-accounts' && req.method === 'GET') {
-        const accounts = (await store.query(`SELECT a.id,a.broker,a.server_name,a.login,a.environment,a.status,a.created_at,
-          COALESCE(h.status,'NOT_REQUESTED') AS hosting_status,h.requested_at,h.reviewed_at
+        const rows = (await store.query(`SELECT a.id,a.broker,a.server_name,a.login,a.environment,a.status,a.created_at,
+          COALESCE(h.status,'NOT_REQUESTED') AS hosting_status,h.requested_at,h.reviewed_at,
+          w.worker_id,w.last_seen_at,w.mt5_online
           FROM nabd_member_mt5_accounts a
           LEFT JOIN nabd_mt5_hosting_requests h ON h.account_id=a.id
+          LEFT JOIN nabd_mt5_monitor_workers w ON w.account_id=a.id
           WHERE a.user_id=? ORDER BY a.created_at DESC`, [u.id])).rows;
-        return result({accounts, tradingEnabled: false, connectionEnabled: false, phase: 'HOSTING_REQUEST_ONLY'});
+        const accounts=rows.map(({worker_id,mt5_online,...a}) => ({
+          ...a,monitoring_status:a.hosting_status === 'APPROVED'
+            ? monitorStatus({worker_id,mt5_online,last_seen_at:a.last_seen_at},clock()) : 'NOT_APPROVED'
+        }));
+        return result({accounts, tradingEnabled: false, connectionEnabled: false, phase: 'READ_ONLY_MONITORING'});
       }
       if (path === '/api/auth/mt5-accounts' && req.method === 'POST') {
         if (!b || typeof b !== 'object' || Array.isArray(b) ||
@@ -422,13 +476,59 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
       // Admin MFA required by the /api/admin/ path guard. Review only; never provision
       // brokerage credentials or set the member account as connected.
       if (path === '/api/admin/mt5-hosting' && req.method === 'GET') {
-        const accounts = (await store.query(`SELECT h.account_id,h.status,h.requested_at,h.reviewed_at,
-          a.broker,a.server_name,a.login,a.environment,a.user_id,u.name AS member_name,u.email AS member_email
+        const rows = (await store.query(`SELECT h.account_id,h.status,h.requested_at,h.reviewed_at,
+          a.broker,a.server_name,a.login,a.environment,a.user_id,u.name AS member_name,u.email AS member_email,
+          w.worker_id,w.issued_at,w.last_seen_at,w.mt5_online
           FROM nabd_mt5_hosting_requests h
           JOIN nabd_member_mt5_accounts a ON a.id=h.account_id
           JOIN nabd_users u ON u.id=a.user_id
+          LEFT JOIN nabd_mt5_monitor_workers w ON w.account_id=a.id
           ORDER BY h.requested_at DESC LIMIT 100`)).rows;
-        return result({accounts,workerConnected:false,tradingEnabled:false,phase:'HOSTING_REQUEST_ONLY'});
+        const accounts=rows.map(({worker_id,mt5_online,...a}) => ({
+          ...a,worker_provisioned:Boolean(worker_id),
+          monitoring_status:a.status === 'APPROVED'
+            ? monitorStatus({worker_id,mt5_online,last_seen_at:a.last_seen_at},clock()) : 'NOT_APPROVED'
+        }));
+        return result({accounts,workerConnected:false,tradingEnabled:false,phase:'READ_ONLY_MONITORING'});
+      }
+      if (path === '/api/admin/mt5-monitor/provision' && req.method === 'POST') {
+        if (!b || typeof b !== 'object' || Array.isArray(b) ||
+            Object.keys(b).some(name => !['id','confirm'].includes(name)) ||
+            typeof b.id !== 'string' || !/^[a-f0-9-]{36}$/.test(b.id) ||
+            b.confirm !== 'ISSUE_READONLY_TOKEN')
+          fail(400, 'Confirm read-only Windows worker enrollment.');
+        const token = opaque(), workerId = randomUUID();
+        await store.transaction(async q => {
+          const ready = (await q(`SELECT a.id FROM nabd_member_mt5_accounts a
+            JOIN nabd_mt5_hosting_requests h ON h.account_id=a.id
+            JOIN nabd_users owner ON owner.id=a.user_id
+            WHERE a.id=? AND h.status='APPROVED' AND owner.status='active'
+            AND owner.verified_at IS NOT NULL AND a.environment='demo'`, [b.id])).rows[0];
+          if (!ready) fail(409, 'Approved, active Demo hosting request required.');
+          await q(`INSERT INTO nabd_mt5_monitor_workers
+            (account_id,token_hash,worker_id,issued_at,last_seen_at,mt5_online)
+            VALUES(?,?,?,?,NULL,0)
+            ON CONFLICT(account_id) DO UPDATE SET token_hash=excluded.token_hash,
+              worker_id=excluded.worker_id,issued_at=excluded.issued_at,last_seen_at=NULL,mt5_online=0`,
+            [b.id,digest(token),workerId,clock()]);
+          await audit(q,u.id,'MT5_MONITOR_TOKEN_ROTATED',b.id);
+        });
+        // This token is emitted ONCE to the MFA-protected administrator.
+        // Store it only on the Windows worker; never save to Render env, logs or browser storage.
+        return result({ok:true,account_id:b.id,worker_id:workerId,token,
+          monitoringOnly:true,tradeAllowed:false,expires:'until_revoked_or_rotated'});
+      }
+      if (path === '/api/admin/mt5-monitor/revoke' && req.method === 'POST') {
+        if (!b || typeof b !== 'object' || Array.isArray(b) ||
+            Object.keys(b).some(name => !['id'].includes(name)) ||
+            typeof b.id !== 'string' || !/^[a-f0-9-]{36}$/.test(b.id))
+          fail(400, 'Invalid monitoring account');
+        await store.transaction(async q => {
+          const deleted = (await q('DELETE FROM nabd_mt5_monitor_workers WHERE account_id=? RETURNING account_id', [b.id])).rows;
+          if (!deleted.length) fail(404, 'No monitoring worker for this account.');
+          await audit(q,u.id,'MT5_MONITOR_REVOKED',b.id);
+        });
+        return result({ok:true,monitoringOnly:true,tradeAllowed:false});
       }
       if (path === '/api/admin/mt5-hosting/review' && req.method === 'POST') {
         if (!b || typeof b !== 'object' || Array.isArray(b) ||
@@ -446,6 +546,8 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
                 AND owner.verified_at IS NOT NULL)
             RETURNING account_id`, [statusValue, clock(), u.id, b.id])).rows;
           if (!changed.length) fail(409, 'الطلب غير متاح للمراجعة أو سبق البت فيه.');
+          if (statusValue === 'REJECTED')
+            await q('DELETE FROM nabd_mt5_monitor_workers WHERE account_id=?',[b.id]);
           await audit(q,u.id,'MT5_HOSTING_'+statusValue,b.id);
         });
         return result({ok:true,status:statusValue,workerConnected:false,tradingEnabled:false});

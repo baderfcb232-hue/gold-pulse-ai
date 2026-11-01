@@ -99,9 +99,21 @@ async function memberMt5Accounts() {
       NOT_REQUESTED: 'لم تطلب الاستضافة المركزية بعد',
       REQUESTED: 'طلب الاستضافة قيد مراجعة الإدارة · لا يوجد اتصال',
       APPROVED: 'تمت الموافقة الإدارية على التجهيز · لا يوجد اتصال أو تداول',
-      REJECTED: 'لم تتم الموافقة على الطلب · يمكنك تقديم طلب جديد'
+      REJECTED: 'لم تتم الموافقة على الطلب · يمكنك تقديم طلب جديد',
+      _WORKER: 'مراقبة MT5 التجريبية'
     };
     details.append(node('p', 'subtle', labels[state] || 'الاستضافة غير مفعّلة'));
+    if (state === 'APPROVED') {
+      const monitoringLabels={
+        NOT_ISSUED:'لم يتم تجهيز مراقبة Windows بعد',
+        AWAITING_WORKER:'بانتظار أول تقرير من Windows MT5',
+        STALE:'توقف وصول تقارير Windows حديثة',
+        MT5_OFFLINE:'Windows متصل بالموقع لكن MT5 غير متصل بالحساب',
+        OBSERVED_DEMO:'تم رصد حساب Demo متصل من Windows · التداول غير مفعّل'
+      };
+      details.append(node('p', 'mt5-inactive',
+        monitoringLabels[account.monitoring_status] || 'مراقبة الحساب غير مفعّلة'));
+    }
     if (state === 'NOT_REQUESTED' || state === 'REJECTED') {
       const hosting = node('div', 'mt5-hosting-consent');
       const label = node('label', 'check-label');
@@ -171,9 +183,34 @@ $('users-prev').onclick = () => {usersPage = Math.max(0, usersPage - 1); users()
 $('users-next').onclick = () => {usersPage++; users().catch(error => message(error.message, true));};
 const mt5HostingLabels = {
   REQUESTED: 'بانتظار المراجعة',
-  APPROVED: 'موافق عليه للتجهيز فقط — غير متصل',
+  APPROVED: 'موافق عليه للتجهيز فقط — لا صلاحيات تداول',
   REJECTED: 'لم تتم الموافقة'
 };
+const mt5MonitorLabels = {
+  NOT_APPROVED:'غير معتمد',
+  NOT_ISSUED:'لا يوجد رمز مراقبة بعد',
+  AWAITING_WORKER:'بانتظار أول تقرير مراقبة',
+  STALE:'تحديث Windows متأخر أو منقطع',
+  MT5_OFFLINE:'عامل Windows يعمل لكن MT5 غير متصل',
+  OBSERVED_DEMO:'تم رصد اتصال MT5 Demo · التداول غير مفعّل'
+};
+function showWorkerOneTime(data) {
+  const panel=$('admin-worker-onetime');
+  const code=node('code','secret-code',data.token);
+  const worker=node('code','secret-code',data.worker_id);
+  const account=node('code','secret-code',data.account_id);
+  const close=node('button','button ghost','إخفاء الرمز من الصفحة');
+  close.type='button';
+  close.onclick=()=>{panel.replaceChildren();panel.hidden=true;};
+  panel.replaceChildren(
+    node('strong','','رمز مراقبة Windows لمرة واحدة — احفظه على السيرفر المركزي بصورة آمنة، وليس في الدردشة أو GitHub.'),
+    node('p','','معرّف الحساب في نبض:'),account,
+    node('p','','معرّف عامل Windows:'),worker,
+    node('p','','رمز المراقبة السري (يظهر الآن فقط):'),code,
+    node('p','','الرمز يسمح فقط بإرسال حالة الاتصال، ولا يفتح أو يغلق صفقات. إنشاء رمز جديد يلغي القديم فورًا.'),close);
+  panel.hidden=false;
+}
+
 async function adminMt5Hosting() {
   const response = await api('/api/admin/mt5-hosting');
   const list = $('admin-mt5-hosting');
@@ -188,6 +225,7 @@ async function adminMt5Hosting() {
     info.append(node('strong', '', request.member_name + ' · ' + request.member_email),
       node('p', 'subtle', request.broker + ' · Demo · حساب ' + request.login + ' · ' + request.server_name),
       node('p', 'mt5-inactive', mt5HostingLabels[request.status] || 'غير معروف'),
+      node('p', 'subtle', mt5MonitorLabels[request.monitoring_status] || 'مراقبة غير متاحة'),
       node('p', 'subtle', 'تاريخ الطلب: ' + date(request.requested_at)));
     const actions = node('div', 'mt5-admin-actions');
     if (request.status === 'REQUESTED') {
@@ -207,6 +245,39 @@ async function adminMt5Hosting() {
           }
         };
         actions.append(button);
+      }
+    }
+    if (request.status === 'APPROVED') {
+      const provision=node('button','button ghost',
+        request.worker_provisioned ? 'تدوير رمز مراقبة Windows' : 'إصدار رمز مراقبة Windows');
+      provision.type='button';
+      provision.onclick=async()=>{
+        if(!confirm('سيتم توليد رمز مراقبة جديد صالح لهذه النسخة فقط. لا يمنح أي صلاحيات تداول. هل تؤكد؟'))return;
+        provision.disabled=true;
+        try{
+          const result=await api('/api/admin/mt5-monitor/provision',
+            {id:request.account_id,confirm:'ISSUE_READONLY_TOKEN'});
+          showWorkerOneTime(result);
+          await adminMt5Hosting();
+          message('تم إنشاء رمز مراقبة Windows. انسخه من اللوحة مرة واحدة.');
+        }catch(error){message(error.message,true);}
+        finally{provision.disabled=false;}
+      };
+      actions.append(provision);
+      if(request.worker_provisioned){
+        const revoke=node('button','button danger','إلغاء رمز المراقبة');
+        revoke.type='button';
+        revoke.onclick=async()=>{
+          if(!confirm('سيتم إيقاف جميع تقارير هذا العامل فورًا. هل تؤكد؟'))return;
+          revoke.disabled=true;
+          try{
+            await api('/api/admin/mt5-monitor/revoke',{id:request.account_id});
+            const panel=$('admin-worker-onetime');panel.replaceChildren();panel.hidden=true;
+            await adminMt5Hosting();
+            message('تم إلغاء رمز مراقبة Windows.');
+          }catch(error){message(error.message,true);revoke.disabled=false;}
+        };
+        actions.append(revoke);
       }
     }
     row.append(info, actions);
