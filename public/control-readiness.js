@@ -48,3 +48,15 @@ export function marketControlWarnings(controls, now) {
   }
   return warnings;
 }
+
+// The button's visual state follows the last known managed-position count,
+// not the rapidly changing 5-second bridge heartbeat. Actual commands still
+// use the current blockers and are revalidated by MT5 and the server.
+export function closeButtonDisplay({authenticated, positions, issues = []}) {
+  const known = authenticated && Array.isArray(positions);
+  if (known && positions.length === 0)
+    return {positionState:'empty', hint:'لا توجد صفقات مفتوحة بحسب آخر سجل MT5. اضغط تحديث الحالة والسجل إذا تغيّرت الصفقات.'};
+  if (known && positions.length > 0)
+    return {positionState:'open', hint:'آخر سجل MT5 يحتوي على ' + positions.length + ' من صفقات البوت. اضغط الزر لفحص شروط الإغلاق وإرسال الأمر بعد التأكيد.'};
+  return {positionState:'unknown', hint:issues.length ? issues[0] + (issues.length > 1 ? ' · اضغط لمعرفة بقية الأسباب.' : '') : 'لم يصل سجل صفقات مؤكد؛ اضغط تحديث الحالة والسجل.'};
+}
