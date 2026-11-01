@@ -276,9 +276,12 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
       // Phase 1: member-scoped, read-only MT5 account registration. Not an active MT5 link.
       // Never accept or store brokerage passwords or investor passwords here.
       if (path === '/api/auth/mt5-accounts' && req.method === 'GET') {
-        const accounts = (await store.query(`SELECT id,broker,server_name,login,environment,status,created_at
-          FROM nabd_member_mt5_accounts WHERE user_id=? ORDER BY created_at DESC`, [u.id])).rows;
-        return result({accounts, tradingEnabled: false, connectionEnabled: false, phase: 'REGISTRATION_ONLY'});
+        const accounts = (await store.query(`SELECT a.id,a.broker,a.server_name,a.login,a.environment,a.status,a.created_at,
+          COALESCE(h.status,'NOT_REQUESTED') AS hosting_status,h.requested_at,h.reviewed_at
+          FROM nabd_member_mt5_accounts a
+          LEFT JOIN nabd_mt5_hosting_requests h ON h.account_id=a.id
+          WHERE a.user_id=? ORDER BY a.created_at DESC`, [u.id])).rows;
+        return result({accounts, tradingEnabled: false, connectionEnabled: false, phase: 'HOSTING_REQUEST_ONLY'});
       }
       if (path === '/api/auth/mt5-accounts' && req.method === 'POST') {
         if (!b || typeof b !== 'object' || Array.isArray(b) ||
@@ -314,6 +317,34 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
           await audit(q, u.id, 'MT5_REGISTRATION_REMOVED', b.id);
         });
         return result({ok: true});
+      }
+      // Phase 2a: opt-in request for centralized MT5 hosting, NOT MT5 credential
+      // collection or automatic execution. The worker is not provisioned here.
+      if (path === '/api/auth/mt5-hosting/request' && req.method === 'POST') {
+        if (!b || typeof b !== 'object' || Array.isArray(b) ||
+            Object.keys(b).some(name => !['id','consent'].includes(name)) ||
+            typeof b.id !== 'string' || !/^[a-f0-9-]{36}$/.test(b.id) || b.consent !== true)
+          fail(400, 'أكّد طلب الاستضافة التجريبية للحساب الذي تملكه.');
+        let outcome;
+        await store.transaction(async q => {
+          const owned = (await q(`SELECT id FROM nabd_member_mt5_accounts
+            WHERE id=? AND user_id=? AND broker='JustMarkets' AND environment='demo'`, [b.id, u.id])).rows;
+          if (!owned.length) fail(404, 'حساب Demo غير موجود ضمن حساباتك.');
+          const existing = (await q('SELECT status FROM nabd_mt5_hosting_requests WHERE account_id=?', [b.id])).rows[0];
+          if (existing && existing.status !== 'REJECTED')
+            fail(409, 'طلب الاستضافة مسجّل بالفعل أو تمت الموافقة على تجهيزه.');
+          if (existing) {
+            await q(`UPDATE nabd_mt5_hosting_requests SET status='REQUESTED',requested_at=?,reviewed_at=NULL,reviewed_by=NULL
+              WHERE account_id=? AND status='REJECTED'`, [clock(), b.id]);
+          } else {
+            await q(`INSERT INTO nabd_mt5_hosting_requests(account_id,status,requested_at)
+              VALUES(?,'REQUESTED',?)`, [b.id, clock()]);
+          }
+          await audit(q,u.id,'MT5_HOSTING_REQUESTED',b.id);
+          outcome = {ok:true,status:'REQUESTED',tradingEnabled:false,connectionEnabled:false,
+            message:'وصل طلب الاستضافة للإدارة. الربط والتداول غير مفعّلين.'};
+        });
+        return result(outcome, 202);
       }
       if (path === '/api/auth/profile' && req.method === 'POST') {
         const name = clean(b.name, 80); if (name.length < 2 || typeof b.notifications !== 'boolean') fail(400, 'بيانات الملف غير صالحة.');
@@ -388,6 +419,37 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
         const token = await store.transaction(q => issueToken(q, target.id, 'reset', 1800));
         await sendMail({email: target.email, kind: 'reset', token}); await audit(store.query, u.id, 'RESET_SENT', target.id); return result();
       }
+      // Admin MFA required by the /api/admin/ path guard. Review only; never provision
+      // brokerage credentials or set the member account as connected.
+      if (path === '/api/admin/mt5-hosting' && req.method === 'GET') {
+        const accounts = (await store.query(`SELECT h.account_id,h.status,h.requested_at,h.reviewed_at,
+          a.broker,a.server_name,a.login,a.environment,a.user_id,u.name AS member_name,u.email AS member_email
+          FROM nabd_mt5_hosting_requests h
+          JOIN nabd_member_mt5_accounts a ON a.id=h.account_id
+          JOIN nabd_users u ON u.id=a.user_id
+          ORDER BY h.requested_at DESC LIMIT 100`)).rows;
+        return result({accounts,workerConnected:false,tradingEnabled:false,phase:'HOSTING_REQUEST_ONLY'});
+      }
+      if (path === '/api/admin/mt5-hosting/review' && req.method === 'POST') {
+        if (!b || typeof b !== 'object' || Array.isArray(b) ||
+            Object.keys(b).some(name => !['id','decision'].includes(name)) ||
+            typeof b.id !== 'string' || !/^[a-f0-9-]{36}$/.test(b.id) ||
+            !['APPROVE','REJECT'].includes(b.decision))
+          fail(400, 'اختر حسابًا وقرار مراجعة صالحًا.');
+        const statusValue = b.decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+        await store.transaction(async q => {
+          const changed = (await q(`UPDATE nabd_mt5_hosting_requests
+            SET status=?,reviewed_at=?,reviewed_by=? WHERE account_id=? AND status='REQUESTED'
+            AND EXISTS(SELECT 1 FROM nabd_member_mt5_accounts a
+              JOIN nabd_users owner ON owner.id=a.user_id
+              WHERE a.id=nabd_mt5_hosting_requests.account_id AND owner.status='active'
+                AND owner.verified_at IS NOT NULL)
+            RETURNING account_id`, [statusValue, clock(), u.id, b.id])).rows;
+          if (!changed.length) fail(409, 'الطلب غير متاح للمراجعة أو سبق البت فيه.');
+          await audit(q,u.id,'MT5_HOSTING_'+statusValue,b.id);
+        });
+        return result({ok:true,status:statusValue,workerConnected:false,tradingEnabled:false});
+      }
       if (path === '/api/admin/audit' && req.method === 'GET') return result({events: (await store.query('SELECT * FROM nabd_auth_audit ORDER BY time DESC LIMIT 100')).rows});
       if (path === '/api/admin/backup' && req.method === 'POST') {await runBackup(); await audit(store.query, u.id, 'BACKUP_CREATED'); return result({ok: true, last_success: lastBackup});}
       if (path === '/api/admin/backup/download' && req.method === 'POST') {
@@ -408,7 +470,8 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
           const allowed = {
             nabd_users: ['id','email','name','password_hash','role','status','verified_at','created_at','last_login','notifications','recommendations','totp_secret','totp_pending','pending_until','totp_last_step'],
             nabd_auth_audit: ['id','time','actor','event','subject'], nabd_auth_settings: ['key','value'],
-            nabd_member_mt5_accounts: ['id','user_id','broker','server_name','login','environment','status','created_at']};
+            nabd_member_mt5_accounts: ['id','user_id','broker','server_name','login','environment','status','created_at'],
+            nabd_mt5_hosting_requests: ['account_id','status','requested_at','reviewed_at','reviewed_by']};
           for (const table of backupTables) for (const row of data.tables[table]) {
             const columns = allowed[table];
             await q(`INSERT INTO ${table}(${columns.join(',')}) VALUES(${columns.map(() => '?').join(',')})`, columns.map(name => row[name] ?? null));
