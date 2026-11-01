@@ -223,7 +223,8 @@ void NBProcessWebsiteRecommendation()
       if(NBRequest("POST","/api/bridge/website-result","{"+source+",\"id\":"+NBD(result_id,0)+
        ",\"status\":"+NBQ(result==2?"SUBMITTED":"REJECTED")+
        ",\"reason_code\":"+NBD(NBMainValue("WRC"),0)+
-       ",\"mt5_retcode\":"+NBD(NBMainValue("WRT"),0)+"}",response)==200)reported_id=result_id;
+       ",\"mt5_retcode\":"+NBD(NBMainValue("WRT"),0)+
+       ",\"deal_ticket\":"+NBQ(NBD(NBMainValue("WDT"),0))+"}",response)==200)reported_id=result_id;
    // A local terminal with Algo Trading off must never claim a recommendation
    // that belongs to an executable copy on the MetaTrader VPS.
    if(!TradingExecutionEnabled())return;
