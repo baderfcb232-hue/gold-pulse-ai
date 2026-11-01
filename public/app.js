@@ -128,7 +128,20 @@ function renderActiveSignal(){
   box.append(values,e('p','source-caption',p.source==='MT5_EA'?'المستويات من البوت؛ التنفيذ يُراجع في الصفقات.':'المستويات من محرك الموقع؛ متابعة افتراضية.'));
   const cap=e('div','signal-caption');for(const [label,value]of [['صدرت',time(p.issued_at,true)],['الصلاحية',time(p.expires_at)],['نوع المتابعة','افتراضية؛ تنفيذ MT5 يظهر في الصفقات']]){const row=e('div');row.append(e('span','',label),e('span','',value));cap.append(row);}box.append(cap);const button=e('button','button ghost wide','احسب لوت هذه الإشارة');button.onclick=()=>{switchView('settings');$('risk-form').elements.entry.value=p.entry;$('risk-form').elements.sl.value=p.sl;};box.append(button);replace('active-signal',box);
 }
-async function loadSignals(){try{const data=await api('/api/signals');signals=data.signals||[];renderSignals();renderResults();}catch(err){signals=[];renderResults();replace('signals-list',empty(err.status===401?'سجّل الدخول بحساب مؤكد ومخوّل لمشاهدة سجل التوصيات.':'تعذر جلب سجل التوصيات الآن.'),Object.assign(e('a','button primary','تسجيل الدخول'),{href:'/auth'}));}}
+async function loadSignals(){try{const data=await api('/api/signals');signals=data.signals||[];renderSignals();renderTelegramSent();renderResults();}catch(err){signals=[];renderTelegramSent();renderResults();replace('signals-list',empty(err.status===401?'سجّل الدخول بحساب مؤكد ومخوّل لمشاهدة سجل التوصيات.':'تعذر جلب سجل التوصيات الآن.'),Object.assign(e('a','button primary','تسجيل الدخول'),{href:'/auth'}));}}
+function renderTelegramSent(){
+  const list=signals.filter(s=>s.telegram_delivery==='SENT').slice(0,12);
+  replace('telegram-sent-list',...(list.length?list.map(s=>{
+    const row=e('article','signal-row'),header=e('div'),source=s.broker_symbol
+      ? 'MT5 · توصية سعر البروكر' : 'Coinbase / مرجع خارجي · غير قابل لتنفيذ MT5';
+    header.append(e('small','signal-source',source),e('h3',s.side==='BUY'?'buy':'sell',sides[s.side]+' · '+(s.broker_symbol||s.symbol)),
+      e('small','subtle',time(s.issued_at,true)));
+    const note=e('p','subtle','رقم التوصية #'+(s.recommendation_code||s.id)+' · أُرسلت لتليجرام؛ لا تفتح صفقة MT5 بمجرد الإرسال');
+    const status=s.execution_trace;
+    if(status)note.append(' · حالة MT5: '+(status.status==='SUBMITTED'?'طلب تنفيذ غير مؤكد':status.status==='REJECTED'?'رفض':status.status==='BLOCKED'?'ممنوع':status.status==='DISPATCHED'?'أُرسل للجسر':'لم يُرسل أمر'));
+    row.append(header,note);return row;
+  }):[empty('لم تُرسل توصيات إلى تليجرام بعد، أو سجّل الدخول بحساب مخوّل لعرضها.')]));
+}
 function renderSignals(){
   const filter=$('signal-filter').value,source=$('signal-source-filter').value;
   const rows=signals.filter(s=>(filter==='ALL'||s.status===filter)&&(source==='ALL'||(s.source==='MT5_EA'?'MT5_EA':'DASHBOARD')===source));
@@ -136,7 +149,14 @@ function renderSignals(){
   replace('signals-list',...(rows.length?rows.map(s=>{
     const row=e('article','signal-row'),head=e('div');head.append(e('small','signal-source',s.source==='MT5_EA'?'بوت MT5':s.source?.startsWith('MT5')?'توصية نبض · '+s.source:'محرك الموقع · '+(s.source||'مرجعي')),e('h3',s.side==='BUY'?'buy':'sell',sides[s.side]+' · '+(s.broker_symbol||s.symbol)),e('small','subtle',time(s.issued_at,true)));
     const levels=e('div','level-inline');for(const [label,v]of [['الدخول',s.entry],['الستوب',s.sl],['هدف أول',s.tp1],['الهدف',s.tp2]])if(Number.isFinite(v)){const cell=e('div');cell.append(e('small','',label),e('strong','',price(v)));levels.append(cell);}
-    const status=e('div','row-status');status.append(badge(statuses[s.status]||s.status,s.status==='TP2'?'good':s.status==='SL'?'bad':'neutral'),e('small','subtle',s.telegram_delivery==='SENT'?'أُرسلت إلى تليجرام · متابعة تحليلية':s.r==null?'متابعة افتراضية':`${num(s.r)}R · قبل التكاليف`));row.append(head,levels,status);return row;
+    const status=e('div','row-status');status.append(badge(statuses[s.status]||s.status,s.status==='TP2'?'good':s.status==='SL'?'bad':'neutral'),e('small','subtle',s.telegram_delivery==='SENT'?'أُرسلت إلى تليجرام · لا تعني التنفيذ':s.r==null?'متابعة افتراضية':`${num(s.r)}R · قبل التكاليف`));
+    if(s.recommendation_code)status.append(e('small','subtle','رقم التوصية #'+s.recommendation_code));
+    const execution=s.execution_trace;
+    if(execution){
+      const labels={SUBMITTED:'طلب MT5 أُرسل — لم يُثبت فتح صفقة',REJECTED:'رفض MT5 التنفيذ',DISPATCHED:'وصلت للجسر — لم يصل تأكيد MT5',BLOCKED:'مُنع إرسال الأمر',NOT_DISPATCHED:'لا يوجد أمر MT5 مسجل'};
+      status.append(e('small','subtle',(labels[execution.status]||execution.status)+(execution.approval_id?' · أمر #'+execution.approval_id:'')+(execution.reason?' · '+execution.reason:'')+(execution.reason_code!=null?' · EA '+execution.reason_code:'')+(execution.mt5_retcode!=null?' · MT5 '+execution.mt5_retcode:'')));
+    }
+    row.append(head,levels,status);return row;
   }):[empty('لم تصدر توصيات ضمن هذا الاختيار بعد.') ]));
 }
 function metric(label,value,note=''){const m=e('div','metric');m.append(e('span','',label),e('strong','',value),e('small','',note));return m;}
@@ -224,8 +244,17 @@ function renderWebsiteEntries(box){
     for(const record of entries.slice(0,8)){
       const row=e('p','subtle'),p=record.plan;
       const status=record.status==='SUBMITTED'?'أرسل MT5 طلب التنفيذ؛ راجع Trade/History':record.status==='REJECTED'?'منع MT5 التنفيذ؛ راجع Experts':now()>record.expires?'لم يصل تأكيد التنفيذ خلال المهلة؛ لن نكرر الإرسال':'أُرسلت إلى الجسر؛ بانتظار رد MT5';
-      row.textContent=`${record.market} · ${time(record.time,true)} · ${sides[p.side]} · دخول ${price(p.entry)} · وقف ${price(p.sl)} · هدف ${price(p.tp)} · ${status}${record.reason_code!=null?' · سبب EA '+record.reason_code:''}${record.mt5_retcode!=null?' · كود MT5 '+record.mt5_retcode:''}`;box.append(row);
+      row.textContent=`${record.market} · توصية #${record.signal_code||'—'} · أمر MT5 #${record.id} · ${time(record.time,true)} · ${sides[p.side]} · دخول ${price(p.entry)} · وقف ${price(p.sl)} · هدف ${price(p.tp)} · ${status}${record.reason_code!=null?' · سبب EA '+record.reason_code:''}${record.mt5_retcode!=null?' · كود MT5 '+record.mt5_retcode:''}`;box.append(row);
     }
+  }
+  const decisions=[...(privateData?.websiteDecisions||[]).map(x=>({...x,market:'الذهب'})),
+    ...(privateData?.btc?.websiteDecisions||[]).map(x=>({...x,market:'بيتكوين'}))]
+    .filter(d=>d.status==='BLOCKED'&&!entries.some(r=>r.plan_id===d.plan_id&&r.market===d.market))
+    .sort((a,b)=>(b.updated_at||0)-(a.updated_at||0));
+  if(decisions.length){
+    box.append(e('h3','','توصيات لم تُرسل للتنفيذ — سبب المنع'));
+    for(const d of decisions.slice(0,8))
+      box.append(e('p','subtle',`${d.market} · توصية #${d.signal_code||'—'} · ${time(d.updated_at,true)} · ${d.reason||'غير معروف'} · لم يصدر أمر MT5`));
   }
 }
 function activeCommandBusy(){return commandSending || commandTracker.busy() ||

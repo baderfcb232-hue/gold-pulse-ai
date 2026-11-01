@@ -221,3 +221,35 @@ test('MT5 diagnostic wire is sent by bridge and written by main EA prior to resu
   assert.ok(section.indexOf('NABDKey("WRC")') < section.indexOf('NABDKey("WI")'));
   assert.ok(section.indexOf('NABDKey("WRT")') < section.indexOf('NABDKey("WI")'));
 });
+
+test('operator traces a published recommendation by stable ID through MT5 dispatch and EA rejection',async t=>{
+  const {app,base,post,source}=await setup(t);
+  const headers={Authorization:'Bearer '+ADMIN};
+  const signal=app.marketFeed.publicState().markets.XAUUSD.currentSignal;
+  assert.ok(signal?.id);
+  let response=await fetch(base+'/api/signals',{headers});
+  assert.equal(response.status,200);
+  let matched=(await response.json()).signals.find(p=>p.id===signal.id);
+  assert.equal(matched.execution_trace.status,'NOT_DISPATCHED');
+  assert.equal(matched.recommendation_code,matched.execution_trace.signal_code);
+  const wire=(await (await post()).text()).split('|');
+  assert.equal(wire[0],'NBWEB1');
+  assert.equal(wire.length,12,'wire format remains compatible with existing MT5 EA');
+  const orderId=Number(wire[11]);
+  response=await fetch(base+'/api/signals',{headers});
+  matched=(await response.json()).signals.find(p=>p.id===signal.id);
+  assert.equal(matched.execution_trace.status,'DISPATCHED');
+  assert.equal(matched.execution_trace.approval_id,orderId);
+  assert.equal(matched.execution_trace.broker_fill_confirmed,false);
+  assert.equal((await post('/api/bridge/website-result',
+    {...source,id:orderId,status:'REJECTED',reason_code:112,mt5_retcode:10016})).status,200);
+  response=await fetch(base+'/api/signals',{headers});
+  matched=(await response.json()).signals.find(p=>p.id===signal.id);
+  assert.equal(matched.execution_trace.status,'REJECTED');
+  assert.equal(matched.execution_trace.reason_code,112);
+  assert.equal(matched.execution_trace.mt5_retcode,10016);
+  const publicResponse=await fetch(base+'/api/signals');
+  assert.equal(publicResponse.status,401,'operator trade execution details are private');
+  assert.equal((await post()).status,200);
+  assert.equal(await (await post()).text(),'','same recommendation cannot dispatch twice');
+});
