@@ -62,7 +62,12 @@ export function commandProgress(command, now) {
     UNCERTAIN: ['التنفيذ غير مؤكد', 'راجع الصفقات وسجل MT5 قبل تكرار الأمر.', 'warn'],
     FAILED: ['لم يُقبل الطلب', 'صحّح السبب الظاهر ثم حاول مجددًا.', 'bad']
   };
-  const [title, detail, tone] = states[command.status] || ['حالة غير معروفة', 'حدّث سجل الأوامر.', 'warn'];
+  const confirmed = command.status === 'CONFIRMED' ? ({
+    RESUME: ['أكد MT5 السماح بالدخول التلقائي', 'هذا الأمر لم يفتح صفقة. البوت ينتظر توصية جديدة مستوفية لشروط الدخول.', 'good'],
+    PAUSE: ['أكد MT5 إيقاف الدخول الجديد', 'لن يفتح البوت صفقات جديدة بهذا الرمز حتى إعادة السماح؛ إدارة الصفقات الحالية مستمرة.', 'good'],
+    CLOSE_ALL: ['أكد MT5 تنفيذ أمر إغلاق صفقات البوت', 'راجع تبويب Trade/History للتأكد من نتائج الإغلاق الفعلية.', 'good']
+  })[command.action] : null;
+  const [title, detail, tone] = confirmed || states[command.status] || ['حالة غير معروفة', 'حدّث سجل الأوامر.', 'warn'];
   return {title, detail, tone, result: commandResultMessage(command.result)};
 }
 export function demoExecutionMessage(state) {
