@@ -64,6 +64,49 @@ async function sessions() {
     row.append(button); return row;
   }));
 }
+// Member MT5 registrations are metadata-only. Never solicit or transmit broker passwords.
+async function memberMt5Accounts() {
+  const response = await api('/api/auth/mt5-accounts');
+  const list = $('member-mt5-list'), formEl = $('member-mt5-form');
+  const accounts = response.accounts || [];
+  formEl.hidden = accounts.length > 0;
+  if (!accounts.length) {
+    list.replaceChildren(node('p', 'subtle', 'لم تسجّل حساب MT5 بعد. يمكنك إدخال معلومات حساب Demo واحد للمرحلة التجريبية.'));
+    return;
+  }
+  list.replaceChildren(...accounts.map(account => {
+    const row = node('div', 'mt5-registration-row');
+    const details = node('div');
+    details.append(node('strong', '', account.broker + ' · Demo'),
+      node('p', 'subtle', 'رقم الحساب: ' + account.login + ' · السيرفر: ' + account.server_name),
+      node('p', 'mt5-inactive', 'بانتظار إعداد الربط · غير متصل · لا يوجد تداول تلقائي'));
+    const remove = node('button', 'button ghost', 'حذف طلب التسجيل');
+    remove.type = 'button';
+    remove.onclick = async () => {
+      if (!confirm('حذف طلب تسجيل حساب MT5 التجريبي؟')) return;
+      remove.disabled = true;
+      try {
+        await api('/api/auth/mt5-accounts/remove', {id: account.id});
+        message('تم حذف طلب تسجيل حساب MT5.');
+        await memberMt5Accounts();
+      } catch (error) {
+        message(error.message, true);
+        remove.disabled = false;
+      }
+    };
+    row.append(details, remove);
+    return row;
+  }));
+}
+form('member-mt5-form', async (el, values) => {
+  const response = await api('/api/auth/mt5-accounts', {
+    broker: values.broker, server: values.server, login: values.login,
+    environment: values.environment, acknowledge: el.elements.acknowledge.checked
+  });
+  el.reset();
+  message(response.message);
+  await memberMt5Accounts();
+});
 $('revoke-all').onclick = () => logout(true).catch(error => message(error.message, true));
 form('deletion-form', async (el, values) => {await api('/api/auth/delete-request', values); el.reset(); message('تم إيقاف الحساب وتسجيل طلب الحذف للمراجعة.'); $('account-content').hidden = true; $('member-logout').hidden = true;});
 const states = {active: 'مفعّل', disabled: 'معطّل', deletion_requested: 'طلب حذف'};
@@ -128,7 +171,7 @@ async function initialize() {
     $('mfa-state').textContent = member.mfa ? 'التحقق بخطوتين مفعّل.' : member.role === 'admin' ? 'فعّل التحقق بخطوتين لفتح لوحة الأدمن.' : 'أضف تطبيق مصادقة لحماية دخولك.';
     $('mfa-start').hidden = member.mfa; $('deletion-form').hidden = member.role === 'admin';
     try {localStorage.setItem('nabd-signal-notices', member.notifications ? 'on' : 'off');} catch {}
-    await sessions();
+    await Promise.all([sessions(), memberMt5Accounts()]);
   }
   if (page === 'admin') {
     if (!response.adminReady) {if (member?.role === 'admin') $('admin-guard-note').textContent = 'حسابك مسؤول. أكمل تفعيل التحقق بخطوتين من صفحة حسابي ثم افتح الإدارة.'; return;}
