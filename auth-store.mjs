@@ -52,6 +52,17 @@ CREATE TABLE IF NOT EXISTS nabd_mt5_hosting_requests (
  reviewed_by TEXT REFERENCES nabd_users(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS nabd_mt5_hosting_queue ON nabd_mt5_hosting_requests(status,requested_at);
+-- Read-only scoped Windows worker identity. Secret material is stored as a SHA-256
+-- digest only. No MT5 passwords, balances, positions, or trading permissions.
+CREATE TABLE IF NOT EXISTS nabd_mt5_monitor_workers (
+ account_id TEXT PRIMARY KEY REFERENCES nabd_member_mt5_accounts(id) ON DELETE CASCADE,
+ token_hash TEXT NOT NULL UNIQUE,
+ worker_id TEXT NOT NULL,
+ issued_at DOUBLE PRECISION NOT NULL,
+ last_seen_at DOUBLE PRECISION,
+ mt5_online INTEGER NOT NULL DEFAULT 0 CHECK(mt5_online IN (0,1))
+);
+
 `;
 
 // The in-memory adapter is deliberately limited to injected tests/development.
