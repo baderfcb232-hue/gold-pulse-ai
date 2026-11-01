@@ -28,6 +28,20 @@ CREATE TABLE IF NOT EXISTS nabd_auth_limits (
  key TEXT PRIMARY KEY, count INTEGER NOT NULL, expires_at DOUBLE PRECISION NOT NULL
 );
 CREATE TABLE IF NOT EXISTS nabd_auth_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+-- Registration metadata only. No broker credentials, tokens, account telemetry, or trade permissions.
+-- Trading integrations are intentionally not wired to this table until per-member execution is isolated.
+CREATE TABLE IF NOT EXISTS nabd_member_mt5_accounts (
+ id TEXT PRIMARY KEY,
+ user_id TEXT NOT NULL REFERENCES nabd_users(id) ON DELETE CASCADE,
+ broker TEXT NOT NULL CHECK(broker='JustMarkets'),
+ server_name TEXT NOT NULL,
+ login TEXT NOT NULL,
+ environment TEXT NOT NULL CHECK(environment='demo'),
+ status TEXT NOT NULL DEFAULT 'PENDING_SETUP' CHECK(status='PENDING_SETUP'),
+ created_at DOUBLE PRECISION NOT NULL,
+ UNIQUE(broker,server_name,login)
+);
+CREATE INDEX IF NOT EXISTS nabd_member_mt5_owner ON nabd_member_mt5_accounts(user_id);
 `;
 
 // The in-memory adapter is deliberately limited to injected tests/development.
