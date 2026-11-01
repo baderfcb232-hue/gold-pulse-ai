@@ -1,7 +1,8 @@
+import {recommendationCode} from './execution-trace.mjs';
 export function formatSignal(p) {
   const price = v => v != null && Number.isFinite(Number(v)) ? String(v) : '—';
   const time = v => Number.isFinite(v) && v > 0 ? new Date(v * 1000).toISOString().replace('T', ' ').replace('.000Z', ' UTC') : '—';
-  return ['نبض | توصية جديدة', `${p.symbol} — ${p.side === 'BUY' ? 'شراء' : 'بيع'}`,
+  return ['نبض | توصية جديدة', ...(recommendationCode(p.id) ? [`رقم التوصية: #${recommendationCode(p.id)}`] : []), `${p.symbol} — ${p.side === 'BUY' ? 'شراء' : 'بيع'}`,
     `الدخول: ${price(p.entry)}`, `وقف الخسارة: ${price(p.sl)}`,
     `الهدف الأول: ${price(p.tp1)}`, `الهدف الثاني: ${price(p.tp2)}`,
     `الفريم: ${p.timeframe || p.tf || 'حسب استراتيجية الموقع'}`,
@@ -9,6 +10,8 @@ export function formatSignal(p) {
     `صدرت: ${time(p.issued_at)}`, `تنتهي: ${time(p.expires_at)}`,
     ...(p.broker_symbol ? ['استخدم أسعار الرمز نفسه لدى الوسيط؛ قد تختلف أسعار المنصات الأخرى.'] : []),
     ...(p.costMeaning === 'NOT_VERIFIED' ? ['الأهداف قبل التكاليف؛ لم تُتحقق تكاليف الوسيط لهذه الرسالة.'] : []),
+    ...(p.broker_symbol ? ['تنبيه: صلاحية الدخول الآلي محدودة بشروط السعر وبحد أقصى 75 ثانية من إصدار التوصية، وليس بكامل مدة صلاحية المتابعة.'] : []),
+    'الإشعار لا يعني فتح صفقة. راجع حالة التنفيذ في نبض وMT5.',
     'توصية تحليلية وليست ضمان ربح.', 'https://gold-pulse-ai.onrender.com/'].join('\n');
 }
 
