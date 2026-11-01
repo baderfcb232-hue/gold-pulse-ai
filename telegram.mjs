@@ -6,6 +6,7 @@ export function formatSignal(p) {
     `الدخول: ${price(p.entry)}`, `وقف الخسارة: ${price(p.sl)}`,
     `الهدف الأول: ${price(p.tp1)}`, `الهدف الثاني: ${price(p.tp2)}`,
     `الفريم: ${p.timeframe || p.tf || 'حسب استراتيجية الموقع'}`,
+    ...(p.broker_symbol ? [`رمز الوسيط: ${p.broker_symbol}`] : []),
     `المصدر: ${p.source || p.source_id || 'REFERENCE'}`,
     `صدرت: ${time(p.issued_at)}`, `تنتهي: ${time(p.expires_at)}`,
     ...(p.broker_symbol ? ['استخدم أسعار الرمز نفسه لدى الوسيط؛ قد تختلف أسعار المنصات الأخرى.'] : []),
