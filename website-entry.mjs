@@ -40,7 +40,11 @@ export function websiteTradeDecision({enabled, snapshot: s, market: m, analysisP
       q.expires_at > now && q.symbol === canonical &&
       q.broker_symbol === s.symbol && q.source_id === m.source_id &&
       q.source === m.source && (!requiredStrategy || q.strategy === requiredStrategy));
-  if (!p || m.connection !== 'LIVE') return no('WAITING_WEBSITE_PLAN');
+  // A strategy may revert to SCANNING after publishing. Never override
+  // risk/news/closed-market/data-gap blocks (including stale calendars).
+  if (!p || m.connection !== 'LIVE' ||
+      !['READY','SCANNING'].includes(m.analysis?.status))
+    return no('WAITING_WEBSITE_PLAN');
   // Do NOT accept historical, Coinbase/reference, wrong-symbol, or old-strategy
   // recommendations, even if they appear in the website's research feed.
   if (requiredStrategy && p.strategy !== requiredStrategy)
