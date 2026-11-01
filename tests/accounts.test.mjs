@@ -392,3 +392,98 @@ test('encrypted backups include central hosting requests and v2 archives still d
   assert.equal(oldDecoded.version,2);
   assert.deepEqual(oldDecoded.tables.nabd_mt5_hosting_requests,[]);
 });
+
+test('Windows read-only worker is one-time provisioned and scoped to an approved Demo account', async t => {
+  const h=await setup(t);
+  await h.verify('worker-a@example.test');await h.verify('worker-b@example.test');
+  const a=await h.login('worker-a@example.test'),b=await h.login('worker-b@example.test');
+  const admin=await h.owner(),registration='/api/auth/mt5-accounts';
+  const spec={broker:'JustMarkets',server:'JustMarkets-Demo',environment:'demo',acknowledge:true};
+  const ar=await h.request(registration,{...spec,login:'13579135'},a);
+  const br=await h.request(registration,{...spec,login:'24680246'},b);
+  assert.equal(ar.status,201);assert.equal(br.status,201);
+  const heartbeat='/api/worker/mt5-heartbeat';
+  const basePacket={account_id:ar.body.id,broker:'JustMarkets',server:spec.server,login:'13579135',
+    environment:'demo',terminal_connected:true,demo_mode:true};
+  const raw=async (payload,token,origin)=>{
+    const response=await fetch(h.base+heartbeat,{
+      method:'POST',headers:{'Content-Type':'application/json',...(token?{'X-NABD-Worker-Token':token}:{}),
+        ...(origin?{Origin:origin}:{})},
+      body:JSON.stringify(payload)});
+    return {status:response.status,body:await response.json()};
+  };
+  const provision='/api/admin/mt5-monitor/provision',issue={id:ar.body.id,confirm:'ISSUE_READONLY_TOKEN'};
+  assert.equal((await h.request(provision,issue,a)).status,403);
+  assert.equal((await h.request(provision,issue,admin,{'X-NABD-CSRF':''})).status,403);
+  assert.equal((await h.request(provision,issue,admin)).status,409);
+  await h.request('/api/auth/mt5-hosting/request',{id:ar.body.id,consent:true},a);
+  assert.equal((await h.request(provision,issue,admin)).status,409);
+  await h.request('/api/admin/mt5-hosting/review',{id:ar.body.id,decision:'APPROVE'},admin);
+  const issued=await h.request(provision,issue,admin);
+  assert.equal(issued.status,200,h.errors.map(e=>e.stack).join('\n'));
+  const {token,worker_id}=issued.body;
+  assert.match(token,/^[A-Za-z0-9_-]{43}$/);
+  assert.match(worker_id,/^[a-f0-9-]{36}$/);
+  assert.equal(issued.body.tradeAllowed,false);
+  assert.equal(issued.body.monitoringOnly,true);
+  const row=(await h.store.query('SELECT * FROM nabd_mt5_monitor_workers WHERE account_id=?',[ar.body.id])).rows[0];
+  assert.notEqual(row.token_hash,token);
+  assert.equal('secret' in row,false);
+  const packet={...basePacket,worker_id};
+  assert.equal((await raw(packet)).status,401);
+  assert.equal((await raw(packet,token.slice(0,-1)+'Z')).status,401);
+  assert.equal((await raw({...packet,account_id:br.body.id},token)).status,401);
+  assert.equal((await raw({...packet,worker_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'},token)).status,401);
+  assert.equal((await raw({...packet,login:'24680246'},token)).status,409);
+  assert.equal((await raw({...packet,environment:'real'},token)).status,400);
+  assert.equal((await raw({...packet,demo_mode:false},token)).status,409);
+  assert.equal((await raw({...packet,trade:true},token)).status,400);
+  const ok=await raw(packet,token);
+  assert.equal(ok.status,200,JSON.stringify(ok.body));
+  assert.equal(ok.body.tradeAllowed,false);
+  assert.equal(ok.body.observed,true);
+  const self=(await h.request(registration,undefined,a)).body.accounts[0];
+  assert.equal(self.monitoring_status,'OBSERVED_DEMO');
+  assert.equal('worker_id' in self,false);assert.equal('token' in self,false);
+  const other=(await h.request(registration,undefined,b)).body.accounts[0];
+  assert.equal(other.monitoring_status,'NOT_APPROVED');
+  assert.equal((await h.request('/api/account',undefined,a)).status,401);
+  assert.equal((await h.request('/api/commands',{action:'RESUME'},a)).status,401);
+  h.advance(46);
+  assert.equal((await h.request(registration,undefined,a)).body.accounts[0].monitoring_status,'STALE');
+  assert.equal((await raw({...packet,terminal_connected:false},token)).status,200);
+  assert.equal((await h.request(registration,undefined,a)).body.accounts[0].monitoring_status,'MT5_OFFLINE');
+  const rotated=await h.request(provision,issue,admin);
+  assert.equal(rotated.status,200);
+  assert.notEqual(rotated.body.token,token);
+  assert.equal((await raw(packet,token)).status,401);
+  assert.equal((await raw({...packet,worker_id:rotated.body.worker_id},rotated.body.token)).status,200);
+  assert.equal((await h.request('/api/admin/mt5-monitor/revoke',{id:ar.body.id},a)).status,403);
+  assert.equal((await h.request('/api/admin/mt5-monitor/revoke',{id:ar.body.id},admin)).status,200);
+  assert.equal((await raw({...packet,worker_id:rotated.body.worker_id},rotated.body.token)).status,401);
+  assert.equal((await h.request(registration,undefined,a)).body.accounts[0].monitoring_status,'NOT_ISSUED');
+  const audit=(await h.request('/api/admin/audit',undefined,admin)).body.events;
+  assert.ok(audit.some(e=>e.event==='MT5_MONITOR_TOKEN_ROTATED'));
+  assert.ok(audit.some(e=>e.event==='MT5_MONITOR_REVOKED'));
+});
+
+test('Windows monitor cannot spoof a member account after access is disabled',async t=>{
+  const h=await setup(t),admin=await h.owner();await h.verify('monitor-disabled@example.test');
+  const member=await h.login('monitor-disabled@example.test');
+  const r=await h.request('/api/auth/mt5-accounts',{broker:'JustMarkets',
+    server:'JustMarkets-Demo',environment:'demo',login:'56473829',acknowledge:true},member);
+  await h.request('/api/auth/mt5-hosting/request',{id:r.body.id,consent:true},member);
+  await h.request('/api/admin/mt5-hosting/review',{id:r.body.id,decision:'APPROVE'},admin);
+  const issued=await h.request('/api/admin/mt5-monitor/provision',
+    {id:r.body.id,confirm:'ISSUE_READONLY_TOKEN'},admin);
+  assert.equal(issued.status,200);
+  await h.request('/api/admin/users/update',{id:member.body.user.id,status:'disabled',recommendations:false},admin);
+  const packet={account_id:r.body.id,worker_id:issued.body.worker_id,broker:'JustMarkets',
+    server:'JustMarkets-Demo',login:'56473829',environment:'demo',
+    terminal_connected:true,demo_mode:true};
+  const response=await fetch(h.base+'/api/worker/mt5-heartbeat',
+    {method:'POST',headers:{'Content-Type':'application/json','X-NABD-Worker-Token':issued.body.token},
+      body:JSON.stringify(packet)});
+  assert.equal(response.status,401);
+  assert.equal((await h.request('/api/admin/mt5-hosting',undefined,admin)).body.accounts[0].monitoring_status,'AWAITING_WORKER');
+});
