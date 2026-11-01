@@ -42,6 +42,16 @@ CREATE TABLE IF NOT EXISTS nabd_member_mt5_accounts (
  UNIQUE(broker,server_name,login)
 );
 CREATE INDEX IF NOT EXISTS nabd_member_mt5_owner ON nabd_member_mt5_accounts(user_id);
+-- Central Windows MT5 hosting requests. An approved request is NOT broker verification
+-- and never enables MT5 connectivity, trading, signal dispatch, or account access.
+CREATE TABLE IF NOT EXISTS nabd_mt5_hosting_requests (
+ account_id TEXT PRIMARY KEY REFERENCES nabd_member_mt5_accounts(id) ON DELETE CASCADE,
+ status TEXT NOT NULL CHECK(status IN ('REQUESTED','APPROVED','REJECTED')),
+ requested_at DOUBLE PRECISION NOT NULL,
+ reviewed_at DOUBLE PRECISION,
+ reviewed_by TEXT REFERENCES nabd_users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS nabd_mt5_hosting_queue ON nabd_mt5_hosting_requests(status,requested_at);
 `;
 
 // The in-memory adapter is deliberately limited to injected tests/development.
