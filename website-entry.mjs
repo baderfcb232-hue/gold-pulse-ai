@@ -29,17 +29,29 @@ export function websiteTradeDecision({enabled, snapshot: s, market: m, analysisP
       // requires a broker tick no older than 10 seconds before placing an order.
       now - s.received_at > 10 || now - s.quote_at > 10 || now - s.ea.heartbeat_at > 10)
     return no('STALE_MT5');
-  const p = m?.currentSignal;
-  if (!p || m.connection !== 'LIVE' || m.analysis?.status !== 'READY') return no('WAITING_WEBSITE_PLAN');
-  // A posted legacy signal must never be traded after switching to scalping (and vice versa).
-  // All three strategy identities must match the current live broker-derived analysis.
-  if (!a || a.strategy !== p.strategy || m.analysis.strategy !== p.strategy ||
-      (requiredStrategy && p.strategy !== requiredStrategy))
+  // Execute each NEW broker-derived website recommendation once it appears in
+  // the website's own tracking history. The market scanner may have moved back
+  // to SCANNING after emitting a plan; do not demand a second M15/H1 agreement
+  // for that already-issued recommendation. The remaining MT5/SL/risk/price
+  // checks and the durable one-shot claim are unchanged.
+  const p = m?.currentSignal ||
+    m?.recentSignals?.find(q => q?.status === 'TRACKING' &&
+      q.issued_at <= now + 5 && now - q.issued_at <= 75 &&
+      q.expires_at > now && q.symbol === canonical &&
+      q.broker_symbol === s.symbol && q.source_id === m.source_id &&
+      q.source === m.source && (!requiredStrategy || q.strategy === requiredStrategy));
+  // A strategy may revert to SCANNING after publishing. Never override
+  // risk/news/closed-market/data-gap blocks (including stale calendars).
+  if (!p || m.connection !== 'LIVE' ||
+      !['READY','SCANNING'].includes(m.analysis?.status))
+    return no('WAITING_WEBSITE_PLAN');
+  // Do NOT accept historical, Coinbase/reference, wrong-symbol, or old-strategy
+  // recommendations, even if they appear in the website's research feed.
+  if (requiredStrategy && p.strategy !== requiredStrategy)
     return no('WEBSITE_STRATEGY_MISMATCH');
   if (m.broker_symbol !== s.symbol || m.source !== `MT5 · ${s.broker}` || !m.source_id?.startsWith('MT5:') ||
       p.source_id !== m.source_id || p.source !== m.source || p.broker_symbol !== s.symbol || p.symbol !== canonical || m.symbol !== canonical)
     return no('WEBSITE_SOURCE_MISMATCH');
-  if (!a || a.bar_time !== p.bar_time || a.side !== p.side) return no('WEBSITE_PLAN_CHANGED');
   if (!Number.isFinite(s.execution.website_since) || s.execution.website_since <= 0 ||
       s.execution.website_since > now + 5 || p.issued_at < s.execution.website_since)
     return no('WAITING_NEW_WEBSITE_PLAN');
