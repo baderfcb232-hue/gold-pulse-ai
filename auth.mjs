@@ -407,7 +407,8 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
           for (const table of [...backupTables].reverse()) await q(`DELETE FROM ${table}`);
           const allowed = {
             nabd_users: ['id','email','name','password_hash','role','status','verified_at','created_at','last_login','notifications','recommendations','totp_secret','totp_pending','pending_until','totp_last_step'],
-            nabd_auth_audit: ['id','time','actor','event','subject'], nabd_auth_settings: ['key','value']};
+            nabd_auth_audit: ['id','time','actor','event','subject'], nabd_auth_settings: ['key','value'],
+            nabd_member_mt5_accounts: ['id','user_id','broker','server_name','login','environment','status','created_at']};
           for (const table of backupTables) for (const row of data.tables[table]) {
             const columns = allowed[table];
             await q(`INSERT INTO ${table}(${columns.join(',')}) VALUES(${columns.map(() => '?').join(',')})`, columns.map(name => row[name] ?? null));
