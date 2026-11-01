@@ -41,9 +41,11 @@ test('gold-only mode ignores conflicting BTC sources, fences dispatch and preser
   assert.equal(await (await post('/api/bridge/website-recommendation',{symbol:'BTCUSD.m'})).text(),'');
   assert.equal(app.publicState().websiteBridge.connection,'NOT_OBSERVED');
   assert.equal(app.db.prepare('SELECT count(*) n FROM btc_snapshot').get().n,1,'historical data is preserved, never rebound');
-  await app.telegram.publish();assert.equal(sent.length,1);assert.match(sent[0],/XAUUSD/);assert.doesNotMatch(sent[0],/BTCUSD/);
+  await app.telegram.publish();
+  assert.equal(sent.length,0,'unclaimed gold research cannot publish a trade notification');
   const health=await (await fetch(base+'/healthz')).json();
-  assert.equal(health.publication.ready,true);assert.equal(health.publication.reason,'READY');
+  assert.equal(health.publication.ready,false);
+  assert.equal(health.publication.telegram.reason,'WAITING_WEBSITE_PLAN');
 });
 test('disabled BTC cannot start REST, history or WebSocket connections or accept reference prices',async()=>{
   const db=new DatabaseSync(':memory:');let requests=0,sockets=0;
