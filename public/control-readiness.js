@@ -28,3 +28,23 @@ export function marketControlStatus(controls, symbol, now) {
   const price = !s ? 'السعر غير متاح' : live ? 'السعر حديث' : 'السعر قديم؛ الدخول الجديد ينتظر سعرًا حديثًا';
   return {bridgeLive, fresh, live, summary: `${name}: ${connection} · ${price}`};
 }
+
+ // Only notify about control-link and bot-heartbeat failures for the affected
+ // market. A stale quote alone (e.g. a closed gold market) is not a bridge outage.
+export function marketControlWarnings(controls, now) {
+  const warnings = [];
+  for (const symbol of ['XAUUSD', 'BTCUSD']) {
+    const control = controls?.[symbol];
+    if (!control || !Number.isFinite(control.bridgeReceivedAt)) continue;
+    const status = marketControlStatus(controls, symbol, now);
+    const name = symbol === 'BTCUSD' ? 'البيتكوين' : 'الذهب';
+    if (!status.bridgeLive && now - control.bridgeReceivedAt > 60) {
+      warnings.push({key: 'bridge:' + symbol,
+        message: name + ': توقف وصول بيانات جسر MT5 لأكثر من دقيقة. حالة الأصل الآخر مستقلة.'});
+    } else if (status.bridgeLive && !status.fresh) {
+      warnings.push({key: 'bot:' + symbol,
+        message: name + ': جسر MT5 متصل لكن نبض البوت قديم أو غير متاح؛ أوامر التحكم معلّقة لهذا الأصل.'});
+    }
+  }
+  return warnings;
+}
