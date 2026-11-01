@@ -138,7 +138,7 @@ function renderTelegramSent(){
       e('small','subtle',time(s.issued_at,true)));
     const note=e('p','subtle','رقم التوصية #'+(s.recommendation_code||s.id)+' · أُرسلت لتليجرام؛ لا تفتح صفقة MT5 بمجرد الإرسال');
     const status=s.execution_trace;
-    if(status)note.append(' · حالة MT5: '+(status.status==='SUBMITTED'?'طلب تنفيذ غير مؤكد':status.status==='REJECTED'?'رفض':status.status==='BLOCKED'?'ممنوع':status.status==='DISPATCHED'?'أُرسل للجسر':'لم يُرسل أمر'));
+    if(status)note.append(' · حالة MT5: '+(status.status==='FILLED'?'صفقة مؤكدة من الوسيط':status.status==='SUBMITTED'?'طلب تنفيذ غير مؤكد':status.status==='REJECTED'?'رفض':status.status==='BLOCKED'?'ممنوع':status.status==='DISPATCHED'?'أُرسل للجسر':'لم يُرسل أمر'));
     row.append(header,note);return row;
   }):[empty('لم تُرسل توصيات إلى تليجرام بعد، أو سجّل الدخول بحساب مخوّل لعرضها.')]));
 }
@@ -153,8 +153,8 @@ function renderSignals(){
     if(s.recommendation_code)status.append(e('small','subtle','رقم التوصية #'+s.recommendation_code));
     const execution=s.execution_trace;
     if(execution){
-      const labels={SUBMITTED:'طلب MT5 أُرسل — لم يُثبت فتح صفقة',REJECTED:'رفض MT5 التنفيذ',DISPATCHED:'وصلت للجسر — لم يصل تأكيد MT5',BLOCKED:'مُنع إرسال الأمر',NOT_DISPATCHED:'لا يوجد أمر MT5 مسجل'};
-      status.append(e('small','subtle',(labels[execution.status]||execution.status)+(execution.approval_id?' · أمر #'+execution.approval_id:'')+(execution.reason?' · '+execution.reason:'')+(execution.reason_code!=null?' · EA '+execution.reason_code:'')+(execution.mt5_retcode!=null?' · MT5 '+execution.mt5_retcode:'')));
+      const labels={FILLED:'تأكد فتح صفقة من سجل الوسيط',SUBMITTED:'طلب MT5 أُرسل — لم يُثبت فتح صفقة',REJECTED:'رفض MT5 التنفيذ',DISPATCHED:'وصلت للجسر — لم يصل تأكيد MT5',BLOCKED:'مُنع إرسال الأمر',NOT_DISPATCHED:'لا يوجد أمر MT5 مسجل'};
+      status.append(e('small','subtle',(labels[execution.status]||execution.status)+(execution.approval_id?' · أمر #'+execution.approval_id:'')+(execution.reason?' · '+execution.reason:'')+(execution.reason_code!=null?' · EA '+execution.reason_code:'')+(execution.mt5_retcode!=null?' · MT5 '+execution.mt5_retcode:'')+(execution.broker_deal_ticket?' · Deal #'+execution.broker_deal_ticket:'')));
     }
     row.append(head,levels,status);return row;
   }):[empty('لم تصدر توصيات ضمن هذا الاختيار بعد.') ]));
@@ -243,8 +243,8 @@ function renderWebsiteEntries(box){
   if(entries.length){box.append(e('h3','','إرسال توصيات نبض إلى MT5 — الذهب والبيتكوين'));
     for(const record of entries.slice(0,8)){
       const row=e('p','subtle'),p=record.plan;
-      const status=record.status==='SUBMITTED'?'أرسل MT5 طلب التنفيذ؛ راجع Trade/History':record.status==='REJECTED'?'منع MT5 التنفيذ؛ راجع Experts':now()>record.expires?'لم يصل تأكيد التنفيذ خلال المهلة؛ لن نكرر الإرسال':'أُرسلت إلى الجسر؛ بانتظار رد MT5';
-      row.textContent=`${record.market} · توصية #${record.signal_code||'—'} · أمر MT5 #${record.id} · ${time(record.time,true)} · ${sides[p.side]} · دخول ${price(p.entry)} · وقف ${price(p.sl)} · هدف ${price(p.tp)} · ${status}${record.reason_code!=null?' · سبب EA '+record.reason_code:''}${record.mt5_retcode!=null?' · كود MT5 '+record.mt5_retcode:''}`;box.append(row);
+      const status=record.broker_fill_confirmed?'تم تأكيد صفقة Demo من سجل الوسيط':record.status==='SUBMITTED'?'أرسل MT5 طلب التنفيذ؛ لا يوجد تأكيد صفقة بعد':record.status==='REJECTED'?'منع MT5 التنفيذ؛ راجع Experts':now()>record.expires?'لم يصل تأكيد التنفيذ خلال المهلة؛ لن نكرر الإرسال':'أُرسلت إلى الجسر؛ بانتظار رد MT5';
+      row.textContent=`${record.market} · توصية #${record.signal_code||'—'} · أمر MT5 #${record.id} · ${time(record.time,true)} · ${sides[p.side]} · دخول ${price(p.entry)} · وقف ${price(p.sl)} · هدف ${price(p.tp)} · ${status}${record.reason_code!=null?' · سبب EA '+record.reason_code:''}${record.mt5_retcode!=null?' · كود MT5 '+record.mt5_retcode:''}${record.broker_deal_ticket?' · تذكرة الصفقة '+record.broker_deal_ticket:''}`;box.append(row);
     }
   }
   const decisions=[...(privateData?.websiteDecisions||[]).map(x=>({...x,market:'الذهب'})),
