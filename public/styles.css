@@ -81,5 +81,14 @@ body{background:radial-gradient(ellipse at 68% 0,#2a1c332e,transparent 55%),var(
 /* Always show why an MT5 control cannot execute, especially on touch screens. */
 .control-action-hints{display:grid;gap:5px;margin:12px 0;overflow-wrap:anywhere}
 .control-action-hints p{font-size:12px;line-height:1.7;color:var(--muted);margin:0}
-.bot-controls .button[data-control-state="blocked"]{border-style:dashed;cursor:help}
-.bot-controls .button[data-control-state="ready"]{border-style:solid}
+/* Readiness can change every second with MT5 telemetry. Never flicker a
+   button's opacity or border as the heartbeat crosses its five-second TTL.
+   The hint and tap check expose the current blocker without enabling trading. */
+.bot-controls .button[aria-disabled="true"]{opacity:1;border-style:solid}
+.bot-controls .button[data-control-state="blocked"]{cursor:help}
+.bot-controls .button[data-control-state="ready"]{cursor:pointer}
+.bot-controls #close-all[data-position-state="empty"],
+.bot-controls #close-all[data-position-state="unknown"]{opacity:.65;border-style:dashed}
+.bot-controls #close-all[data-position-state="open"]{opacity:1;border-style:solid}
+.bot-controls .button:disabled{opacity:.45;cursor:wait}
+
