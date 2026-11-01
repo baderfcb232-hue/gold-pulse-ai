@@ -249,7 +249,7 @@ async function adminMt5Hosting() {
     }
     if (request.status === 'APPROVED') {
       const provision=node('button','button ghost',
-        request.worker_id ? 'تدوير رمز مراقبة Windows' : 'إصدار رمز مراقبة Windows');
+        request.worker_provisioned ? 'تدوير رمز مراقبة Windows' : 'إصدار رمز مراقبة Windows');
       provision.type='button';
       provision.onclick=async()=>{
         if(!confirm('سيتم توليد رمز مراقبة جديد صالح لهذه النسخة فقط. لا يمنح أي صلاحيات تداول. هل تؤكد؟'))return;
@@ -264,7 +264,7 @@ async function adminMt5Hosting() {
         finally{provision.disabled=false;}
       };
       actions.append(provision);
-      if(request.worker_id){
+      if(request.worker_provisioned){
         const revoke=node('button','button danger','إلغاء رمز المراقبة');
         revoke.type='button';
         revoke.onclick=async()=>{
