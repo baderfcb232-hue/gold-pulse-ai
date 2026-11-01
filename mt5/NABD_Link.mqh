@@ -83,6 +83,7 @@ void NABDWebsiteBlocked(const double id,const string reason,const int code,const
   {
    // Publish all rejection details BEFORE the result id so the bridge never
    // associates an earlier order's MT5 retcode with a later recommendation.
+   GlobalVariableSet(NABDKey("WDT"),0.0);
    GlobalVariableSet(NABDKey("WRC"),(double)code);
    GlobalVariableSet(NABDKey("WRT"),(double)retcode);
    GlobalVariableSet(NABDKey("WR"),1.0);GlobalVariableSet(NABDKey("WI"),id);GlobalVariablesFlush();
@@ -99,6 +100,7 @@ void NABDProcessWebsiteApproval()
    if(!GlobalVariableSetOnCondition(NABDKey("WC"),id,previous))return;
    GlobalVariablesFlush(); // Claim BEFORE validation/order; never retry an uncertain entry.
    GlobalVariableSet(NABDKey("WI"),0.0); // Result identifier is published LAST after validation/submission.
+   GlobalVariableSet(NABDKey("WDT"),0.0);
    GlobalVariableSet(NABDKey("WRC"),0.0);GlobalVariableSet(NABDKey("WRT"),0.0);
    if(!TradingExecutionEnabled()){NABDWebsiteBlocked(id,"trading execution switch is off",101);return;}
    if(!ExecutionPermissionsAvailable()){NABDWebsiteBlocked(id,"terminal/account trade permissions unavailable",102);return;}
@@ -140,6 +142,7 @@ void NABDProcessWebsiteApproval()
         g_website_attempt_code>0?g_website_attempt_code:115,g_website_attempt_retcode);
       return;
      }
+   GlobalVariableSet(NABDKey("WDT"),(double)g_website_attempt_deal_ticket);
    GlobalVariableSet(NABDKey("WRC"),0.0);
    GlobalVariableSet(NABDKey("WRT"),(double)g_website_attempt_retcode);
    GlobalVariableSet(NABDKey("WR"),2.0);GlobalVariableSet(NABDKey("WI"),id);GlobalVariablesFlush();
