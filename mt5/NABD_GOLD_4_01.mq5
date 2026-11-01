@@ -34,8 +34,8 @@ input bool            InpRespectNextLevel       = true;
 
 //--- risk and execution
 input group "Risk and execution"
-input bool            InpDemoWebsiteNoDailyLimits = true;      // Demo website only: no daily loss/trade count cap
-input bool            InpDemoBrokerMinimumLot   = true;
+input bool            InpDemoWebsiteNoDailyLimits = false;      // Demo website only: no daily loss/trade count cap
+input bool            InpDemoBrokerMinimumLot   = false;
 input int             InpMaxConcurrentPositions = 5;         // Demo: combined cap across managed gold/BTC positions
 input double          InpMaxOpenRiskPercent     = 2.0;       // Demo: aggregate worst-case loss to SL across positions        // Demo only: allow broker minimum within daily loss limit
 input double          InpRiskPercent            = 0.50;        // Equity stop risk for the whole cycle
@@ -554,7 +554,12 @@ bool IsNewEntryBar()
 // This keeps live execution explicitly locked while still allowing backtests.
 bool TradingExecutionEnabled()
   {
-   return(InpEnableLiveTrading || MQLInfoInteger(MQL_TESTER));
+   // These distributable EAs are Demo-only: never permit orders on a live account.
+   // Keep the explicit trading switch as a prerequisite for Demo orders.
+   return(MQLInfoInteger(MQL_TESTER) ||
+     (InpEnableLiveTrading &&
+      AccountInfoInteger(ACCOUNT_TRADE_MODE)==ACCOUNT_TRADE_MODE_DEMO &&
+      IsJustMarketsAccount()));
   }
 
 //+------------------------------------------------------------------+
