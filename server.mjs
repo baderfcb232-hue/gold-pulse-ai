@@ -22,7 +22,7 @@ import {demoTradeDecision} from './demo-trade.mjs';
 import {automaticRiskSizing} from './automatic-risk.mjs';
 import {validateManualLot} from './trade-lot.mjs';
 import {websiteTradeDecision, entrySourceKey} from './website-entry.mjs';
-import {linkExecutionTrace, recommendationCode} from './execution-trace.mjs';
+import {linkExecutionTrace, recommendationCode, verifiedBrokerDeal} from './execution-trace.mjs';
 import {brokerGoldMarket, brokerBtcMarket} from './broker-market.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -165,7 +165,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         return {entries: entries.map(record => ({...record,symbol})),
           decisions: decisions.map(record => ({...record,symbol}))};
       }));
-      return linkExecutionTrace(rows, perSource.flatMap(x=>x.entries), perSource.flatMap(x=>x.decisions));
+      return linkExecutionTrace(rows, perSource.flatMap(x=>x.entries), perSource.flatMap(x=>x.decisions), {XAUUSD:snapshot,BTCUSD:btcSnapshot});
     } catch (e) {
       console.warn('Website recommendation execution trace temporarily unavailable:', e.message);
       return rows; // Never fabricate an execution result if the journal is unavailable.
@@ -736,13 +736,13 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         const riskSizing = automaticRiskSizing(snapshot, localPlan || recentGold, now);
         return send(req, res, 200, {account: snapshot?.account ?? null, positions: snapshot?.positions ?? [],
           riskSizing,
-          websiteEntries: snapshot && commandJournal?.websiteEntries ? (await commandJournal.websiteEntries(entrySourceKey(snapshot))).map(record => ({...record,signal_code:recommendationCode(record.plan_id || record.plan?.id)})) : [],
+          websiteEntries: snapshot && commandJournal?.websiteEntries ? (await commandJournal.websiteEntries(entrySourceKey(snapshot))).map(record => ({...record,signal_code:recommendationCode(record.plan_id || record.plan?.id),broker_fill_confirmed:Boolean(verifiedBrokerDeal(record,snapshot)),broker_deal_ticket:verifiedBrokerDeal(record,snapshot)?.ticket||null})) : [],
           websiteDecisions: snapshot && commandJournal?.websiteDecisions ? (await commandJournal.websiteDecisions(entrySourceKey(snapshot))).map(record => ({...record,signal_code:recommendationCode(record.plan_id)})) : [],
           tradeSizing: snapshot && commandJournal?.getTradeSizing ? await commandJournal.getTradeSizing(entrySourceKey(snapshot)) : {mode:'AUTO',lot:null},
           btc: !cfg.goldOnly && btcSnapshot ? {account:btcSnapshot.account,positions:btcSnapshot.positions,lastUpdate:btcSnapshot.received_at,
             riskSizing: automaticRiskSizing(btcSnapshot, marketFeed.publicState().markets.BTCUSD?.currentSignal, now),
             tradeSizing:commandJournal?.getTradeSizing ? await commandJournal.getTradeSizing(entrySourceKey(btcSnapshot)) : {mode:'AUTO',lot:null},
-            websiteEntries:commandJournal?.websiteEntries ? (await commandJournal.websiteEntries(entrySourceKey(btcSnapshot))).map(record => ({...record,signal_code:recommendationCode(record.plan_id || record.plan?.id)})) : [],
+            websiteEntries:commandJournal?.websiteEntries ? (await commandJournal.websiteEntries(entrySourceKey(btcSnapshot))).map(record => ({...record,signal_code:recommendationCode(record.plan_id || record.plan?.id),broker_fill_confirmed:Boolean(verifiedBrokerDeal(record,btcSnapshot)),broker_deal_ticket:verifiedBrokerDeal(record,btcSnapshot)?.ticket||null})) : [],
             websiteDecisions:commandJournal?.websiteDecisions ? (await commandJournal.websiteDecisions(entrySourceKey(btcSnapshot))).map(record => ({...record,signal_code:recommendationCode(record.plan_id)})) : []} : null,
           deals: db.prepare('SELECT data FROM deals ORDER BY time DESC LIMIT 1000').all().map(x => JSON.parse(x.data)),
           commands: commandJournal ? await commandJournal.list(clock()) : db.prepare('SELECT * FROM commands ORDER BY id DESC LIMIT 100').all(),
@@ -812,8 +812,12 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           if ((b.reason_code!==undefined && (!Number.isInteger(b.reason_code) || b.reason_code<0 || b.reason_code>999)) ||
               (b.mt5_retcode!==undefined && (!Number.isInteger(b.mt5_retcode) || b.mt5_retcode<0 || b.mt5_retcode>999999)))
             return send(req,res,400,{error:'Invalid MT5 rejection diagnostic'});
+          if (b.deal_ticket!==undefined &&
+              (typeof b.deal_ticket!=='string' || !/^(?:0|[1-9][0-9]{0,19})$/.test(b.deal_ticket)))
+            return send(req,res,400,{error:'Invalid broker deal ticket'});
           await commandJournal.websiteResult(source,b.id,b.status,clock(),
-            {reason_code:b.reason_code,mt5_retcode:b.mt5_retcode});
+            {reason_code:b.reason_code,mt5_retcode:b.mt5_retcode,
+              deal_ticket:b.deal_ticket});
           await refreshWebsiteActivity(symbol, source, true);
           return send(req,res,200,{ok:true});
         }
@@ -821,7 +825,11 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         await refreshWebsiteActivity(symbol, source);
         const tradeSizing=commandJournal?.getTradeSizing ? await commandJournal.getTradeSizing(entrySourceKey(chosen)) : {mode:'AUTO'};
         const decision=websiteExecutionReview(chosen,tradeSizing),p=decision.plan;
-        const candidate=marketFeed.publicState().markets[symbol]?.currentSignal;
+        const candidate=marketFeed.publicState().markets[symbol]?.currentSignal ||
+          marketFeed.history(symbol).find(q => q?.status==='TRACKING' &&
+            q.issued_at <= clock()+5 && clock()-q.issued_at <= 75 &&
+            q.source===`MT5 · ${chosen.broker}` && q.broker_symbol===chosen.symbol &&
+            q.symbol===symbol);
         if (candidate && commandJournal?.recordWebsiteDecision) {
           try {
             await commandJournal.recordWebsiteDecision(source,candidate,
