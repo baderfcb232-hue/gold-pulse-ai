@@ -2,7 +2,7 @@ import {positionSize, ema, botHeartbeatFresh, BOT_CONTROL_TTL} from '/engine.mjs
 import {initLiveWorkspace} from '/live.js';
 import {createStateConnection} from '/state-connection.js';
 import {requestJson} from '/http.js';
-import {controlBlockers, marketControlStatus} from '/control-readiness.js?v=market-status-1';
+import {controlBlockers, marketControlStatus, marketControlWarnings} from '/control-readiness.js?v=market-status-2';
 import {createCommandTracker, commandProgress, demoExecutionMessage} from '/command-feedback.js';
 const $ = id => document.getElementById(id);
 const e = (tag, cls, content) => {const x = document.createElement(tag); if (cls) x.className = cls; if (content != null) x.textContent = String(content); return x;};
@@ -53,8 +53,7 @@ function effectiveConnection() {
 }
 let lastFaults = null;
 function renderFaultAlerts() {
-  const faults = new Map();
-  if(state?.bridgeReceivedAt && now()-state.bridgeReceivedAt>60)faults.set('bridge','توقف وصول بيانات جسر MT5 لأكثر من دقيقة.');
+  const faults = new Map(marketControlWarnings(state?.controls, now()).map(w => [w.key, w.message]));
   if(state?.storage?.checkpoint?.state==='ERROR')faults.set('storage','تعذر حفظ نسخة السجل في قاعدة البيانات.');
   if(lastFaults)for(const [key,message]of faults)if(!lastFaults.has(key))toast(message,true);
   lastFaults=faults;
