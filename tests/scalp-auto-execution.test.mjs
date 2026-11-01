@@ -35,13 +35,23 @@ test('explicit Demo scalp candidate is eligible only when all legacy broker and 
    ['WAITING_COSTS',z=>z.costs.ready=false],
    ['DURABLE_ENTRY_JOURNAL_REQUIRED',z=>z.durable=false],
    ['WEBSITE_SOURCE_MISMATCH',z=>z.market.currentSignal.source_id='REFERENCE'],
-   ['WEBSITE_PLAN_CHANGED',z=>z.analysisPlan.bar_time-=300],
    ['WEBSITE_STRATEGY_MISMATCH',z=>z.market.currentSignal.strategy='EMA-PULLBACK-1'],
   ]){
     const modified=scenario();mutate(modified);
     assert.equal(websiteTradeDecision(modified).reason,reason,reason);
   }
 });
+test('a newly published broker plan needs no second M15 re-check, but news and risk blocks remain mandatory',()=>{
+ const f=scenario();f.analysisPlan={...f.analysisPlan,bar_time:f.analysisPlan.bar_time-300};
+ f.market.analysis={...f.market.analysis,status:'SCANNING',plan:null};
+ assert.equal(websiteTradeDecision(f).reason,'WEBSITE_READY');
+ for(const status of ['NEWS_BLOCK','WARMING','GAP','BLOCKED','STALE']){
+   const blocked=scenario();
+   blocked.market.analysis={...blocked.market.analysis,status,plan:null};
+   assert.equal(websiteTradeDecision(blocked).reason,'WAITING_WEBSITE_PLAN');
+ }
+});
+
 test('new scalp plans are not blocked solely by an existing position',()=>{
  const f=scenario(); f.snapshot.positions=[{ticket:'123',side:'BUY',volume:0.01,entry:f.market.currentSignal.entry,
    sl:f.market.currentSignal.sl,tp:f.market.currentSignal.tp1}];
