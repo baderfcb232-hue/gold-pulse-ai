@@ -34,7 +34,12 @@ jobs:
               assert 'ACCOUNT_TRADE_MODE_DEMO &&' in s
               assert 'InpRiskPercent            = 0.50;' in s
               assert 'InpMaxDailyLossPercent    = 2.0;' in s
-              assert 'InpMaxTradesPerDay        = 3;' in s
+              assert 'InpMaxTradesPerDay        = 0;' in s
+              assert 'InpDemoWebsiteNoDailyLimits = false;' in s
+              assert 'InpDemoBrokerMinimumLot   = false;' in s
+              assert 'if(InpMaxTradesPerDay>0 && entries>=InpMaxTradesPerDay)' in s
+              assert 'int remaining=(DemoWebsiteNoDailyLimitsEnabled() || InpMaxTradesPerDay==0) ? 1 :' in s
+              assert 'Daily history unavailable; cannot validate daily loss' in s
               for required in (
                   'NBProcessWebsiteRecommendation()', 'NABDProcessWebsiteApproval()',
                   'g_website_attempt_deal_ticket', 'deal_ticket', 'NABDKey("WDT")',
