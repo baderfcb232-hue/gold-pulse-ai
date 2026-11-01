@@ -20,6 +20,8 @@ export async function createCommandJournal(connectionString) {
         plan_id text NOT NULL, time double precision NOT NULL, expires double precision NOT NULL,
         status text NOT NULL, plan text NOT NULL, reported_at double precision,
         UNIQUE(source_key,plan_id));
+      ALTER TABLE nabd_command_journal ADD COLUMN IF NOT EXISTS source_key text;
+      ALTER TABLE nabd_command_journal ADD COLUMN IF NOT EXISTS symbol text;
       ALTER TABLE nabd_website_entries ADD COLUMN IF NOT EXISTS reason_code integer;
       ALTER TABLE nabd_website_entries ADD COLUMN IF NOT EXISTS mt5_retcode integer;
       CREATE TABLE IF NOT EXISTS nabd_trade_sizing (
@@ -43,21 +45,21 @@ export async function createCommandJournal(connectionString) {
       return r.rows[0];
     }),
     list: now => safe(async () => {await expire(pool, now); return (await pool.query('SELECT * FROM nabd_command_journal ORDER BY id DESC LIMIT 100')).rows.map(row);}),
-    enqueue: (now, action, ticket, fraction) => safe(async () => {
+    enqueue: (now, action, ticket, fraction, target = null) => safe(async () => {
       const c = await pool.connect();
       try {
         await c.query('BEGIN');
         // Serialize across workers and overlapping deployments, not only this process.
         await c.query('SELECT pg_advisory_xact_lock(72623481)');
         await expire(c, now);
-        if ((await c.query("SELECT id FROM nabd_command_journal WHERE status='QUEUED' LIMIT 1")).rows.length) {
+        if ((await c.query("SELECT id FROM nabd_command_journal WHERE status='QUEUED' AND source_key IS NOT DISTINCT FROM $1 LIMIT 1", [target?.source_key ?? null])).rows.length) {
           await c.query('COMMIT'); return null;
         }
-        const result = await c.query("INSERT INTO nabd_command_journal(time,expires,action,ticket,fraction,status) VALUES($1,$2,$3,$4,$5,'QUEUED') RETURNING *", [now, now+20, action, ticket, fraction]);
+        const result = await c.query("INSERT INTO nabd_command_journal(time,expires,action,ticket,fraction,status,source_key,symbol) VALUES($1,$2,$3,$4,$5,'QUEUED',$6,$7) RETURNING *", [now, now+20, action, ticket, fraction,target?.source_key ?? null,target?.symbol ?? null]);
         await c.query('COMMIT'); return row(result.rows[0]);
       } catch (e) {await c.query('ROLLBACK').catch(()=>{}); throw e;} finally {c.release();}
     }),
-    next: now => safe(async () => {await expire(pool, now); return row((await pool.query("SELECT * FROM nabd_command_journal WHERE status='QUEUED' AND expires>$1 ORDER BY id LIMIT 1", [now])).rows[0]);}),
+    next: (now, source = null) => safe(async () => {await expire(pool, now); return row((await pool.query("SELECT * FROM nabd_command_journal WHERE status='QUEUED' AND expires>$1 AND source_key IS NOT DISTINCT FROM $2 ORDER BY id LIMIT 1", [now,source])).rows[0]);}),
     get: id => safe(async () => row((await pool.query('SELECT * FROM nabd_command_journal WHERE id=$1', [id])).rows[0])),
     result: (id, status, message) => safe(async () => {await pool.query("UPDATE nabd_command_journal SET status=$2,result=$3 WHERE id=$1 AND status IN ('QUEUED','EXPIRED')", [id,status,message]);}),
     close: () => pool.end()

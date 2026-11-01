@@ -6,9 +6,9 @@ export function createCommandTracker() {
     get: () => current ? {...current} : null,
     busy,
     clear: () => {current = null;},
-    begin(action, ticket, now) {
+    begin(action, ticket, now, symbol = null) {
       if (busy()) return false;
-      current = {action, ticket: String(ticket), time: now, status: 'SENDING', id: null};
+      current = {action, symbol, ticket: String(ticket), time: now, status: 'SENDING', id: null};
       return true;
     },
     accepted(result) {
@@ -25,8 +25,8 @@ export function createCommandTracker() {
     },
     observe(records, now) {
       if (!current || ['SENDING','FAILED'].includes(current.status) || !Array.isArray(records)) return;
-      const record = records.find(c => current.id != null ? Number(c.id) === current.id :
-        c.action === current.action && String(c.ticket) === current.ticket && c.time >= current.time - 2 && c.time <= current.time + 20);
+      const record = records.find(c => (!current.symbol || c.symbol===current.symbol) && (current.id != null ? Number(c.id) === current.id :
+        c.action === current.action && String(c.ticket) === current.ticket && c.time >= current.time - 2 && c.time <= current.time + 20));
       if (record) current = {...current, ...record, id: Number(record.id)};
       else if (current.status === 'VERIFYING' && now > current.time + 25)
         current = {...current, status: 'UNCERTAIN', result: 'لم يظهر تأكيد في سجل الموقع. راجع سجل MT5 قبل تكرار الأمر.'};
@@ -77,27 +77,27 @@ export function demoExecutionMessage(state) {
   if (x.paused) return 'الدخول موقوف. شغّل الدخول التلقائي للسماح بالتنفيذ عند اكتمال الشروط.';
   if (!x.website_recommendations && x.demo_result === 'SUBMITTED') return 'أرسل البوت آخر طلب تنفيذ. تأكيد الصفقة يظهر في سجل عمليات MT5.';
   if (!x.website_recommendations && x.demo_result === 'BLOCKED') return 'منع MT5 آخر محاولة تنفيذ. راجع سبب المنع في تبويب Experts.';
-  if (r?.ready) return 'توصية ذهب معتمدة بانتظار فحص MT5 النهائي.';
+  if (r?.ready) return 'توصية الأصل المحدد معتمدة بانتظار فحص MT5 النهائي.';
   const reasons = {
     STALE_MT5: 'ننتظر بيانات حديثة من البوت قبل السماح بدخول جديد.',
     POSITION_ALREADY_OPEN: 'توجد صفقة مفتوحة؛ ننتظر إغلاقها قبل فرصة جديدة.',
     MT5_EXECUTION_NOT_READY: 'إعدادات التنفيذ أو التحكم في MT5 تحتاج مراجعة.',
     PRICE_OR_SPREAD_MOVED: 'تغيّر السعر أو السبريد؛ ننتظر فرصة مطابقة جديدة.',
-    PLAN_NOT_APPROVED: 'ننتظر توصية ذهب معتمدة تستوفي شروط الأخبار والاتجاه والتكلفة.',
+    PLAN_NOT_APPROVED: 'ننتظر توصية الأصل المحدد معتمدة تستوفي شروط الأخبار والاتجاه والتكلفة.',
     ACCOUNT_NOT_SHARED: 'فعّل مشاركة بيانات الحساب في الجسر لاستكمال فحص التنفيذ.',
     DAILY_RISK_BELOW_MINIMUM_VOLUME: 'تعذّر الدخول: خسارة أصغر لوت تتجاوز المتبقي من الحد اليومي. وضع أقل لوت لا يلغي حد الخسارة اليومي.',
     BELOW_MINIMUM_VOLUME: 'تعذّر الدخول: أقل لوت عند البروكر يتجاوز سقف مخاطرة حسابك. يُحسب الحجم تلقائيًا؛ ننتظر فرصة تناسب الحساب.',
     INSUFFICIENT_MARGIN: 'تعذّر الدخول: الهامش المتاح لا يكفي لحجم الصفقة المحسوب.',
     INVALID_RISK_SETTINGS: 'ننتظر نسبة مخاطرة صالحة من إعدادات MT5.',
     INVALID_CONTRACT: 'مواصفات اللوت وقيمة التيك غير مكتملة؛ حساب الحجم معلّق.',
-    WAITING_WEBSITE_PLAN: 'وضع توصيات نبض مفعّل؛ ننتظر توصية ذهب جديدة من بيانات حسابك.',
+    WAITING_WEBSITE_PLAN: 'وضع توصيات نبض مفعّل؛ ننتظر توصية الأصل المحدد جديدة من بيانات حسابك.',
     WAITING_NEW_WEBSITE_PLAN: 'ننتظر توصية تصدر بعد تشغيل وضع الموقع؛ لن ندخل توصية سابقة.',
-    WEBSITE_SOURCE_MISMATCH: 'مصدر التوصية لا يطابق حساب الذهب المرتبط؛ التنفيذ موقوف لهذه الخطة.',
+    WEBSITE_SOURCE_MISMATCH: 'مصدر التوصية لا يطابق حساب الأصل المحدد المرتبط؛ التنفيذ موقوف لهذه الخطة.',
     WEBSITE_PLAN_CHANGED: 'تغيّر تكوين التوصية؛ ننتظر شمعة وفرصة جديدة.',
     WAITING_COSTS: 'تكاليف حساب البروكر غير مؤكدة أو السبريد تجاوز الحد.',
     DURABLE_ENTRY_JOURNAL_REQUIRED: 'سجل إرسال الصفقات الدائم غير متاح؛ لا نرسل أمرًا قد يتكرر.'
   };
-  const details = [reasons[r?.reason] || 'ننتظر اكتمال شروط توصية الذهب المعتمدة.'];
+  const details = [reasons[r?.reason] || 'ننتظر اكتمال شروط توصية الأصل المحدد المعتمدة.'];
   if (x.website_recommendations) {
     const b = state.websiteBridge;
     if (r?.reason === 'WAITING_WEBSITE_PLAN' && state.reasons?.[1]) details.push(state.reasons[1]);

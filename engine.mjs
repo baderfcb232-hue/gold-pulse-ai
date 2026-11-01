@@ -141,6 +141,7 @@ export function cleanSnapshot(raw, now = Date.now() / 1000) {
       minimum_volume_fallback: raw.execution?.minimum_volume_fallback === true,
       website_no_daily_limits: raw.execution?.website_no_daily_limits === true,
       manual_lot_supported: raw.execution?.manual_lot_supported === true,
+      control_protocol: raw.execution?.control_protocol === 2 ? 2 : 1,
       daily_risk_remaining: typeof raw.execution?.daily_risk_remaining === "number" && Number.isFinite(raw.execution.daily_risk_remaining) && raw.execution.daily_risk_remaining >= 0 ? raw.execution.daily_risk_remaining : null,
       news_filter: raw.execution?.news_filter === true},
     account: raw.account && typeof raw.account === 'object' ? {

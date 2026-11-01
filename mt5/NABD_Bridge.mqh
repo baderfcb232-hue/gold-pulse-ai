@@ -176,10 +176,17 @@ string NBDeals(const long offset)
      }
    return json+"]";
   }
+// Bind every control poll and result to this account, broker, symbol and Magic.
+string NBControlIdentity()
+  {
+   return "\"account_ref\":"+NBQ((string)AccountInfoInteger(ACCOUNT_LOGIN))+
+      ",\"broker\":"+NBQ(AccountInfoString(ACCOUNT_SERVER))+",\"symbol\":"+NBQ(g_symbol)+
+      ",\"magic\":"+NBQ((string)InpMagicNumber);
+  }
 void NBAcknowledge(const long id,const string status,const string message)
   {
    string response;
-   NBRequest("POST","/api/bridge/result","{\"id\":"+(string)id+",\"status\":"+NBQ(status)+",\"message\":"+NBQ(message)+"}",response);
+   NBRequest("POST","/api/bridge/result","{"+NBControlIdentity()+",\"id\":"+(string)id+",\"status\":"+NBQ(status)+",\"message\":"+NBQ(message)+"}",response);
   }
 void NBProcessDemoRecommendation()
   {
@@ -245,7 +252,12 @@ void NBProcessWebsiteRecommendation()
 void NBProcessCommand()
   {
    string response;
-   if(NBRequest("GET","/api/bridge/next","",response)!=200 || StringLen(response)==0)return;
+   if(NBRequest("POST","/api/bridge/control-next","{"+NBControlIdentity()+"}",response)!=200)return;
+   // Old unscoped commands remain gold-only during the upgrade.
+   string instrument=g_symbol;StringToUpper(instrument);
+   if(StringLen(response)==0 && StringFind(instrument,"BTCUSD")!=0)
+      if(NBRequest("GET","/api/bridge/next","",response)!=200)return;
+   if(StringLen(response)==0)return;
    string parts[];if(StringSplit(response,'|',parts)!=6)return;
    long id=StringToInteger(parts[0]);string action=parts[1];ulong ticket=(ulong)StringToInteger(parts[2]);
    double fraction=StringToDouble(parts[3]);long created=StringToInteger(parts[4]),expiry=StringToInteger(parts[5]);
@@ -428,6 +440,7 @@ void NABDOnTimer()
      ",\"minimum_volume_fallback\":"+NBB(NBMainFresh() && NBMainValue("MV")>0.5)+
      ",\"website_no_daily_limits\":"+NBB(NBMainFresh() && NBMainValue("ND")>0.5)+
      ",\"manual_lot_supported\":"+NBB(NBMainFresh() && NBMainValue("VL")>0.5)+
+     ",\"control_protocol\":2"+
      ",\"daily_risk_remaining\":"+NBD(NBMainValue("RD"))+
      ",\"news_filter\":"+NBB(NBMainValue("NF")>0.5)+"},\"ea\":"+NBEA(offset);
    if(g_nb_bootstrap_done)payload+=",\"daily_candles\":"+g_nb_daily;
@@ -461,9 +474,7 @@ void NABDOnTimer()
      NBMainFresh()?"Update accepted by dashboard. Main bot link present.":"Update accepted by dashboard. Waiting for the main bot link.");
    if(InpNABDAllowRemoteControl && InpNABDSendAccount)
      {
-      // Legacy commands belong to the gold bridge. BTC must not consume them.
-      string instrument=g_symbol;StringToUpper(instrument);
-      if(StringFind(instrument,"BTCUSD")!=0) NBProcessCommand();
+      NBProcessCommand();
       NBProcessWebsiteRecommendation();
       NBProcessDemoRecommendation();
      }

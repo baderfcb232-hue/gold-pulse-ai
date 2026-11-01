@@ -20,6 +20,12 @@ let lastSignalId = null, signalsStamp = '', clockOffset = 0, pendingCommand = nu
 let stateErrorShown = false;
 let privateEpoch = 0, privateReadAllowed = true, privateLoading = null, commandSending = false, privateErrorShown = false;
 const commandTracker = createCommandTracker();
+let controlMarket='XAUUSD';
+const controlName=()=>controlMarket==='BTCUSD'?'البيتكوين':'الذهب';
+const controlState=()=>state?.controls?.[controlMarket]||null;
+const controlAccount=()=>controlMarket==='BTCUSD'?privateData?.btc:privateData;
+const controlLive=()=>{const s=controlState();return !!s && s.connection==='LIVE' && now()-s.lastUpdate<=20 && s.terminalConnected;};
+const selectedFresh=()=>{const s=controlState();return !!s && now()-s.bridgeReceivedAt<=10 && botHeartbeatFresh(s.bot?.heartbeat_at,s.execution?.main_connected,now(),BOT_CONTROL_TTL);};
 let memberIdentity = null, memberCsrf = '';
 const price = v => v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('en-US',{minimumFractionDigits:state?.spec?.digits ?? 2,maximumFractionDigits:state?.spec?.digits ?? 2});
 const num = (v, digits = 2) => v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('en-US',{maximumFractionDigits:digits});
@@ -187,13 +193,13 @@ async function loadPrivate(){
 function renderPrivate(){
   renderLink();$('account-lock').hidden=authenticated;$('account-content').hidden=!authenticated;
   if(!authenticated){replace('account-metrics');replace('automatic-risk-content');replace('positions-list');replace('commands-list');replace('deals-list',empty('سجّل دخول المشغّل لرؤية سجل حسابك.'));return;}
-  const a=privateData?.account,currency=a?.currency||state?.spec?.currency||'';
+  const a=controlAccount()?.account,currency=a?.currency||controlState()?.spec?.currency||'';
   replace('account-metrics',metric('الرصيد',num(a?.balance),currency),metric('حقوق الحساب',num(a?.equity),currency),metric('الهامش المتاح',num(a?.free_margin),currency),metric('ربح/خسارة عائمة',num(a?.floating),currency));
   renderAutomaticRisk();
   renderTradeSizing();
   if(a&&!$('risk-form').elements.equity.value)$('risk-form').elements.equity.value=a.equity;
-  const rows=privateData?.positions||[];
-  replace('positions-list',...(rows.length?rows.map(p=>{const box=e('article','position'),top=e('div','position-top');top.append(e('h3',p.side==='BUY'?'buy':'sell',`${sides[p.side]} · #${p.ticket}`),e('strong','number '+(p.profit>=0?'buy':'sell'),`${num(p.profit+p.swap)} ${currency}`));const data=e('div','position-data');for(const [label,v]of [['اللوت',num(p.volume,3)],['الدخول',price(p.entry)],['الستوب',p.sl?price(p.sl):'غير مضبوط'],['الهدف',p.tp?price(p.tp):'غير مضبوط']]){const cell=e('div');cell.append(e('small','',label),e('strong','',v));data.append(cell);}const buttons=e('div','actions');for(const [action,title]of [['BREAK_EVEN','ستوب على الدخول'],['PARTIAL_CLOSE','إغلاق نصف الصفقة'],['CLOSE_POSITION','إغلاق الصفقة']]){const b=e('button','button '+(action==='CLOSE_POSITION'?'danger':'ghost'),title);b.dataset.action=action;b.disabled=false;b.setAttribute('aria-disabled',String(getControlBlockers(action).length>0));b.onclick=()=>confirmCommand(action,p.ticket);buttons.append(b);}const spec=state?.spec,validStop=p.sl>0&&(p.side==='BUY'?p.sl<p.entry:p.sl>p.entry);const loss=validStop&&spec?.tick_size>0&&spec?.tick_value_loss>0?Math.abs(p.entry-p.sl)/spec.tick_size*spec.tick_value_loss*p.volume:null;const protection=!p.sl?'تحذير: الصفقة بدون وقف خسارة.':loss!=null?`خسارة مقدّرة من الدخول حتى الوقف: ${num(loss)} ${currency}، قبل العمولات والانزلاق.`:'الوقف مضبوط؛ تقدير الخسارة من الدخول غير متاح أو الوقف تجاوز الدخول.';box.append(top,data,e('p',!p.sl?'error-text':'subtle',protection),...(!p.tp?[e('p','error-text','الصفقة بدون هدف ربح مضبوط.')]:[]),buttons);return box;}):[empty('لا توجد صفقات مفتوحة للبوت المرتبط.') ]));
+  const rows=controlAccount()?.positions||[];
+  replace('positions-list',...(rows.length?rows.map(p=>{const box=e('article','position'),top=e('div','position-top');top.append(e('h3',p.side==='BUY'?'buy':'sell',`${sides[p.side]} · #${p.ticket}`),e('strong','number '+(p.profit>=0?'buy':'sell'),`${num(p.profit+p.swap)} ${currency}`));const data=e('div','position-data');for(const [label,v]of [['اللوت',num(p.volume,3)],['الدخول',price(p.entry)],['الستوب',p.sl?price(p.sl):'غير مضبوط'],['الهدف',p.tp?price(p.tp):'غير مضبوط']]){const cell=e('div');cell.append(e('small','',label),e('strong','',v));data.append(cell);}const buttons=e('div','actions');for(const [action,title]of [['BREAK_EVEN','ستوب على الدخول'],['PARTIAL_CLOSE','إغلاق نصف الصفقة'],['CLOSE_POSITION','إغلاق الصفقة']]){const b=e('button','button '+(action==='CLOSE_POSITION'?'danger':'ghost'),title);b.dataset.action=action;b.disabled=false;b.setAttribute('aria-disabled',String(getControlBlockers(action).length>0));b.onclick=()=>confirmCommand(action,p.ticket);buttons.append(b);}const spec=controlState()?.spec,validStop=p.sl>0&&(p.side==='BUY'?p.sl<p.entry:p.sl>p.entry);const loss=validStop&&spec?.tick_size>0&&spec?.tick_value_loss>0?Math.abs(p.entry-p.sl)/spec.tick_size*spec.tick_value_loss*p.volume:null;const protection=!p.sl?'تحذير: الصفقة بدون وقف خسارة.':loss!=null?`خسارة مقدّرة من الدخول حتى الوقف: ${num(loss)} ${currency}، قبل العمولات والانزلاق.`:'الوقف مضبوط؛ تقدير الخسارة من الدخول غير متاح أو الوقف تجاوز الدخول.';box.append(top,data,e('p',!p.sl?'error-text':'subtle',protection),...(!p.tp?[e('p','error-text','الصفقة بدون هدف ربح مضبوط.')]:[]),buttons);return box;}):[empty('لا توجد صفقات مفتوحة للبوت المرتبط.') ]));
   replace('commands-list',...(privateData?.commands?.length?privateData.commands.map(c=>{
     const row=e('div','command-row'),info=e('div'),progress=commandProgress(c,now());
     info.append(e('strong','',actions[c.action]||c.action),e('small','',`${time(c.time,true)}${c.ticket!=='0'?' · #'+c.ticket:''}`));
@@ -241,35 +247,38 @@ function renderWebsiteEntries(box){
   }
 }
 function activeCommandBusy(){return commandSending || commandTracker.busy() ||
-  (privateData?.commands||[]).some(c=>c.status==='QUEUED');}
+  (privateData?.commands||[]).some(c=>c.symbol===controlMarket && c.status==='QUEUED' && c.expires>now());}
 function renderCommandProgress(){
-  const tracked=commandTracker.get(),recent=(privateData?.commands||[])[0];
+  const tracked=commandTracker.get(),recent=(privateData?.commands||[]).find(c=>c.symbol===controlMarket && now()-c.time<120);
   const progress=commandProgress(tracked||recent,now()),box=$('command-progress');
   box.hidden=!progress;if(!progress)return;
   box.className='command-progress '+progress.tone;
   // Keep the live region stable while its countdown changes.
   if(!box.firstChild){box.append(e('strong'),e('p'),e('p','command-result'));}
-  const command=tracked||recent,title=`${actions[command.action]||command.action} · ${progress.title}`;
+  const command=tracked||recent,title=`${controlName()} · ${actions[command.action]||command.action} · ${progress.title}`;
   for(const [node,value]of [[box.children[0],title],[box.children[1],progress.detail],[box.children[2],progress.result||'']])
     if(node.textContent!==value)node.textContent=value;
 }
 function getControlBlockers(action){
+  const c=controlState(),x=c?.execution;
   const reasons=controlBlockers({action,authenticated,persistent:state?.storage?.remoteControlAvailable===true,
-    live:effectiveConnection()==='LIVE',fresh:controlFresh(),remoteControl:!!state?.execution?.remote_control,
-    enabled:!!state?.execution?.enabled});
+    live:controlLive() || (action==='PAUSE' && !!c?.terminalConnected),fresh:selectedFresh(),
+    remoteControl:!!x?.remote_control,enabled:!!x?.enabled});
+  if(x?.control_protocol!==2)reasons.push('حدّث ملف '+controlName()+' إلى NABD 4.01 وزامن VPS لتفعيل التحكم المستقل.');
   if(activeCommandBusy())reasons.push('يوجد أمر قيد الإرسال أو التأكيد؛ انتظر تحديث سجله.');
-  if(controlFresh() && effectiveConnection()==='LIVE'){
-    if(action==='PAUSE' && state?.execution?.paused)reasons.push('الدخول موقوف بالفعل.');
-    if(action==='RESUME' && state?.execution?.paused===false)reasons.push('الدخول التلقائي مسموح بالفعل؛ البوت ينتظر اكتمال شروط التوصية.');
+  if(selectedFresh()){
+    if(action==='PAUSE' && x?.paused)reasons.push('الدخول موقوف بالفعل.');
+    if(action==='RESUME' && x?.paused===false)reasons.push('الدخول التلقائي مسموح بالفعل؛ البوت ينتظر اكتمال شروط التوصية.');
   }
-  if(action==='CLOSE_ALL' && authenticated && privateData?.positions?.length===0 && now()-privateData.lastUpdate<=10)
+  if(action==='CLOSE_ALL' && authenticated && controlAccount()?.positions?.length===0 && now()-controlAccount().lastUpdate<=10)
     reasons.push('لا توجد صفقات مفتوحة للبوت المرتبط لإغلاقها.');
   return reasons;
 }
 function renderExecution(){
-  const x=state?.execution;
-  put('control-connection-summary',!mainFresh()?'حالة MT5 غير حديثة؛ ننتظر تحديث البوت.':x?.paused?'دخول صفقات جديدة موقوف':x?.enabled?'الدخول التلقائي مسموح عند اكتمال الشروط':'التنفيذ غير مفعّل داخل MT5');
-  put('demo-execution-status',demoExecutionMessage(state));
+  const c=controlState(),x=c?.execution;
+  $('control-market').disabled=activeCommandBusy();
+  put('control-connection-summary',!selectedFresh()?'حالة MT5 غير حديثة؛ ننتظر تحديث البوت.':x?.paused?'دخول صفقات جديدة موقوف':x?.enabled?'الدخول التلقائي مسموح عند اكتمال الشروط':'التنفيذ غير مفعّل داخل MT5');
+  put('demo-execution-status',c?demoExecutionMessage({...c,demoExecution:c.websiteExecution}):'ننتظر بيانات MT5 لـ'+controlName());
   // Never hide the update package based only on a remote execution flag:
   // it does not prove that the updated compiled EA is installed on the VPS.
   $('control-download-mt5').hidden=false;
@@ -280,30 +289,30 @@ function renderExecution(){
   const btcNote=!btc?'البيتكوين: لم تُؤكد بيانات جسر BTC في حساب المشغّل':(!Number.isFinite(btc.lastUpdate)||now()-btc.lastUpdate>15)?'البيتكوين: تحديث جسر BTC متأخر':'البيتكوين: وصل تحديث MT5؛ تنفيذ الصفقة يحتاج فحص شروطها';
   put('mt5-market-readiness',goldNote+' | '+btcNote+' | جسر الذهب: '+bridge+' | تحميل ملفات MT5 لا يعني تركيبها على VPS.');
   renderCommandProgress();
-  put('execution-badge',!mainFresh()?'حالة البوت غير متاحة':x?.enabled?(x.demo?'حساب تجريبي':'حساب حقيقي'):'التنفيذ المحلي غير مفعّل');
+  put('execution-badge',!selectedFresh()?'حالة البوت غير متاحة':x?.enabled?(x.demo?'حساب تجريبي':'حساب حقيقي'):'التنفيذ المحلي غير مفعّل');
   $('execution-badge').className='pill '+(x?.enabled?'warn':'neutral');
   put('execution-description',x?(x.demo && x.website_no_daily_limits ? `Demo · حدود الخسارة وعدد الدخولات اليومية معطّلة · ستوب التوصية والهدف الأول · حساب اللوت يبدأ من ${num(x.risk_percent)}% مع السماح بأقل لوت · ${x.paused?'الدخول موقوف':'الدخول مفعّل'}` : `${x.paused?'دخول الصفقات موقوف':'إدارة البوت من MT5'} · هدف الربح الصغير ${num(x.small_profit_target)} ${state?.spec?.currency||''} · مخاطرة الإعداد المحلي ${num(x.risk_percent)}% · ${x.remote_control?'التحكم من الموقع متاح':'التحكم من الموقع غير مفعّل'}`):'إعدادات التنفيذ تظهر عند وصول ربط البوت.');
   // Always explain disabled controls. The actual command is blocked by
   // confirmCommand(), rechecked before POST, and revalidated on the server.
   for(const [id,action] of [['pause-bot','PAUSE'],['resume-bot','RESUME'],['close-all','CLOSE_ALL']]){
     const button=$(id),issues=getControlBlockers(action);
-    button.disabled=activeCommandBusy();
+    button.disabled=activeCommandBusy()||issues.length>0;
     button.setAttribute('aria-disabled',String(issues.length>0));
     button.title=issues.join(' · ')||'سيُطلب التأكيد قبل إرسال الأمر إلى MT5.';
     if(id==='pause-bot')button.textContent=x?.paused?'الدخول موقوف':'إيقاف دخول جديد';
     if(id==='resume-bot')button.textContent=x?.paused===false?'الدخول التلقائي مسموح':'تشغيل الدخول التلقائي';
   }
-  const notice=$('control-help'),issues=getControlBlockers(state?.execution?.paused?'RESUME':'PAUSE');
+  const notice=$('control-help'),issues=getControlBlockers(x?.paused?'RESUME':'PAUSE');
   notice.textContent=issues.length?issues.join(' · '):'اختر الأمر ثم أكّد إرساله. النتيجة تظهر بعد رد MT5.';
   document.querySelectorAll('.position .actions button').forEach(button=>{
     const blockers=getControlBlockers(button.dataset.action||'CLOSE_POSITION');
-    button.disabled=activeCommandBusy();
+    button.disabled=activeCommandBusy()||blockers.length>0;
     button.setAttribute('aria-disabled',String(blockers.length>0));
     button.title=blockers.join(' · ')||'سيُطلب التأكيد قبل إرسال الأمر إلى MT5.';
   });
 }
 function renderDeals(){if(!authenticated)return;const rows=privateData?.deals||[];if(!rows.length){replace('deals-list',empty('لم تصل عمليات MT5 فعلية بعد.'));return;}const wrap=e('div','table-wrap'),table=e('table'),head=e('thead'),hr=e('tr');for(const t of ['الوقت','رقم العملية','النوع','الحركة','اللوت','ربح/خسارة','العمولة','التبييت','الرسوم','الصافي'])hr.append(e('th','',t));head.append(hr);const tbody=e('tbody');for(const d of rows){const tr=e('tr'),net=d.profit+d.commission+d.swap+d.fee;for(const v of [time(d.time,true),d.ticket,sides[d.side],d.entry_type==='IN'?'دخول':d.entry_type==='OUT'?'خروج':d.entry_type,num(d.volume,3),num(d.profit),num(d.commission),num(d.swap),num(d.fee),num(net)])tr.append(e('td','',v));tbody.append(tr);}table.append(head,tbody);wrap.append(table);replace('deals-list',wrap);}
-function confirmCommand(action,ticket='0'){if(!authenticated){$('login-dialog').showModal();return;}const issues=getControlBlockers(action);if(issues.length){toast(issues.join(' · '),true);return;}pendingCommand={action,ticket,...(action==='PARTIAL_CLOSE'?{fraction:.5}:{})};put('command-title',actions[action]);put('command-detail',action==='PAUSE'?'سيوقف البوت فتح صفقات جديدة، مع استمرار إدارة الصفقات القائمة.':action==='RESUME'?'سيُرفع إيقاف الدخول. التنفيذ يبقى خاضعًا لإعدادات البوت والفلاتر في MT5.':action==='CLOSE_ALL'?'سيحاول البوت إغلاق صفقاته المرتبطة بهذا الرمز والرقم السحري، بالسعر المتاح.':action==='BREAK_EVEN'?`سيُطلب نقل ستوب الصفقة #${ticket} لسعر الدخول إذا سمحت شروط البروكر. تكاليف الصفقة قد تجعل النتيجة غير صفرية.`:`سيُرسل طلب ${actions[action]} #${ticket} بالسعر المتاح، وينتظر تأكيد MT5.`);$('command-dialog').showModal();}
+function confirmCommand(action,ticket='0'){if(!authenticated){$('login-dialog').showModal();return;}const issues=getControlBlockers(action);if(issues.length){toast(issues.join(' · '),true);return;}pendingCommand={action,ticket,symbol:controlMarket,...(action==='PARTIAL_CLOSE'?{fraction:.5}:{})};put('command-title',controlName()+' · '+actions[action]);put('command-detail',action==='PAUSE'?'سيوقف البوت فتح صفقات جديدة، مع استمرار إدارة الصفقات القائمة.':action==='RESUME'?'سيُرفع إيقاف الدخول. التنفيذ يبقى خاضعًا لإعدادات البوت والفلاتر في MT5.':action==='CLOSE_ALL'?'سيحاول البوت إغلاق صفقاته المرتبطة بهذا الرمز والرقم السحري، بالسعر المتاح.':action==='BREAK_EVEN'?`سيُطلب نقل ستوب الصفقة #${ticket} لسعر الدخول إذا سمحت شروط البروكر. تكاليف الصفقة قد تجعل النتيجة غير صفرية.`:`سيُرسل طلب ${actions[action]} #${ticket} بالسعر المتاح، وينتظر تأكيد MT5.`);$('command-dialog').showModal();}
 function renderDiagnostics(){const s=state||{},at=s.bridgeReceivedAt,bridgeRecent=at>0&&now()-at<=20,entries=[['حالة المصدر',labels[effectiveConnection()]||'—'],['وصول الجسر',!at?'لم يصل تحديث':bridgeRecent?'إرسال حديث':'الإرسال متوقف أو متأخر'],['آخر وصول من الجسر',time(at,true)],['آخر نبض للبوت',time(s.bot?.heartbeat_at,true)],['اتصال المنصة بالبروكر',!at?'غير معروف':!bridgeRecent?'آخر حالة محفوظة؛ ننتظر تحديثًا':s.terminalConnected?'متصل':'منقطع'],['البروكر',s.broker||'لم يصل'],['الرمز',s.symbol||'XAUUSD'],['آخر سعر',time(s.lastUpdate,true)],['نوع السبريد','نقاط البروكر'],['قيمة التيك للوت',num(s.spec?.tick_value_loss)+' '+(s.spec?.currency||'')],['أصغر لوت',num(s.spec?.volume_min,3)],['التحكم الآمن',s.controlsConfigured?'مضبوط بالخادم':'يحتاج ضبط الرموز بالخادم'],['سجل أوامر التحكم',s.storage?.commandJournal==='postgres'?'PostgreSQL (دائم)':s.storage?.commandJournal==='disk'?'قرص دائم':'غير متاح'],['سجل التحليل والنتائج',s.storage?.mode==='persistent'?'قرص دائم':s.storage?.checkpoint?.state==='SAVED'?'نسخة PostgreSQL دورية':s.storage?.checkpoint?.state==='RESTORED'?'مستعاد من PostgreSQL':'مؤقت أو النسخ غير مؤكد'],['محرك التحليل',s.strategy||'غير متاح']];replace('diagnostics',...entries.map(([label,val])=>{const row=e('div');row.append(e('dt','',label),e('dd','',val));return row;}));}
 function renderStorage(){
   const storage=state?.storage||{}, persistent=storage.mode==='persistent',checkpoint=storage.checkpoint;
@@ -372,7 +381,7 @@ $('command-confirm').onclick=async()=>{
   const issues=getControlBlockers(pendingCommand.action);
   if(issues.length){$('command-dialog').close();pendingCommand=null;toast(issues.join(' · '),true);return;}
   const command={...pendingCommand},epoch=privateEpoch;
-  if(!commandTracker.begin(command.action,command.ticket,now()))return;
+  if(!commandTracker.begin(command.action,command.ticket,now(),command.symbol))return;
   commandSending=true;$('command-confirm').disabled=true;
   // Close immediately so the same confirmation cannot be submitted twice.
   $('command-dialog').close();pendingCommand=null;renderExecution();
@@ -395,6 +404,7 @@ $('refresh-controls').onclick=async()=>{
 $('control-download-mt5').onclick=event=>{if(!authenticated){event.preventDefault();$('login-dialog').showModal();}};
 $('command-dialog').addEventListener('close',()=>{pendingCommand=null;});
 
+$('control-market').onchange=()=>{controlMarket=$('control-market').value;pendingCommand=null;$('command-dialog').close();commandTracker.clear();renderPrivate();renderExecution();};
 $('pause-bot').onclick=()=>confirmCommand('PAUSE');$('resume-bot').onclick=()=>confirmCommand('RESUME');$('close-all').onclick=()=>confirmCommand('CLOSE_ALL');$('signal-filter').onchange=renderSignals;$('signal-source-filter').onchange=renderSignals;$('results-source-filter').onchange=renderResults;$('news-filter').onchange=renderNews;
 $('download-mt5').onclick=event=>{if(!authenticated){event.preventDefault();$('login-dialog').showModal();}};
 $('copy-bridge-url').onclick=async()=>{try{await navigator.clipboard.writeText($('bridge-url').value);toast('تم نسخ رابط الجسر.');}catch{toast('انسخ الرابط من الحقل مباشرة.',true);$('bridge-url').select();}};

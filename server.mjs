@@ -357,6 +357,25 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       websiteLastResult: bridge.lastResult
     };
   }
+  for (const column of ['source_key','symbol'])
+    if (!db.prepare('PRAGMA table_info(commands)').all().some(c=>c.name===column))
+      db.exec(`ALTER TABLE commands ADD COLUMN ${column} TEXT`);
+  function controlState(s) {
+    if (!s) return null;
+    const now=clock();
+    return {symbol:s.symbol, broker:s.broker, bridgeReceivedAt:s.received_at,
+      lastUpdate:s.quote_at, connection:analyze(s,now,cfg).connection,
+      terminalConnected:s.terminal_connected, spec:s.spec,
+      bot:s.ea?{heartbeat_at:s.ea.heartbeat_at}:null,
+      execution:{...s.execution,managed_magic:undefined},
+      websiteExecution:(()=>{const {plan,...r}=websiteExecutionReview(s);return r;})(),
+      websiteBridge:websiteBridgeState(s===btcSnapshot?'BTCUSD':'XAUUSD')};
+  }
+  function commandSource(b) {
+    const s=b?.symbol===btcSnapshot?.symbol?btcSnapshot:snapshot;
+    return s && b?.symbol===s.symbol && b.account_ref===s.account_ref &&
+      b.broker===s.broker && b.magic===s.execution.managed_magic ? s : null;
+  }
   function publicState() {
     const a = sourceAnalysis(snapshot, clock(), cfg);
     const publication = publicationReview(a);
@@ -365,7 +384,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     const websitePlan=website?.currentSignal;
     const active = signalRows().find(s => s.status === 'TRACKING' && (a.source === 'MT5_EA' ? s.source === 'MT5_EA' : s.source !== 'MT5_EA'));
     const available = a.connection === 'LIVE' && a.source_ready;
-    return {version: '3.4.0', revision, symbol: snapshot?.symbol || 'XAUUSD', broker: snapshot?.broker || null,
+    return {controls:{XAUUSD:controlState(snapshot),BTCUSD:cfg.goldOnly?null:controlState(btcSnapshot)}, version: '3.4.0', revision, symbol: snapshot?.symbol || 'XAUUSD', broker: snapshot?.broker || null,
       bid: snapshot?.bid ?? null, ask: snapshot?.ask ?? null,
       spread: snapshot ? (snapshot.ask - snapshot.bid) / snapshot.spec.point : null,
       spreadUnit: 'points', lastUpdate: snapshot?.quote_at ?? null,
@@ -681,33 +700,39 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       if (path === '/api/commands' && req.method === 'POST') {
         if (!operator(req)) return send(req, res, 401, {error: 'تسجيل دخول المشغّل مطلوب.'});
         if (!storagePersistent && !commandJournal) return send(req, res, 409, {error: 'إدارة الصفقات من الموقع تحتاج حفظًا دائمًا لسجل الأوامر. المراقبة متاحة.'});
-        const a = analyze(snapshot, clock(), cfg);
-        if (a.connection !== 'LIVE') return send(req, res, 409, {error: 'الربط غير حي؛ لا يمكن إرسال أمر.'});
-        if ((cfg.signalSource === 'EA' || snapshot.ea) && !botHeartbeatFresh(snapshot.ea?.heartbeat_at,
-          snapshot.execution.main_connected, clock(), BOT_CONTROL_TTL))
-          return send(req, res, 409, {error: 'حالة البوت المحلي قديمة أو غير متاحة؛ أوامر الإدارة معلّقة.'});
         const b = await body(req), action = b.action;
-        if (!snapshot.execution.remote_control) return send(req, res, 409, {error: 'التحكم من الموقع غير مفعّل في إعدادات البوت.'});
+        if (b.symbol != null && !['XAUUSD','BTCUSD'].includes(b.symbol)) return send(req,res,400,{error:'Invalid control market'});
+        const selected=b.symbol==='BTCUSD'?(cfg.goldOnly?null:btcSnapshot):snapshot;
+        if (!selected) return send(req,res,409,{error:'لم تصل بيانات MT5 للأصل المحدد.'});
+        const scoped=b.symbol!=null;
+        if (scoped && selected.execution.control_protocol!==2) return send(req,res,409,{error:'حدّث ملف هذا الأصل إلى NABD 4.01 ثم زامن VPS لتفعيل الأزرار المستقلة.'});
+        const target=scoped?{source_key:entrySourceKey(selected),symbol:b.symbol}:null;
+        const a = analyze(selected, clock(), cfg);
+        if (a.connection !== 'LIVE' && !(scoped && action==='PAUSE' && selected.terminal_connected)) return send(req, res, 409, {error: 'الربط غير حي؛ لا يمكن إرسال أمر.'});
+        if ((cfg.signalSource === 'EA' || selected.ea) && !botHeartbeatFresh(selected.ea?.heartbeat_at,
+          selected.execution.main_connected, clock(), BOT_CONTROL_TTL))
+          return send(req, res, 409, {error: 'حالة البوت المحلي قديمة أو غير متاحة؛ أوامر الإدارة معلّقة.'});
+        if (!selected.execution.remote_control) return send(req, res, 409, {error: 'التحكم من الموقع غير مفعّل في إعدادات البوت.'});
         if (!['PAUSE','RESUME','CLOSE_POSITION','CLOSE_ALL','BREAK_EVEN','PARTIAL_CLOSE'].includes(action))
           return send(req, res, 400, {error: 'أمر غير مدعوم.'});
-        if (!snapshot.execution.enabled && !['PAUSE','RESUME'].includes(action))
+        if (!selected.execution.enabled && !['PAUSE','RESUME'].includes(action))
           return send(req, res, 409, {error: 'التنفيذ غير مفعّل داخل MT5.'});
         const ticket = text(b.ticket ?? '0', 25);
         if (!/^\d{1,25}$/.test(ticket)) return send(req, res, 400, {error: 'رقم صفقة غير صالح.'});
-        if (['CLOSE_POSITION','BREAK_EVEN','PARTIAL_CLOSE'].includes(action) && !snapshot.positions.some(p => p.ticket === ticket))
+        if (['CLOSE_POSITION','BREAK_EVEN','PARTIAL_CLOSE'].includes(action) && !selected.positions.some(p => p.ticket === ticket))
           return send(req, res, 400, {error: 'هذه الصفقة ليست ضمن صفقات البوت المرتبطة.'});
         const fraction = action === 'PARTIAL_CLOSE' ? Number(b.fraction) : 0;
         if (action === 'PARTIAL_CLOSE' && !(fraction > 0 && fraction < 1)) return send(req, res, 400, {error: 'نسبة إغلاق جزئي غير صالحة.'});
         let id;
         if (commandJournal) {
-          const queued = await commandJournal.enqueue(clock(), action, ticket, fraction);
+          const queued = await commandJournal.enqueue(clock(), action, ticket, fraction, target);
           if (!queued) return send(req, res, 409, {error: 'يوجد أمر قيد الانتظار؛ انتظر تأكيده أولًا.'});
           id = queued.id;
         } else {
-          if (db.prepare("SELECT id FROM commands WHERE status='QUEUED' AND expires>? LIMIT 1").get(clock()))
+          if (db.prepare("SELECT id FROM commands WHERE status='QUEUED' AND expires>? AND source_key IS ? LIMIT 1").get(clock(),target?.source_key??null))
             return send(req, res, 409, {error: 'يوجد أمر قيد الانتظار؛ انتظر تأكيده أولًا.'});
-          id = db.prepare("INSERT INTO commands(time,expires,action,ticket,fraction,status) VALUES(?,?,?,?,?,'QUEUED')")
-            .run(clock(), clock() + 20, action, ticket, fraction).lastInsertRowid;
+          id = db.prepare("INSERT INTO commands(time,expires,action,ticket,fraction,status,source_key,symbol) VALUES(?,?,?,?,?,'QUEUED',?,?)")
+            .run(clock(), clock() + 20, action, ticket, fraction,target?.source_key??null,target?.symbol??null).lastInsertRowid;
         }
         audit('COMMAND_QUEUED', {id: Number(id), action, ticket});
         return send(req, res, 202, {id: Number(id), status: 'QUEUED', message: 'الأمر في الانتظار؛ التنفيذ يحتاج تأكيد MT5.'});
@@ -778,17 +803,27 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         if (fields.some(v => /[|\r\n]/.test(String(v)))) return send(req, res, 409, {error: 'Invalid source identity'});
         return send(req, res, 200, fields.join('|'), 'text/plain; charset=utf-8');
       }
+      if (path === '/api/bridge/control-next' && req.method === 'POST') {
+        if (!bridge(req)) return send(req,res,401,{error:'Invalid bridge token'});
+        const s=commandSource(await body(req,2000));
+        if (!s || s.execution.control_protocol!==2) return send(req,res,409,{error:'Control source mismatch or update required'});
+        if (!storagePersistent && !commandJournal) return send(req,res,200,'','text/plain');
+        const source=entrySourceKey(s);
+        const c=commandJournal?await commandJournal.next(clock(),source):db.prepare("SELECT * FROM commands WHERE status='QUEUED' AND expires>? AND source_key=? ORDER BY id LIMIT 1").get(clock(),source);
+        return send(req,res,200,c?[c.id,c.action,c.ticket,c.fraction,Math.floor(c.time),Math.floor(c.expires)].join('|'):'','text/plain; charset=utf-8');
+      }
       if (path === '/api/bridge/next' && req.method === 'GET') {
         if (!bridge(req)) return send(req, res, 401, {error: 'Invalid bridge token'});
         if (!storagePersistent && !commandJournal) return send(req, res, 200, '', 'text/plain; charset=utf-8');
         db.prepare("UPDATE commands SET status='EXPIRED' WHERE status='QUEUED' AND expires<?").run(clock());
-        const c = commandJournal ? await commandJournal.next(clock()) : db.prepare("SELECT * FROM commands WHERE status='QUEUED' ORDER BY id LIMIT 1").get();
+        const c = commandJournal ? await commandJournal.next(clock()) : db.prepare("SELECT * FROM commands WHERE status='QUEUED' AND source_key IS NULL ORDER BY id LIMIT 1").get();
         return send(req, res, 200, c ? [c.id,c.action,c.ticket,c.fraction,Math.floor(c.time),Math.floor(c.expires)].join('|') : '', 'text/plain; charset=utf-8');
       }
       if (path === '/api/bridge/result' && req.method === 'POST') {
         if (!bridge(req)) return send(req, res, 401, {error: 'Invalid bridge token'});
         const b = await body(req), c = commandJournal ? await commandJournal.get(Number(b.id)) : db.prepare('SELECT * FROM commands WHERE id=?').get(Number(b.id));
         if (!c) return send(req, res, 404, {error: 'Unknown command'});
+        if(c.source_key){const s=commandSource(b);if(!s || entrySourceKey(s)!==c.source_key)return send(req,res,409,{error:'Control result source mismatch'});}
         if (!['QUEUED','EXPIRED'].includes(c.status)) return send(req, res, 200, {ok: true, status: c.status});
         if (!['CONFIRMED','REJECTED','UNCERTAIN'].includes(b.status)) return send(req, res, 400, {error: 'Invalid confirmation'});
         if (commandJournal) await commandJournal.result(c.id, b.status, text(b.message, 500));
