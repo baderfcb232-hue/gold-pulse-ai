@@ -2,7 +2,7 @@ import {positionSize, ema, botHeartbeatFresh, BOT_CONTROL_TTL} from '/engine.mjs
 import {initLiveWorkspace} from '/live.js';
 import {createStateConnection} from '/state-connection.js';
 import {requestJson} from '/http.js';
-import {controlBlockers, marketControlStatus} from '/control-readiness.js';
+import {controlBlockers, marketControlStatus} from '/control-readiness.js?v=market-status-1';
 import {createCommandTracker, commandProgress, demoExecutionMessage} from '/command-feedback.js';
 const $ = id => document.getElementById(id);
 const e = (tag, cls, content) => {const x = document.createElement(tag); if (cls) x.className = cls; if (content != null) x.textContent = String(content); return x;};
