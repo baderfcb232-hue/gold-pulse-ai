@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {analyze, TF_SECONDS, defaults} from './engine.mjs';
 import {analyzeGoldScalp,goldScalpBarFreshness} from './strategies/gold-scalping.mjs';
 import {analyzeBtcScalp,btcScalpBarFreshness} from './strategies/btc-scalping.mjs';
+import {analyzeBtcFusion} from './strategies/btc-fusion-scalper.mjs';
 
 // Reuse the existing website strategy with the broker's closed OHLC bars.
 // Account data and the EA's execution controls never enter the public market.
@@ -17,6 +18,7 @@ export function brokerInstrumentMarket(snapshot, now, {goldStrategy = 'EMA_LEGAC
     .update(JSON.stringify([snapshot.account_ref, snapshot.broker, snapshot.symbol])).digest('hex').slice(0, 24);
   const source = 'MT5 · ' + snapshot.broker;
   const a = gold && goldStrategy === 'SCALP' ? analyzeGoldScalp(snapshot,now) :
+    btc && btcStrategy === 'FUSION' ? analyzeBtcFusion(snapshot,now) :
     btc && btcStrategy === 'SCALP' ? analyzeBtcScalp(snapshot,now) :
     analyze(snapshot, now, btc ? {maxSpreadPoints: Math.max(1, btcSpreadPoints)} : undefined);
   const incomplete = Object.values(a.frames).some(f => f.direction === 'UNKNOWN');
