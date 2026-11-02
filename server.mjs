@@ -68,7 +68,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     publicationEnabled: process.env.SIGNAL_PUBLICATION_ENABLED === 'true',
     demoRecommendationExecution: process.env.DEMO_RECOMMENDATION_EXECUTION === 'true',
     goldSignalStrategy: process.env.NABD_GOLD_SIGNAL_STRATEGY || 'EMA_LEGACY',
-    btcSignalStrategy: process.env.NABD_BTC_SIGNAL_STRATEGY || 'FUSION',
+    btcSignalStrategy: process.env.NABD_BTC_SIGNAL_STRATEGY || 'EMA_LEGACY',
     btcScalpDemoAutoExecution: process.env.NABD_BTC_SCALP_DEMO_AUTOTRADE === 'true',
     btcFusionDemoAutoExecution: process.env.NABD_BTC_FUSION_DEMO_AUTOTRADE === 'true',
     scalpDemoAutoExecution: process.env.NABD_SCALP_DEMO_AUTOTRADE === 'true',
