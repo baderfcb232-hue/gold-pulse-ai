@@ -9,7 +9,7 @@ test('gold profit protection runs before legacy demo-management short circuit', 
   assert.match(manage,/ManageHalfTargetProfitLock\(\);[\s\S]*ManageHalfTargetPartialClose\(\);[\s\S]*if\(DemoWebsiteNoDailyLimitsEnabled\(\)\)/);
   assert.match(gold,/InpUseHalfTargetProfitLock = true/);
   assert.match(gold,/InpUseAutoHalfClose\s+= true/);
-  assert.match(gold,/Math\.Abs\(PositionGetDouble\(POSITION_SL\)-locked_sl\)/);
+  assert.match(gold,/MathAbs\(PositionGetDouble\(POSITION_SL\)-locked_sl\)/);
 });
 test('profit lock uses a fresh broker quote and never widens stop', () => {
   const start=gold.indexOf('void ManageHalfTargetProfitLock()\n  {');
