@@ -65,6 +65,7 @@ input bool            InpBlockIfCalendarFails   = true;
 
 //--- position management
 input group "Open-position management"
+input bool            InpUseHalfTargetProfitLock = true;   // Lock 50% of the actual entry-to-TP distance
 input bool            InpUseBreakEven           = false;
 input double          InpBreakEvenTriggerAtr    = 1.00;
 input double          InpBreakEvenOffsetAtr     = 0.05;
@@ -167,6 +168,7 @@ bool   TradingExecutionEnabled();
 bool   BuildSignal(SignalData &signal);
 bool   PlaceSignal(const SignalData &signal);
 void   ManageOpenPositions();
+void   ManageHalfTargetProfitLock();
 bool   IsEmergencyStopActive();
 void   CloseOwnPositions();
 bool   HasOwnPosition();
@@ -799,12 +801,76 @@ bool PlaceSignal(const SignalData &signal)
 //+------------------------------------------------------------------+
 //| Position management                                              |
 //+------------------------------------------------------------------+
+// Protect 50% of the distance from actual fill to broker TP (not signal TP).
+// A broker stop/freeze buffer must be cleared before SL can be placed there.
+// This does not close volume and never loosens an existing more-protective SL.
+void ManageHalfTargetProfitLock()
+  {
+   if(!InpUseHalfTargetProfitLock)
+      return;
+
+   MqlTick tick;
+   if(!SymbolInfoTick(g_symbol,tick) || tick.bid<=0.0 || tick.ask<tick.bid ||
+      ServerNow()-tick.time>10 || tick.time>ServerNow()+2)
+      return;
+
+   double minimum_distance=MinimumStopDistance()+2.0*g_point;
+   double tick_size=SymbolInfoDouble(g_symbol,SYMBOL_TRADE_TICK_SIZE);
+   if(tick_size<=0.0)
+      tick_size=g_point;
+
+   for(int i=PositionsTotal()-1;i>=0;i--)
+     {
+      ulong ticket=PositionGetTicket(i);
+      if(ticket==0 || !PositionSelectByTicket(ticket) || !IsOwnPositionSelected())
+         continue;
+
+      long side=PositionGetInteger(POSITION_TYPE);
+      if(side!=POSITION_TYPE_BUY && side!=POSITION_TYPE_SELL)
+         continue;
+      bool buy=(side==POSITION_TYPE_BUY);
+      double entry=PositionGetDouble(POSITION_PRICE_OPEN);
+      double tp=PositionGetDouble(POSITION_TP);
+      double current_sl=PositionGetDouble(POSITION_SL);
+      if(entry<=0.0 || tp<=0.0 || (buy ? tp<=entry : tp>=entry))
+         continue;
+
+      double midpoint=entry+0.5*(tp-entry);
+      // Round toward entry so the stop stays valid on broker tick-size grids.
+      double locked_sl=NormalizePrice((buy ? MathFloor(midpoint/tick_size+1.0e-9) :
+                                           MathCeil(midpoint/tick_size-1.0e-9))*tick_size);
+      if((buy && (locked_sl<=entry || locked_sl>=tp ||
+                  tick.bid<=midpoint || tick.bid-locked_sl<=minimum_distance ||
+                  (current_sl>0.0 && current_sl>=locked_sl-0.5*g_point))) ||
+         (!buy && (locked_sl>=entry || locked_sl<=tp ||
+                   tick.ask>=midpoint || locked_sl-tick.ask<=minimum_distance ||
+                   (current_sl>0.0 && current_sl<=locked_sl+0.5*g_point))))
+         continue;
+
+      bool sent=g_trade.PositionModify(ticket,locked_sl,tp);
+      uint retcode=g_trade.ResultRetcode();
+      bool confirmed=sent && IsSuccessfulRetcode(retcode) &&
+                     PositionSelectByTicket(ticket) &&
+                     MathAbs(PositionGetDouble(POSITION_SL)-locked_sl)<=g_point*0.5;
+      if(confirmed)
+         LogEvent("HALF_TARGET_PROFIT_LOCK",
+                  StringFormat("ticket=%I64u,entry=%.*f,tp=%.*f,new_sl=%.*f",
+                               ticket,g_digits,entry,g_digits,tp,g_digits,locked_sl));
+      else
+         LogEvent("HALF_TARGET_LOCK_FAILED",
+                  StringFormat("ticket=%I64u,retcode=%u,%s",
+                               ticket,retcode,g_trade.ResultRetcodeDescription()));
+     }
+  }
+
 void ManageOpenPositions()
   {
    if(!ExecutionPermissionsAvailable())
       return;
    if(IsEmergencyStopActive())
       return;
+   // Independent of ATR trail/small-profit and website unlimited-entry modes.
+   ManageHalfTargetProfitLock();
    if(DemoWebsiteNoDailyLimitsEnabled())
      {
       SyncCycleState();
