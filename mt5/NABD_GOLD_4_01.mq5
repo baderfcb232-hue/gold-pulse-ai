@@ -39,6 +39,10 @@ input bool            InpDemoBrokerMinimumLot   = false;
 input int             InpMaxConcurrentPositions = 5;         // Demo: combined cap across managed gold/BTC positions
 input double          InpMaxOpenRiskPercent     = 2.0;       // Demo: aggregate worst-case loss to SL across positions        // Demo only: allow broker minimum within daily loss limit
 input double          InpRiskPercent            = 0.50;        // Equity stop risk for the whole cycle
+input bool            InpUseVolatilityLotReduction = true;
+input int             InpVolatilityLookbackBars = 48;     // ATR bars (closed)
+input double          InpHighVolAtrRatio        = 1.50;
+input double          InpMinVolLotFactor        = 0.25;   // Never force broker minimum if adjusted size is too small
 input double          InpRewardRisk             = 1.00;        // Target = R multiple
 input double          InpStopBufferAtr           = 0.20;
 input double          InpMinStopAtr             = 0.50;
@@ -190,6 +194,7 @@ bool DemoWebsiteNoDailyLimitsEnabled();
 bool DemoBrokerMinimumLotEnabled();
 double ExecutionRiskBudget(const ENUM_ORDER_TYPE order_type,const double entry,const double stop_loss);
 double CalculateVolume(const ENUM_ORDER_TYPE order_type,const double entry,const double stop_loss);
+double VolatilityLotFactor();
 bool   MarginIsAcceptable(const ENUM_ORDER_TYPE order_type,const double entry,const double volume);
 int    VolumeDigits(const double step);
 double NormalizePrice(const double price);
@@ -323,6 +328,9 @@ int OnInit()
       !MathIsValidNumber(InpExitCostPerLot) || InpExitCostPerLot<0.0 ||
       !MathIsValidNumber(InpCloseBufferMoney) || InpCloseBufferMoney<0.0 ||
       InpCycleCooldownSeconds<0 || InpDeviationPoints<0 || InpMagicNumber<=0 ||
+       InpVolatilityLookbackBars<20 || InpVolatilityLookbackBars>300 ||
+       !MathIsValidNumber(InpHighVolAtrRatio) || InpHighVolAtrRatio<1.0 ||
+       !MathIsValidNumber(InpMinVolLotFactor) || InpMinVolLotFactor<=0.0 || InpMinVolLotFactor>1.0 ||
        InpAfterSessionOpenMinutes<0 || InpAfterSessionOpenMinutes>240 ||
        InpBeforeSessionCloseMinutes<0 || InpBeforeSessionCloseMinutes>240)
      {
@@ -716,6 +724,15 @@ bool PlaceSignal(const SignalData &signal)
      }
    double minimum=SymbolInfoDouble(g_symbol,SYMBOL_VOLUME_MIN);
    double step=SymbolInfoDouble(g_symbol,SYMBOL_VOLUME_STEP);
+   double volatility_factor=VolatilityLotFactor();
+   if(volatility_factor<=0.0 || step<=0.0)
+     {g_website_attempt_code=123;LogEvent("ORDER_BLOCKED","Missing ATR history for volatility-aware sizing");return(false);}
+   if(volatility_factor<1.0)
+     {
+      total_volume=NormalizeDouble(MathFloor(total_volume*volatility_factor/step+1.0e-9)*step,VolumeDigits(step));
+      if(total_volume<minimum-1.0e-8)
+        {g_website_attempt_code=124;LogEvent("ORDER_BLOCKED","Volatility-adjusted lot below broker minimum");return(false);}
+     }
    int remaining=(DemoWebsiteNoDailyLimitsEnabled() || InpMaxTradesPerDay==0) ? 1 : InpMaxTradesPerDay-CountTodayEntries();
    int legs=SPPlanLegCount(DemoWebsiteNoDailyLimitsEnabled() ? 1 : (InpUseSmallProfit ? InpMaxBasketPositions : 1),
                           remaining,IsHedgingAccount(),total_volume,minimum);
@@ -1637,6 +1654,32 @@ double ExecutionRiskBudget(const ENUM_ORDER_TYPE order_type,const double entry,c
      }
    return MathMin(budget,daily); // Daily loss allowance applies in every Demo mode.
   }
+// Scales DOWN lot size when closed-bar ATR exceeds its trailing baseline.
+// This is additional to ATR-derived stop distance and the account risk ceiling.
+double VolatilityLotFactor()
+  {
+   if(!InpUseVolatilityLotReduction)
+      return(1.0);
+   double values[];
+   int count=CopyBuffer(g_entry_atr_handle,0,1,InpVolatilityLookbackBars,values);
+   if(count<20)
+      return(0.0); // Fail closed: never guess volatility with missing ATR history.
+   double total=0.0;
+   for(int i=0;i<count-1;i++)
+     {
+      if(!MathIsValidNumber(values[i]) || values[i]<=0.0)
+         return(0.0);
+      total+=values[i];
+     }
+   double baseline=total/(count-1);
+   double current=values[count-1];
+   if(!MathIsValidNumber(current) || current<=0.0 || baseline<=0.0)
+      return(0.0);
+   if(current<=baseline*InpHighVolAtrRatio)
+      return(1.0);
+   return(MathMax(InpMinVolLotFactor,MathMin(1.0,baseline/current)));
+  }
+
 double CalculateVolume(const ENUM_ORDER_TYPE order_type,const double entry,const double stop_loss)
   {
    if(InpRiskPercent<=0.0 || entry<=0.0 || stop_loss<=0.0)
