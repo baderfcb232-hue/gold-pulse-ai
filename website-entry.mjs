@@ -63,12 +63,15 @@ export function websiteTradeDecision({enabled, snapshot: s, market: m, analysisP
   // to SCANNING after emitting a plan; do not demand a second M15/H1 agreement
   // for that already-issued recommendation. The remaining MT5/SL/risk/price
   // checks and the durable one-shot claim are unchanged.
-  const p = m?.currentSignal ||
-    m?.recentSignals?.find(q => q?.status === 'TRACKING' &&
-      q.issued_at <= now + 5 && now - q.issued_at <= 75 &&
-      q.expires_at > now && q.symbol === canonical &&
-      q.broker_symbol === s.symbol && q.source_id === m.source_id &&
-      q.source === m.source && (!requiredStrategy || q.strategy === requiredStrategy));
+  const freshMatching = q => q?.status === 'TRACKING' &&
+    q.issued_at <= now + 5 && now - q.issued_at <= 75 &&
+    q.expires_at > now && q.symbol === canonical &&
+    q.broker_symbol === s.symbol && q.source_id === m?.source_id &&
+    q.source === m?.source && (!requiredStrategy || q.strategy === requiredStrategy);
+  // A stale/wrong-source current pointer must not hide a newer valid broker plan.
+  // Keep the current pointer for precise rejection diagnostics if no match exists.
+  const p = (freshMatching(m?.currentSignal) ? m.currentSignal :
+    m?.recentSignals?.find(freshMatching)) || m?.currentSignal;
   // A strategy may revert to SCANNING after publishing. Never override
   // risk/news/closed-market/data-gap blocks (including stale calendars).
   if (!p || m.connection !== 'LIVE' ||

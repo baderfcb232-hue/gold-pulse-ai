@@ -75,6 +75,16 @@ test('website execution rejects unsafe account, stale source, old plans, foreign
     ['BELOW_MINIMUM_VOLUME',f=>f.snapshot.account.equity=1],['INSUFFICIENT_MARGIN',f=>f.snapshot.account.free_margin=0]
   ]){const f=decisionFixture();change(f);assert.equal(websiteTradeDecision(f).reason,reason,reason);}
 });
+test('stale current pointer does not hide a newer valid tracked recommendation',()=>{
+  const f=decisionFixture(), valid=f.market.currentSignal;
+  const stale={...valid,id:'stale-current',issued_at:NOW-90,expires_at:NOW-15};
+  f.market={...f.market,currentSignal:stale,recentSignals:[valid]};
+  const decision=websiteTradeDecision(f);
+  assert.equal(decision.reason,'WEBSITE_READY');
+  assert.equal(decision.plan.id,valid.id);
+  assert.equal(decision.plan.sl,valid.sl);
+  assert.equal(decision.plan.tp,valid.tp1);
+});
 test('website signals dispatch immediately from tracking even when scanner returns to SCANNING',()=>{
   const f=decisionFixture(),p=f.market.currentSignal;
   f.market={...f.market,currentSignal:null,recentSignals:[p],
