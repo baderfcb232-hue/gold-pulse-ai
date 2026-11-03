@@ -127,13 +127,19 @@ const volumeProfile=(bars,bins=12)=>{
   const max=byBin.indexOf(Math.max(...byBin));
   return low+(max+.5)*width; // tick-volume-derived POC proxy.
 };
-const nyHour=seconds=>new Intl.DateTimeFormat('en-US',{
+// ICU formatters own substantial native memory, which is not reflected in
+// V8 heap pressure. Never construct one for every candle on every quote.
+const nyFormatter=new Intl.DateTimeFormat('en-US',{
   timeZone:'America/New_York',hour:'2-digit',minute:'2-digit',hourCycle:'h23',
-  year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(seconds*1000));
+  year:'numeric',month:'2-digit',day:'2-digit'});
+const nyHour=seconds=>nyFormatter.format(new Date(seconds*1000));
 const openingRangeProxy=bars=>{
   const latest=nyHour(bars.at(-1).time).split(',')[0];
-  const first=bars.filter(b=>nyHour(b.time).split(',')[0]===latest &&
-    /, 08:(00|05|10)$/.test(nyHour(b.time)) /* not authoritative exchange session */);
+  const first=bars.filter(b=>{
+    const local=nyHour(b.time);
+    return local.split(',')[0]===latest &&
+      /, 08:(00|05|10)$/.test(local); /* not authoritative exchange session */
+  });
   // ORB is descriptive-only until broker session boundaries are supplied.
   return first.length>=3?{high:ext(first.slice(0,3),'high'),low:ext(first.slice(0,3),'low'),validated:false}:null;
 };
