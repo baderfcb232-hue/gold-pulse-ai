@@ -68,7 +68,8 @@ input bool            InpBlockIfCalendarFails   = true;
 
 //--- position management
 input group "Open-position management"
-input bool            InpUseHalfTargetProfitLock = true;   // Lock 50% of the actual entry-to-TP distance
+input bool            InpUseHalfTargetProfitLock = true;   // Lock SL at midpoint after a broker-safe breakout
+input bool            InpUseAutoHalfClose       = true;   // Close half the volume once SL secures midpoint
 input bool            InpUseBreakEven           = false;
 input double          InpBreakEvenTriggerAtr    = 1.00;
 input double          InpBreakEvenOffsetAtr     = 0.05;
@@ -172,6 +173,7 @@ bool   BuildSignal(SignalData &signal);
 bool   PlaceSignal(const SignalData &signal);
 void   ManageOpenPositions();
 void   ManageHalfTargetProfitLock();
+void   ManageHalfTargetPartialClose();
 bool   IsEmergencyStopActive();
 void   CloseOwnPositions();
 bool   HasOwnPosition();
@@ -868,6 +870,72 @@ void ManageHalfTargetProfitLock()
      }
   }
 
+// Perform a single 50% partial close only AFTER the SL already protects 50% TP.
+// A claim is flushed BEFORE submission to prevent duplicate close after a timeout.
+// Operators must inspect the MT5 deal/history for any UNCERTAIN attempt; never
+// automatically retry an ambiguous close. Applies to hedging accounts only.
+void ManageHalfTargetPartialClose()
+  {
+   if(!InpUseAutoHalfClose || !IsHedgingAccount())
+      return;
+   MqlTick tick;
+   if(!SymbolInfoTick(g_symbol,tick) || tick.bid<=0.0 || tick.ask<tick.bid ||
+      ServerNow()-tick.time>10 || tick.time>ServerNow()+2)
+      return;
+
+   double minimum=SymbolInfoDouble(g_symbol,SYMBOL_VOLUME_MIN);
+   double step=SymbolInfoDouble(g_symbol,SYMBOL_VOLUME_STEP);
+   if(minimum<=0.0 || step<=0.0)
+      return;
+
+   for(int i=PositionsTotal()-1;i>=0;i--)
+     {
+      ulong ticket=PositionGetTicket(i);
+      if(!ticket || !PositionSelectByTicket(ticket) || !IsOwnPositionSelected())
+         continue;
+
+      long side=PositionGetInteger(POSITION_TYPE);
+      bool buy=(side==POSITION_TYPE_BUY);
+      if(!buy && side!=POSITION_TYPE_SELL)
+         continue;
+      double entry=PositionGetDouble(POSITION_PRICE_OPEN);
+      double tp=PositionGetDouble(POSITION_TP);
+      double sl=PositionGetDouble(POSITION_SL);
+      double volume=PositionGetDouble(POSITION_VOLUME);
+      if(entry<=0.0 || tp<=0.0 || sl<=0.0 || (buy ? tp<=entry : tp>=entry))
+         continue;
+      double midpoint=entry+0.5*(tp-entry);
+      if((buy && (tick.bid<=midpoint || sl<midpoint-g_point)) ||
+         (!buy && (tick.ask>=midpoint || sl>midpoint+g_point)))
+         continue;
+
+      double half=MathFloor((volume*0.5)/step+1.0e-8)*step;
+      half=NormalizeDouble(half,VolumeDigits(step));
+      // When 0.01 is the minimum, a 0.01 position cannot be halved.
+      if(half<minimum || volume-half<minimum-1.0e-8)
+         continue;
+
+      long position_id=PositionGetInteger(POSITION_IDENTIFIER);
+      string key=NABDKey("PC_"+(string)position_id);
+      if(GlobalVariableCheck(key))
+         continue;
+      if(GlobalVariableSet(key,1.0)==0)
+         {LogEvent("HALF_CLOSE_BLOCKED","Cannot persist a partial-close claim");continue;}
+      GlobalVariablesFlush();
+
+      bool sent=g_trade.PositionClosePartial(ticket,half,InpDeviationPoints);
+      uint code=g_trade.ResultRetcode();
+      bool confirmed=sent && IsSuccessfulRetcode(code) &&
+                    PositionSelectByTicket(ticket) &&
+                    PositionGetDouble(POSITION_VOLUME)<volume-0.5*step;
+      GlobalVariableSet(key,confirmed?2.0:3.0);
+      GlobalVariablesFlush();
+      LogEvent(confirmed?"HALF_TARGET_PARTIAL_CLOSED":"HALF_TARGET_PARTIAL_UNCERTAIN",
+               StringFormat("ticket=%I64u,volume=%.4f,half=%.4f,retcode=%u,%s",
+                            ticket,volume,half,code,g_trade.ResultRetcodeDescription()));
+     }
+  }
+
 void ManageOpenPositions()
   {
    if(!ExecutionPermissionsAvailable())
@@ -876,6 +944,7 @@ void ManageOpenPositions()
       return;
    // Independent of ATR trail/small-profit and website unlimited-entry modes.
    ManageHalfTargetProfitLock();
+   ManageHalfTargetPartialClose();
    if(DemoWebsiteNoDailyLimitsEnabled())
      {
       SyncCycleState();
