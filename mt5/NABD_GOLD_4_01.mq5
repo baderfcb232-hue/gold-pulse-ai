@@ -2121,7 +2121,8 @@ string NBPositions(const long offset)
       ulong ticket=PositionGetTicket(i);
       if(!ticket || !IsOwnPositionSelected())continue;
       if(n++>0)json+=",";
-      json+="{\"ticket\":"+NBQ((string)ticket)+",\"side\":"+NBQ(PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY?"BUY":"SELL")+
+      json+="{\"ticket\":"+NBQ((string)ticket)+",\"position_id\":"+NBQ((string)PositionGetInteger(POSITION_IDENTIFIER))+
+             ",\"side\":"+NBQ(PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY?"BUY":"SELL")+
             ",\"volume\":"+NBD(PositionGetDouble(POSITION_VOLUME))+
             ",\"entry\":"+NBD(PositionGetDouble(POSITION_PRICE_OPEN),g_digits)+
             ",\"sl\":"+NBD(PositionGetDouble(POSITION_SL),g_digits)+",\"tp\":"+NBD(PositionGetDouble(POSITION_TP),g_digits)+
