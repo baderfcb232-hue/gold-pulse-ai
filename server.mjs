@@ -6,6 +6,7 @@ import {randomBytes, timingSafeEqual, createHash} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
 import {analyze, previewFlexibleAnalysis, sourceAnalysis, cleanSnapshot, trackPlan, positionSize, text, defaults, botHeartbeatFresh, BOT_CONTROL_TTL} from './engine.mjs';
 import {mt5Archive} from './archive.mjs';
+import {summarizeGoldPerformance} from './performance.mjs';
 import {createMarketFeed} from './market.mjs';
 import {createNewsFeed} from './news.mjs';
 
