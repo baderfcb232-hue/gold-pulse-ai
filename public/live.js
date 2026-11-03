@@ -49,6 +49,9 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   function configureChart() {
     if (symbol === chartSourceKey) return;
     chartSourceKey = symbol; tf = 'M15'; chartKey = ''; brokerChartKey = ''; brokerChartData = null;
+    // Show BTC Fusion diagnostics without requiring an extra click.
+    const details = $('scalp-checks')?.closest?.('details');
+    if (details) details.open = symbol === 'BTCUSD';
     $('live-chart-tfs').replaceChildren(...['M1', 'M5', 'M15', 'H1', 'H4'].map(value => {
       const b = node('button', value === tf ? 'active' : '', tfButtons[value]);
       b.dataset.tf = value; b.setAttribute('aria-pressed', String(value === tf)); return b;

@@ -44,23 +44,36 @@ function candlesReady(snapshot, now) {
 }
 export function analyzeBtcFusion(snapshot, now = Date.now() / 1000) {
   const legacy = analyze(snapshot, now, {...defaults, maxSpreadPoints: 100000000});
+  // Diagnostic-only prerequisites: pending steps are never counted as passed.
+  // These do not alter trading gates, risk caps, or order dispatch.
+  const readinessChecks = [
+    'وصول سعر بيتكوين حديث من MT5',
+    'توفر 220 شمعة مغلقة حديثة لكل فريم',
+    'صلاحية التقويم الاقتصادي',
+    'خارج نافذة منع الأخبار عالية التأثير',
+    'صحة سعر ومواصفات عقد الوسيط',
+    'السبريد ضمن حدود الوسيط وATR',
+    'وجود اتجاه واضح على M15',
+    'توافق اتجاه M15 مع H1 أو H4'
+  ].map(name => ({name, pass: null}));
+  const mark = (index, pass) => (readinessChecks[index].pass = Boolean(pass));
   const base = {...legacy, strategy: BTC_FUSION_STRATEGY, decision: 'WAIT', plan: null,
-    checks: [], score: null, risk: 'CAUTION', reasons: []};
+    checks: [], readinessChecks, score: null, risk: 'CAUTION', reasons: []};
   const wait = (reason, risk = 'CAUTION', extras = {}) => ({...base, risk, reasons: [reason], ...extras});
   if (!snapshot || !/^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(snapshot.symbol || ''))
     return wait('FUSION: BTCUSD broker MT5 data required.', 'BLOCKED');
-  if (legacy.connection !== 'LIVE') return wait('FUSION: stale or disconnected broker quotes.', 'BLOCKED');
-  if (!candlesReady(snapshot, now)) return wait('FUSION: need 220 recent closed consecutive M5/M15/H1/H4 bars.', 'BLOCKED');
+  if (!mark(0, legacy.connection === 'LIVE')) return wait('FUSION: stale or disconnected broker quotes.', 'BLOCKED');
+  if (!mark(1, candlesReady(snapshot, now))) return wait('FUSION: need 220 recent closed consecutive M5/M15/H1/H4 bars.', 'BLOCKED');
   const calendar = snapshot.calendar;
-  if (calendar?.status !== 'ok' || !Number.isFinite(calendar.updated_at) ||
-      now - calendar.updated_at > defaults.calendarTtl || !Array.isArray(calendar.events))
+  if (!mark(2, calendar?.status === 'ok' && Number.isFinite(calendar.updated_at) &&
+      now - calendar.updated_at <= defaults.calendarTtl && Array.isArray(calendar.events)))
     return wait('FUSION: economic calendar missing or stale.', 'BLOCKED');
   const news = calendar.events.find(e => e.currency === 'USD' && e.importance === 3 &&
     e.time - defaults.newsBefore <= now && now <= e.time + defaults.newsAfter);
-  if (news) return wait('FUSION: USD high-impact news window: ' + news.name, 'BLOCKED', {news_block: news});
+  if (!mark(3, !news)) return wait('FUSION: USD high-impact news window: ' + news.name, 'BLOCKED', {news_block: news});
   const {M5: m5, M15: m15, H1: h1, H4: h4} = snapshot.candles;
   const point = snapshot.spec?.point, tick = snapshot.spec?.tick_size, spread = snapshot.ask - snapshot.bid;
-  if (!(snapshot.bid > 0 && snapshot.ask >= snapshot.bid && point > 0 && tick > 0))
+  if (!mark(4, snapshot.bid > 0 && snapshot.ask >= snapshot.bid && point > 0 && tick > 0))
     return wait('FUSION: invalid broker quote/spec.', 'BLOCKED');
   const mid = (snapshot.ask + snapshot.bid) / 2;
   const spreadCap = Math.max(1, Math.floor(mid * .001 / point));
@@ -70,9 +83,9 @@ export function analyzeBtcFusion(snapshot, now = Date.now() / 1000) {
   const last = m5.at(-1), prev = m5.at(-2), vol = atr(m5, 14), momentum = rsi(close5, 14);
   if (!(vol > 0) || !Number.isFinite(momentum)) return wait('FUSION: invalid ATR/RSI.', 'BLOCKED');
   const spreadOk = spread / point <= allowedPoints && spread <= vol * .18;
-  if (!spreadOk) return wait('FUSION: excessive broker spread relative to ATR.', 'BLOCKED');
+  if (!mark(5, spreadOk)) return wait('FUSION: excessive broker spread relative to ATR.', 'BLOCKED');
   const side = sideOf(ema(close15, 8), ema(close15, 21), m15.at(-1).close);
-  if (side === 'WAIT') return wait('FUSION: waiting for M15 EMA8/21 bias.');
+  if (!mark(6, side !== 'WAIT')) return wait('FUSION: waiting for M15 EMA8/21 bias.');
   const buy = side === 'BUY', sign = buy ? 1 : -1;
   const ema5Fast = ema(close5, 8), ema5Slow = ema(close5, 21);
   const trendM5 = buy ? ema5Fast > ema5Slow && last.close > ema5Fast : ema5Fast < ema5Slow && last.close < ema5Fast;
@@ -82,7 +95,8 @@ export function analyzeBtcFusion(snapshot, now = Date.now() / 1000) {
   const h4Raw = sideOf(ema(h4Closes, 8), ema(h4Closes, 21), h4.at(-1).close);
   const h4Side = h4Raw === 'BUY' && h4.at(-1).close > ema(h4Closes, 200) ? 'BUY' :
     h4Raw === 'SELL' && h4.at(-1).close < ema(h4Closes, 200) ? 'SELL' : 'WAIT';
-  if (h1Side !== side && h4Side !== side) return wait('FUSION: M15 conflicts with H1 and H4.');
+  // Still block mismatched timeframes, but evaluate all read-only diagnostics first.
+  const higherTimeframeAligned = mark(7, h1Side === side || h4Side === side);
   const prior3 = m5.slice(-4, -1), prior6 = m5.slice(-7, -1);
   const upper = Math.max(...prior3.map(x => x.high)), lower = Math.min(...prior3.map(x => x.low));
   const swingHigh = Math.max(...prior6.map(x => x.high)), swingLow = Math.min(...prior6.map(x => x.low));
@@ -108,6 +122,8 @@ export function analyzeBtcFusion(snapshot, now = Date.now() / 1000) {
   ];
   const score = checks.reduce((sum, c) => sum + (c.pass ? c.weight : 0), 0);
   const assessed = {...base, checks, score, risk:'ASSESSED', reasons:checks.filter(c => !c.pass).map(c => c.name)};
+  if (!higherTimeframeAligned)
+    return {...assessed, risk:'CAUTION', reasons:['FUSION: M15 conflicts with H1 and H4.']};
   if (!trendM5 || !goodRsi || !(breakout || sweep) || !near || score < 75)
     return {...assessed, reasons: ['FUSION: entry gates incomplete or score below 75.', ...assessed.reasons]};
   const entry = align(price, snapshot.spec);
