@@ -33,7 +33,10 @@ export function automaticRiskSizing(snapshot, plan = null, now = Date.now() / 10
   // Keep legacy terminals and real accounts on their strict percentage budget.
   const demoMinimum = snapshot.execution.demo === true && /just.?markets/i.test(snapshot.broker || '') &&
     snapshot.execution.minimum_volume_fallback === true;
-  const noDailyLimits = demoMinimum && snapshot.execution.website_recommendations === true &&
+  // Gold always respects the MT5 daily loss allowance, including unlimited-entry Demo.
+  // Keep the existing BTC estimate behavior unchanged in this gold-only update.
+  const isGold = /^XAUUSD(?:[._#]|$)/i.test(snapshot.symbol || '');
+  const noDailyLimits = !isGold && demoMinimum && snapshot.execution.website_recommendations === true &&
     snapshot.execution.demo_recommendations === true && snapshot.execution.website_no_daily_limits === true;
   const remaining = snapshot.execution.daily_risk_remaining;
   if (demoMinimum && result.estimate.code === 'BELOW_MINIMUM_VOLUME') {
