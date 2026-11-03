@@ -104,3 +104,26 @@ test('fusion is monitoring only without an independent gold Demo opt-in',async t
  assert.throws(()=>createApplication({config:{goldSignalStrategy:'FUSION',goldFusionDemoAutoExecution:'true'}}),
    /Invalid NABD_GOLD_FUSION_DEMO_AUTOTRADE/);
 });
+
+test('fusion trend engine can produce symmetric, well-oriented BUY and SELL plans',()=>{
+ for (const side of ['BUY','SELL']) {
+   const x=raw();
+   if(side==='SELL'){
+     for(const tf of ['M5','M15','H1','H4'])
+       for(const c of x.candles[tf]){
+         const {open,close,high,low}=c;
+         c.open=8000-open;c.close=8000-close;c.high=8000-low;c.low=8000-high;
+       }
+   }
+   x.bid=x.candles.M5.at(-1).close-.01;x.ask=x.bid+.03;
+   const analysis=analyzeGoldFusion(cleanSnapshot(x,NOW),NOW);
+   assert.equal(analysis.strategy,GOLD_FUSION_STRATEGY);
+   assert.equal(analysis.regime,'TREND');
+   assert.equal(analysis.plan?.side,side,JSON.stringify({side,score:analysis.score,
+     checks:analysis.checks,reasons:analysis.reasons}));
+   const p=analysis.plan;
+   assert.ok(p.sl>0 && p.tp1>0 && p.tp2>0);
+   assert.ok(side==='BUY'?p.sl<p.entry&&p.entry<p.tp1:p.tp1<p.entry&&p.entry<p.sl);
+   assert.equal(p.status,'TRACKING');
+ }
+});
