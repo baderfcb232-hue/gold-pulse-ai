@@ -2414,7 +2414,7 @@ void NBBOnTimer()
       NBStatus("Loading M5, M15, H1 and H4 history from MT5...");
       candles="{\"M5\":"+NBCandles(PERIOD_M5,offset)+",\"M15\":"+NBCandles(PERIOD_M15,offset)+
         ",\"H1\":"+NBCandles(PERIOD_H1,offset)+",\"H4\":"+NBCandles(PERIOD_H4,offset)+
-        (NABD_IS_BTC ? "}" : ",\"M1\":"+NBCandles(PERIOD_M1,offset,90)+"}");
+        ",\"M1\":"+NBCandles(PERIOD_M1,offset,90)+"}";
       calendar=g_nb_calendar;
       if(btcOneSecond){cachedBtcCandles=candles;lastBtcHistory=GetTickCount64();}
         }
