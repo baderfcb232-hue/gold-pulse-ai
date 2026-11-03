@@ -97,12 +97,15 @@ const candleSignals=(bars)=>{
     pinSell:upper>=body*2&&lower<=body,inside:b.high<p.high&&b.low>p.low};
 };
 const dailyContext=rows=>{
-  if(!Array.isArray(rows)||rows.length<56)return {turtle:'UNAVAILABLE',pivots:null};
+  if(!Array.isArray(rows)||rows.length<56)return {turtle20:'UNAVAILABLE',turtle55:'UNAVAILABLE',pivots:null};
   const previous=rows.at(-1),before=rows.slice(-56,-1);
-  const turtle=previous.close>ext(before,'high')?'BUY':
+  const turtle55=previous.close>ext(before,'high')?'BUY':
     previous.close<ext(before,'low')?'SELL':'NEUTRAL';
+  const prior20=rows.slice(-21,-1);
+  const turtle20=previous.close>ext(prior20,'high')?'BUY':
+    previous.close<ext(prior20,'low')?'SELL':'NEUTRAL';
   const {high:h,low:l,close:c}=previous,pivot=(h+l+c)/3,range=h-l;
-  return {turtle,pivots:{classic:pivot,r1:2*pivot-l,s1:2*pivot-h,
+  return {turtle20,turtle55,pivots:{classic:pivot,r1:2*pivot-l,s1:2*pivot-h,
     camarillaR3:c+range*1.1/4,camarillaS3:c-range*1.1/4}};
 };
 const fibLevels=(bars)=>{
@@ -130,7 +133,7 @@ const nyHour=seconds=>new Intl.DateTimeFormat('en-US',{
 const openingRangeProxy=bars=>{
   const latest=nyHour(bars.at(-1).time).split(',')[0];
   const first=bars.filter(b=>nyHour(b.time).split(',')[0]===latest &&
-    /, 0?8:0[0-9]/.test(nyHour(b.time)) /* not authoritative exchange session */);
+    /, 08:(00|05|10)$/.test(nyHour(b.time)) /* not authoritative exchange session */);
   // ORB is descriptive-only until broker session boundaries are supplied.
   return first.length>=3?{high:ext(first.slice(0,3),'high'),low:ext(first.slice(0,3),'low'),validated:false}:null;
 };
@@ -172,7 +175,8 @@ export function analyzeGoldFusion(snapshot,now=Date.now()/1000,settings=defaults
   const mom=macd(closes),rel=rsi(closes,14),sto=oscillator(m5,14);
   const bb=bands(closes),volumeVwap=vwap(m5),adx5=adx(m5),st=supertrend(m5);
   const ich=cloud(m5),pattern=candleSignals(m5),daily=dailyContext(snapshot.daily_candles);
-  const turtle=daily.turtle,fib=fibLevels(m5),zones=candleZones(m5),fvgSide=fvg(m5),poc=volumeProfile(m5);
+  const turtle20=daily.turtle20,turtle55=daily.turtle55,
+    fib=fibLevels(m5),zones=candleZones(m5),fvgSide=fvg(m5),poc=volumeProfile(m5);
   const volumeAvg=mean(m5.slice(-21,-1).map(x=>x.tick_volume||0));
   const volumeConfirmed=volumeAvg>0&&last.tick_volume>=volumeAvg*1.15;
   const prior20=m5.slice(-21,-1),brBuy=last.close>ext(prior20,'high'),
@@ -218,7 +222,8 @@ export function analyzeGoldFusion(snapshot,now=Date.now()/1000,settings=defaults
   const score=checks.reduce((v,x)=>v+(x.pass?x.weight:0),0);
   const context={adx:adx5,macd:mom.histogram,supertrend:st,ichimoku:ich,
     bollinger:bb,rsi:rel,stochastic:sto,tickVwap:volumeVwap,
-    turtle55Daily:turtle,pivots:daily.pivots,volumeProfilePocProxy:poc,
+    turtle20Daily:turtle20,turtle55Daily:turtle55,
+    pivots:daily.pivots,volumeProfilePocProxy:poc,
     fibRetracements:fib,fvgThreeBar:fvgSide,orderBlockProxy:zones,
     openingRangeProxy:openingRangeProxy(m5)};
   const partial={...empty,regime,checks,score,indicators:context,risk:'ASSESSED',
