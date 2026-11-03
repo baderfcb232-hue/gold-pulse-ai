@@ -52,3 +52,34 @@ test('Fusion is read-only without explicit Demo execution permission',async t=>{
 test('invalid Fusion execution option fails validation',()=>{
  assert.throws(()=>createApplication({config:{btcFusionDemoAutoExecution:'true'}}),/Invalid NABD_BTC_FUSION_DEMO_AUTOTRADE/);
 });
+
+// The live dashboard must show why a BTC Fusion scan is waiting, not a blank score.
+test('BTC Fusion timeframe conflict exposes nine evaluated checks but cannot open a plan',()=>{
+  const raw=source();
+  for(const tf of ['H1','H4']) for(const bar of raw.candles[tf]) {
+    bar.open=4096;bar.close=4096;bar.high=4096.3;bar.low=4095.7;
+  }
+  const snapshot=cleanSnapshot(raw,NOW);
+  const analysis=analyzeBtcFusion(snapshot,NOW);
+  assert.match(analysis.reasons[0],/M15 conflicts with H1 and H4/);
+  assert.equal(analysis.plan,null);
+  assert.equal(analysis.decision,'WAIT');
+  assert.equal(analysis.readinessChecks.length,8);
+  assert.equal(analysis.readinessChecks[7].pass,false);
+  assert.equal(analysis.checks.length,9);
+  assert.ok(Number.isFinite(analysis.score));
+  assert.equal(analysis.checks.find(c=>c.name==='H1 context').pass,false);
+  assert.equal(analysis.checks.find(c=>c.name==='H4 context').pass,false);
+  const displayed=brokerBtcMarket(snapshot,NOW,{btcStrategy:'FUSION'}).analysis;
+  assert.deepEqual(displayed.checks,analysis.checks);
+  assert.deepEqual(displayed.readinessChecks,analysis.readinessChecks);
+  assert.equal(displayed.plan,null);
+});
+test('BTC Fusion displays failed early prerequisite and leaves later gates pending',()=>{
+  const raw=source();raw.quote_at=NOW-60;
+  const analysis=analyzeBtcFusion(cleanSnapshot(raw,NOW),NOW);
+  assert.equal(analysis.plan,null);
+  assert.equal(analysis.score,null);
+  assert.equal(analysis.readinessChecks[0].pass,false);
+  assert.ok(analysis.readinessChecks.slice(1).every(c=>c.pass===null));
+});
