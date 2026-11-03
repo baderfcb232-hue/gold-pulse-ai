@@ -205,7 +205,11 @@ export function analyzeGoldFusion(snapshot,now=Date.now()/1000,settings=defaults
   const prior20=m5.slice(-21,-1),brBuy=last.close>ext(prior20,'high'),
     brSell=last.close<ext(prior20,'low');
   const breakout=volumeConfirmed && (brBuy||brSell) && adx5>=20;
-  const regime=breakout?'BREAKOUT':adx5>=22&&m15Side!=='WAIT'?'TREND':
+  // A confirmed early trend should not be trapped in the 19-22 ADX gap.
+  // Demand independent M5/M15, Supertrend and MACD alignment before evaluating it.
+  const earlyTrend=adx5>=19&&adx5<22&&m15Side!=='WAIT'&&trend===m15Side&&
+    st===m15Side&&(m15Side==='BUY'?mom.histogram>0:mom.histogram<0);
+  const regime=breakout?'BREAKOUT':(adx5>=22||earlyTrend)&&m15Side!=='WAIT'?'TREND':
     adx5<19?'RANGE':'TRANSITION';
   gate(7,regime!=='TRANSITION');
   if(regime==='TRANSITION')return wait('REGIME_TRANSITION_NO_ENTRY','CAUTION',{regime,indicators:{adx:adx5},
@@ -253,7 +257,9 @@ export function analyzeGoldFusion(snapshot,now=Date.now()/1000,settings=defaults
     openingRangeProxy:openingRangeProxy(m5)};
   const partial={...empty,regime,checks,score,indicators:context,risk:'ASSESSED',
     reasons:checks.filter(x=>!x.pass).map(x=>x.name)};
-  if(side==='WAIT' || score<75 || checks.filter(x=>x.pass).length<4)
+  // Lower-ADX early trends need a higher score and more agreeing signals.
+  if(side==='WAIT' || score<(earlyTrend?85:75) ||
+      checks.filter(x=>x.pass).length<(earlyTrend?5:4))
     return {...partial,risk:'CAUTION',reasons:side==='WAIT'?['NO_REGIME_ENTRY_SETUP']:
       ['INSUFFICIENT_INDEPENDENT_CONFIRMATION']};
   const buy=side==='BUY';
