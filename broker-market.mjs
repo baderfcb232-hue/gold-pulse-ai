@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {analyze, TF_SECONDS, defaults} from './engine.mjs';
 import {analyzeGoldScalp,goldScalpBarFreshness} from './strategies/gold-scalping.mjs';
+import {analyzeGoldFusion} from './strategies/gold-fusion.mjs';
 import {analyzeBtcScalp,btcScalpBarFreshness} from './strategies/btc-scalping.mjs';
 import {analyzeBtcFusion} from './strategies/btc-fusion-scalper.mjs';
 
@@ -17,14 +18,15 @@ export function brokerInstrumentMarket(snapshot, now, {goldStrategy = 'EMA_LEGAC
   const sourceId = 'MT5:' + createHash('sha256')
     .update(JSON.stringify([snapshot.account_ref, snapshot.broker, snapshot.symbol])).digest('hex').slice(0, 24);
   const source = 'MT5 · ' + snapshot.broker;
-  const a = gold && goldStrategy === 'SCALP' ? analyzeGoldScalp(snapshot,now) :
+  const a = gold && goldStrategy === 'FUSION' ? analyzeGoldFusion(snapshot,now) :
+    gold && goldStrategy === 'SCALP' ? analyzeGoldScalp(snapshot,now) :
     btc && btcStrategy === 'FUSION' ? analyzeBtcFusion(snapshot,now) :
     btc && btcStrategy === 'SCALP' ? analyzeBtcScalp(snapshot,now) :
     analyze(snapshot, now, btc ? {maxSpreadPoints: Math.max(1, btcSpreadPoints)} : undefined);
   const incomplete = Object.values(a.frames).some(f => f.direction === 'UNKNOWN');
   // For gold scalp status, use the same closed-candle rules as the scalp
   // analyzer itself. Legacy and BTC retain their original timeframe policy.
-  const oldBars = gold && goldStrategy === 'SCALP'
+  const oldBars = gold && (goldStrategy === 'SCALP' || goldStrategy === 'FUSION')
     ? !goldScalpBarFreshness(snapshot,now).fresh
     : btc && btcStrategy === 'SCALP' ? !btcScalpBarFreshness(snapshot,now).fresh
     : Object.entries(TF_SECONDS).some(([tf, step]) => {
@@ -51,6 +53,9 @@ export function brokerInstrumentMarket(snapshot, now, {goldStrategy = 'EMA_LEGAC
     market_hours: gold ? 'جلسات الذهب لدى البروكر؛ إصدار الخطط يحتاج سعرًا حديثًا وشموعًا مغلقة' : 'جلسات بيتكوين لدى البروكر؛ إصدار الخطط يتطلب شموع MT5 حديثة',
     feed_error: null,
     analysis: {strategy: a.strategy, decision: a.decision, status, frames: a.frames,
+      gold_research: gold && goldStrategy === 'FUSION' ? {regime: a.regime || 'WAIT',
+        indicators: a.indicators || null, news_shadow: a.news_shadow || null,
+        status: a.risk === 'BLOCKED' ? 'ENTRY_BLOCKED' : 'OBSERVATION_ONLY'} : null,
       checks: a.checks, score: a.score, setup: null, plan,
       reason: a.reasons.join(' ') || 'نبحث عن اكتمال شروط الدخول على شموع البروكر.',
       reference_only: true, calendar_available: calendarAvailable,

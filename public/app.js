@@ -181,7 +181,7 @@ async function loadPrivate(){
 }
 function renderPrivate(){
   renderLink();$('account-lock').hidden=authenticated;$('account-content').hidden=!authenticated;
-  if(!authenticated){replace('account-metrics');replace('automatic-risk-content');replace('positions-list');replace('commands-list');replace('deals-list',empty('سجّل دخول المشغّل لرؤية سجل حسابك.'));return;}
+  if(!authenticated){replace('account-metrics');replace('automatic-risk-content');replace('positions-list');replace('commands-list');replace('deals-list',empty('سجّل دخول المشغّل لرؤية سجل حسابك.'));renderActualPerformance();return;}
   const a=controlAccount()?.account,currency=a?.currency||controlState()?.spec?.currency||'';
   replace('account-metrics',metric('الرصيد',num(a?.balance),currency),metric('حقوق الحساب',num(a?.equity),currency),metric('الهامش المتاح',num(a?.free_margin),currency),metric('ربح/خسارة عائمة',num(a?.floating),currency));
   renderAutomaticRisk();
@@ -335,7 +335,35 @@ function renderExecution(){
     button.title=blockers.join(' · ')||'سيُطلب التأكيد قبل إرسال الأمر إلى MT5.';
   });
 }
-function renderDeals(){if(!authenticated)return;const rows=privateData?.deals||[];if(!rows.length){replace('deals-list',empty('لم تصل عمليات MT5 فعلية بعد.'));return;}const wrap=e('div','table-wrap'),table=e('table'),head=e('thead'),hr=e('tr');for(const t of ['الوقت','رقم العملية','النوع','الحركة','اللوت','ربح/خسارة','العمولة','التبييت','الرسوم','الصافي'])hr.append(e('th','',t));head.append(hr);const tbody=e('tbody');for(const d of rows){const tr=e('tr'),net=d.profit+d.commission+d.swap+d.fee;for(const v of [time(d.time,true),d.ticket,sides[d.side],d.entry_type==='IN'?'دخول':d.entry_type==='OUT'?'خروج':d.entry_type,num(d.volume,3),num(d.profit),num(d.commission),num(d.swap),num(d.fee),num(net)])tr.append(e('td','',v));tbody.append(tr);}table.append(head,tbody);wrap.append(table);replace('deals-list',wrap);}
+function renderActualPerformance(){
+  const box=$('actual-performance-metrics'),note=$('actual-performance-note');
+  if(!box || !note)return;
+  if(!authenticated){
+    box.replaceChildren();note.textContent='سجّل دخول المشغّل لعرض أداء الذهب الفعلي.';
+    return;
+  }
+  const p=privateData?.performance;
+  if(!p?.available){
+    box.replaceChildren();note.textContent='لم تتوفر بيانات الحساب الفعلية لحساب نسبة الأرباح.';
+    return;
+  }
+  const sign=n=>!Number.isFinite(n)?'—':(n>0?'+':'')+num(n);
+  const pct=n=>!Number.isFinite(n)?'—':(n>0?'+':'')+num(n,2)+'%';
+  const cur=p.currency||privateData?.account?.currency||'';
+  box.replaceChildren(
+    metric('صافي ربح اليوم',sign(p.daily?.net)+' '+cur,'صفقات الذهب المحققة'),
+    metric('عائد اليوم التقريبي',pct(p.daily?.returnPercentEstimate),'مقارنة برأس مال البداية المقدّر'),
+    metric('صافي ربح الشهر',sign(p.monthly?.net)+' '+cur,'صفقات الذهب المحققة'),
+    metric('عائد الشهر التقريبي',pct(p.monthly?.returnPercentEstimate),'مقارنة برأس مال البداية المقدّر'),
+    metric('نسبة الصفقات الرابحة اليوم',pct(p.daily?.winRatePercent),'من '+num(p.daily?.closedTrades,0)+' صفقة مغلقة'),
+    metric('نسبة الصفقات الرابحة الشهر',pct(p.monthly?.winRatePercent),'من '+num(p.monthly?.closedTrades,0)+' صفقة مغلقة'),
+    metric('معامل الربح الشهري',num(p.monthly?.profitFactor),'من الصفقات المغلقة'),
+    metric('الربح/الخسارة العائمة للذهب',sign(p.floatingGold)+' '+cur,'لا تدخل في الربح المحقق')
+  );
+  const stale=privateData?.lastUpdate && now()-privateData.lastUpdate>10;
+  note.textContent=(stale?'تنبيه: بيانات MT5 متأخرة. ':'')+(p.caveat||'');
+}
+function renderDeals(){renderActualPerformance();if(!authenticated)return;const rows=privateData?.deals||[];if(!rows.length){replace('deals-list',empty('لم تصل عمليات MT5 فعلية بعد.'));return;}const wrap=e('div','table-wrap'),table=e('table'),head=e('thead'),hr=e('tr');for(const t of ['الوقت','رقم العملية','النوع','الحركة','اللوت','ربح/خسارة','العمولة','التبييت','الرسوم','الصافي'])hr.append(e('th','',t));head.append(hr);const tbody=e('tbody');for(const d of rows){const tr=e('tr'),net=d.profit+d.commission+d.swap+d.fee;for(const v of [time(d.time,true),d.ticket,sides[d.side],d.entry_type==='IN'?'دخول':d.entry_type==='OUT'?'خروج':d.entry_type,num(d.volume,3),num(d.profit),num(d.commission),num(d.swap),num(d.fee),num(net)])tr.append(e('td','',v));tbody.append(tr);}table.append(head,tbody);wrap.append(table);replace('deals-list',wrap);}
 function confirmCommand(action,ticket='0'){if(!authenticated){$('login-dialog').showModal();return;}const issues=getControlBlockers(action);if(issues.length){toast(issues.join(' · '),true);return;}pendingCommand={action,ticket,symbol:controlMarket,...(action==='PARTIAL_CLOSE'?{fraction:.5}:{})};put('command-title',controlName()+' · '+actions[action]);put('command-detail',action==='PAUSE'?'سيوقف البوت فتح صفقات جديدة، مع استمرار إدارة الصفقات القائمة.':action==='RESUME'?'سيُرفع إيقاف الدخول. التنفيذ يبقى خاضعًا لإعدادات البوت والفلاتر في MT5.':action==='CLOSE_ALL'?'سيحاول البوت إغلاق صفقاته المرتبطة بهذا الرمز والرقم السحري، بالسعر المتاح.':action==='BREAK_EVEN'?`سيُطلب نقل ستوب الصفقة #${ticket} لسعر الدخول إذا سمحت شروط البروكر. تكاليف الصفقة قد تجعل النتيجة غير صفرية.`:`سيُرسل طلب ${actions[action]} #${ticket} بالسعر المتاح، وينتظر تأكيد MT5.`);$('command-dialog').showModal();}
 function renderDiagnostics(){const s=state||{},at=s.bridgeReceivedAt,bridgeRecent=at>0&&now()-at<=20,entries=[['حالة المصدر',labels[effectiveConnection()]||'—'],['وصول الجسر',!at?'لم يصل تحديث':bridgeRecent?'إرسال حديث':'الإرسال متوقف أو متأخر'],['آخر وصول من الجسر',time(at,true)],['آخر نبض للبوت',time(s.bot?.heartbeat_at,true)],['اتصال المنصة بالبروكر',!at?'غير معروف':!bridgeRecent?'آخر حالة محفوظة؛ ننتظر تحديثًا':s.terminalConnected?'متصل':'منقطع'],['البروكر',s.broker||'لم يصل'],['الرمز',s.symbol||'XAUUSD'],['آخر سعر',time(s.lastUpdate,true)],['نوع السبريد','نقاط البروكر'],['قيمة التيك للوت',num(s.spec?.tick_value_loss)+' '+(s.spec?.currency||'')],['أصغر لوت',num(s.spec?.volume_min,3)],['التحكم الآمن',s.controlsConfigured?'مضبوط بالخادم':'يحتاج ضبط الرموز بالخادم'],['سجل أوامر التحكم',s.storage?.commandJournal==='postgres'?'PostgreSQL (دائم)':s.storage?.commandJournal==='disk'?'قرص دائم':'غير متاح'],['سجل التحليل والنتائج',s.storage?.mode==='persistent'?'قرص دائم':s.storage?.checkpoint?.state==='SAVED'?'نسخة PostgreSQL دورية':s.storage?.checkpoint?.state==='RESTORED'?'مستعاد من PostgreSQL':'مؤقت أو النسخ غير مؤكد'],['محرك التحليل',s.strategy||'غير متاح']];replace('diagnostics',...entries.map(([label,val])=>{const row=e('div');row.append(e('dt','',label),e('dd','',val));return row;}));}
 function renderStorage(){

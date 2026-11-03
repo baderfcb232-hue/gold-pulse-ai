@@ -39,6 +39,10 @@ input bool            InpDemoBrokerMinimumLot   = false;
 input int             InpMaxConcurrentPositions = 5;         // Demo: combined cap across managed gold/BTC positions
 input double          InpMaxOpenRiskPercent     = 2.0;       // Demo: aggregate worst-case loss to SL across positions        // Demo only: allow broker minimum within daily loss limit
 input double          InpRiskPercent            = 0.50;        // Equity stop risk for the whole cycle
+input bool            InpUseVolatilityLotReduction = true;
+input int             InpVolatilityLookbackBars = 48;     // ATR bars (closed)
+input double          InpHighVolAtrRatio        = 1.50;
+input double          InpMinVolLotFactor        = 0.25;   // Never force broker minimum if adjusted size is too small
 input double          InpRewardRisk             = 1.00;        // Target = R multiple
 input double          InpStopBufferAtr           = 0.20;
 input double          InpMinStopAtr             = 0.50;
@@ -53,6 +57,9 @@ input bool            InpEnableLiveTrading      = true;       // Explicit safety
 
 //--- time and news protection
 input group "Trading schedule and news"
+input bool            InpUseBrokerSessionBuffers = true; // Gold broker session time buffers
+input int             InpAfterSessionOpenMinutes = 30;
+input int             InpBeforeSessionCloseMinutes = 60;
 input bool            InpUseTradingHours        = false;
 input int             InpTradeStartHour         = 7;           // Broker server time
 input int             InpTradeEndHour           = 20;          // Broker server time, exclusive
@@ -65,6 +72,8 @@ input bool            InpBlockIfCalendarFails   = true;
 
 //--- position management
 input group "Open-position management"
+input bool            InpUseHalfTargetProfitLock = true;   // Lock SL at midpoint after a broker-safe breakout
+input bool            InpUseAutoHalfClose       = true;   // Close half the volume once SL secures midpoint
 input bool            InpUseBreakEven           = false;
 input double          InpBreakEvenTriggerAtr    = 1.00;
 input double          InpBreakEvenOffsetAtr     = 0.05;
@@ -167,6 +176,8 @@ bool   TradingExecutionEnabled();
 bool   BuildSignal(SignalData &signal);
 bool   PlaceSignal(const SignalData &signal);
 void   ManageOpenPositions();
+void   ManageHalfTargetProfitLock();
+void   ManageHalfTargetPartialClose();
 bool   IsEmergencyStopActive();
 void   CloseOwnPositions();
 bool   HasOwnPosition();
@@ -183,6 +194,7 @@ bool DemoWebsiteNoDailyLimitsEnabled();
 bool DemoBrokerMinimumLotEnabled();
 double ExecutionRiskBudget(const ENUM_ORDER_TYPE order_type,const double entry,const double stop_loss);
 double CalculateVolume(const ENUM_ORDER_TYPE order_type,const double entry,const double stop_loss);
+double VolatilityLotFactor();
 bool   MarginIsAcceptable(const ENUM_ORDER_TYPE order_type,const double entry,const double volume);
 int    VolumeDigits(const double step);
 double NormalizePrice(const double price);
@@ -315,7 +327,12 @@ int OnInit()
       !MathIsValidNumber(InpBasketProfitTarget) || InpBasketProfitTarget<=0.0 ||
       !MathIsValidNumber(InpExitCostPerLot) || InpExitCostPerLot<0.0 ||
       !MathIsValidNumber(InpCloseBufferMoney) || InpCloseBufferMoney<0.0 ||
-      InpCycleCooldownSeconds<0 || InpDeviationPoints<0 || InpMagicNumber<=0)
+      InpCycleCooldownSeconds<0 || InpDeviationPoints<0 || InpMagicNumber<=0 ||
+       InpVolatilityLookbackBars<20 || InpVolatilityLookbackBars>300 ||
+       !MathIsValidNumber(InpHighVolAtrRatio) || InpHighVolAtrRatio<1.0 ||
+       !MathIsValidNumber(InpMinVolLotFactor) || InpMinVolLotFactor<=0.0 || InpMinVolLotFactor>1.0 ||
+       InpAfterSessionOpenMinutes<0 || InpAfterSessionOpenMinutes>240 ||
+       InpBeforeSessionCloseMinutes<0 || InpBeforeSessionCloseMinutes>240)
      {
       Print("Invalid risk or small-profit settings.");
       return(INIT_PARAMETERS_INCORRECT);
@@ -655,7 +672,7 @@ bool BuildSignal(SignalData &signal)
    ZeroMemory(signal);
    signal.reason="Waiting for native scalp setup";
    if(HasOwnPosition() || HasOwnPendingOrder() || HasForeignNettingExposure() || g_cycle_closing)return false;
-   if(!IsWithinTradingHours()){signal.reason="Outside configured hours";return false;}
+   if(!IsWithinTradingHours()){signal.reason="Outside allowed trading hours or broker open/close buffer";return false;}
    if(DailyRiskLimitReached(signal.reason) || IsHighImpactNewsWindow(signal.reason))return false;
    MqlTick tick;
    if(!SymbolInfoTick(g_symbol,tick) || ServerNow()-tick.time>10 || tick.time>ServerNow()+2)
@@ -682,7 +699,7 @@ bool BuildSignal(SignalData &signal)
 bool PlaceSignal(const SignalData &signal)
   {
    g_website_attempt_code=0;g_website_attempt_retcode=0;g_website_attempt_deal_ticket=0;
-   if(!ExecutionPermissionsAvailable() ||
+   if(!ExecutionPermissionsAvailable() || !IsWithinTradingHours() ||
       (!DemoWebsiteNoDailyLimitsEnabled() && HasOwnPosition()) ||
       (DemoWebsiteNoDailyLimitsEnabled() && !ConcurrentWebsiteEntryAllowed()) ||
       HasOwnPendingOrder() || HasForeignNettingExposure() || g_cycle_closing)
@@ -707,6 +724,15 @@ bool PlaceSignal(const SignalData &signal)
      }
    double minimum=SymbolInfoDouble(g_symbol,SYMBOL_VOLUME_MIN);
    double step=SymbolInfoDouble(g_symbol,SYMBOL_VOLUME_STEP);
+   double volatility_factor=VolatilityLotFactor();
+   if(volatility_factor<=0.0 || step<=0.0)
+     {g_website_attempt_code=123;LogEvent("ORDER_BLOCKED","Missing ATR history for volatility-aware sizing");return(false);}
+   if(volatility_factor<1.0)
+     {
+      total_volume=NormalizeDouble(MathFloor(total_volume*volatility_factor/step+1.0e-9)*step,VolumeDigits(step));
+      if(total_volume<minimum-1.0e-8)
+        {g_website_attempt_code=124;LogEvent("ORDER_BLOCKED","Volatility-adjusted lot below broker minimum");return(false);}
+     }
    int remaining=(DemoWebsiteNoDailyLimitsEnabled() || InpMaxTradesPerDay==0) ? 1 : InpMaxTradesPerDay-CountTodayEntries();
    int legs=SPPlanLegCount(DemoWebsiteNoDailyLimitsEnabled() ? 1 : (InpUseSmallProfit ? InpMaxBasketPositions : 1),
                           remaining,IsHedgingAccount(),total_volume,minimum);
@@ -799,12 +825,143 @@ bool PlaceSignal(const SignalData &signal)
 //+------------------------------------------------------------------+
 //| Position management                                              |
 //+------------------------------------------------------------------+
+// Protect 50% of the distance from actual fill to broker TP (not signal TP).
+// A broker stop/freeze buffer must be cleared before SL can be placed there.
+// This does not close volume and never loosens an existing more-protective SL.
+void ManageHalfTargetProfitLock()
+  {
+   if(!InpUseHalfTargetProfitLock)
+      return;
+
+   MqlTick tick;
+   if(!SymbolInfoTick(g_symbol,tick) || tick.bid<=0.0 || tick.ask<tick.bid ||
+      ServerNow()-tick.time>10 || tick.time>ServerNow()+2)
+      return;
+
+   double minimum_distance=MinimumStopDistance()+2.0*g_point;
+   double tick_size=SymbolInfoDouble(g_symbol,SYMBOL_TRADE_TICK_SIZE);
+   if(tick_size<=0.0)
+      tick_size=g_point;
+
+   for(int i=PositionsTotal()-1;i>=0;i--)
+     {
+      ulong ticket=PositionGetTicket(i);
+      if(ticket==0 || !PositionSelectByTicket(ticket) || !IsOwnPositionSelected())
+         continue;
+
+      long side=PositionGetInteger(POSITION_TYPE);
+      if(side!=POSITION_TYPE_BUY && side!=POSITION_TYPE_SELL)
+         continue;
+      bool buy=(side==POSITION_TYPE_BUY);
+      double entry=PositionGetDouble(POSITION_PRICE_OPEN);
+      double tp=PositionGetDouble(POSITION_TP);
+      double current_sl=PositionGetDouble(POSITION_SL);
+      if(entry<=0.0 || tp<=0.0 || (buy ? tp<=entry : tp>=entry))
+         continue;
+
+      double midpoint=entry+0.5*(tp-entry);
+      // Round toward entry so the stop stays valid on broker tick-size grids.
+      double locked_sl=NormalizePrice((buy ? MathFloor(midpoint/tick_size+1.0e-9) :
+                                           MathCeil(midpoint/tick_size-1.0e-9))*tick_size);
+      if((buy && (locked_sl<=entry || locked_sl>=tp ||
+                  tick.bid<=midpoint || tick.bid-locked_sl<=minimum_distance ||
+                  (current_sl>0.0 && current_sl>=locked_sl-0.5*g_point))) ||
+         (!buy && (locked_sl>=entry || locked_sl<=tp ||
+                   tick.ask>=midpoint || locked_sl-tick.ask<=minimum_distance ||
+                   (current_sl>0.0 && current_sl<=locked_sl+0.5*g_point))))
+         continue;
+
+      bool sent=g_trade.PositionModify(ticket,locked_sl,tp);
+      uint retcode=g_trade.ResultRetcode();
+      bool confirmed=sent && IsSuccessfulRetcode(retcode) &&
+                     PositionSelectByTicket(ticket) &&
+                     MathAbs(PositionGetDouble(POSITION_SL)-locked_sl)<=g_point*0.5;
+      if(confirmed)
+         LogEvent("HALF_TARGET_PROFIT_LOCK",
+                  StringFormat("ticket=%I64u,entry=%.*f,tp=%.*f,new_sl=%.*f",
+                               ticket,g_digits,entry,g_digits,tp,g_digits,locked_sl));
+      else
+         LogEvent("HALF_TARGET_LOCK_FAILED",
+                  StringFormat("ticket=%I64u,retcode=%u,%s",
+                               ticket,retcode,g_trade.ResultRetcodeDescription()));
+     }
+  }
+
+// Perform a single 50% partial close only AFTER the SL already protects 50% TP.
+// A claim is flushed BEFORE submission to prevent duplicate close after a timeout.
+// Operators must inspect the MT5 deal/history for any UNCERTAIN attempt; never
+// automatically retry an ambiguous close. Applies to hedging accounts only.
+void ManageHalfTargetPartialClose()
+  {
+   if(!InpUseAutoHalfClose || !IsHedgingAccount())
+      return;
+   MqlTick tick;
+   if(!SymbolInfoTick(g_symbol,tick) || tick.bid<=0.0 || tick.ask<tick.bid ||
+      ServerNow()-tick.time>10 || tick.time>ServerNow()+2)
+      return;
+
+   double minimum=SymbolInfoDouble(g_symbol,SYMBOL_VOLUME_MIN);
+   double step=SymbolInfoDouble(g_symbol,SYMBOL_VOLUME_STEP);
+   if(minimum<=0.0 || step<=0.0)
+      return;
+
+   for(int i=PositionsTotal()-1;i>=0;i--)
+     {
+      ulong ticket=PositionGetTicket(i);
+      if(!ticket || !PositionSelectByTicket(ticket) || !IsOwnPositionSelected())
+         continue;
+
+      long side=PositionGetInteger(POSITION_TYPE);
+      bool buy=(side==POSITION_TYPE_BUY);
+      if(!buy && side!=POSITION_TYPE_SELL)
+         continue;
+      double entry=PositionGetDouble(POSITION_PRICE_OPEN);
+      double tp=PositionGetDouble(POSITION_TP);
+      double sl=PositionGetDouble(POSITION_SL);
+      double volume=PositionGetDouble(POSITION_VOLUME);
+      if(entry<=0.0 || tp<=0.0 || sl<=0.0 || (buy ? tp<=entry : tp>=entry))
+         continue;
+      double midpoint=entry+0.5*(tp-entry);
+      if((buy && (tick.bid<=midpoint || sl<midpoint-g_point)) ||
+         (!buy && (tick.ask>=midpoint || sl>midpoint+g_point)))
+         continue;
+
+      double half=MathFloor((volume*0.5)/step+1.0e-8)*step;
+      half=NormalizeDouble(half,VolumeDigits(step));
+      // When 0.01 is the minimum, a 0.01 position cannot be halved.
+      if(half<minimum || volume-half<minimum-1.0e-8)
+         continue;
+
+      long position_id=PositionGetInteger(POSITION_IDENTIFIER);
+      string key=NABDKey("PC_"+(string)position_id);
+      if(GlobalVariableCheck(key))
+         continue;
+      if(GlobalVariableSet(key,1.0)==0)
+         {LogEvent("HALF_CLOSE_BLOCKED","Cannot persist a partial-close claim");continue;}
+      GlobalVariablesFlush();
+
+      bool sent=g_trade.PositionClosePartial(ticket,half,InpDeviationPoints);
+      uint code=g_trade.ResultRetcode();
+      bool confirmed=sent && IsSuccessfulRetcode(code) &&
+                    PositionSelectByTicket(ticket) &&
+                    PositionGetDouble(POSITION_VOLUME)<volume-0.5*step;
+      GlobalVariableSet(key,confirmed?2.0:3.0);
+      GlobalVariablesFlush();
+      LogEvent(confirmed?"HALF_TARGET_PARTIAL_CLOSED":"HALF_TARGET_PARTIAL_UNCERTAIN",
+               StringFormat("ticket=%I64u,volume=%.4f,half=%.4f,retcode=%u,%s",
+                            ticket,volume,half,code,g_trade.ResultRetcodeDescription()));
+     }
+  }
+
 void ManageOpenPositions()
   {
    if(!ExecutionPermissionsAvailable())
       return;
    if(IsEmergencyStopActive())
       return;
+   // Independent of ATR trail/small-profit and website unlimited-entry modes.
+   ManageHalfTargetProfitLock();
+   ManageHalfTargetPartialClose();
    if(DemoWebsiteNoDailyLimitsEnabled())
      {
       SyncCycleState();
@@ -950,6 +1107,7 @@ bool ConcurrentWebsiteEntryAllowed(const double additional_risk)
    // overlapping recommendations on the same symbol without merging stops.
    if(!IsHedgingAccount() && CountOwnPositions()>0)return false;
    int count=0;
+   int unprotected_or_losing=0;
    double risk=0.0;
    for(int i=0;i<PositionsTotal();i++)
      {
@@ -959,12 +1117,19 @@ bool ConcurrentWebsiteEntryAllowed(const double additional_risk)
       double stop=PositionGetDouble(POSITION_SL),volume=PositionGetDouble(POSITION_VOLUME);
       double entry=PositionGetDouble(POSITION_PRICE_OPEN),loss=0.0;
       ENUM_ORDER_TYPE kind=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY?ORDER_TYPE_BUY:ORDER_TYPE_SELL;
+      bool protected_profit=(kind==ORDER_TYPE_BUY ? stop>=entry : stop<=entry);
+      if(PositionGetDouble(POSITION_PROFIT)+PositionGetDouble(POSITION_SWAP)<=0.0 || !protected_profit)
+         unprotected_or_losing++;
       if(stop<=0.0 || volume<=0.0 || !OrderCalcProfit(kind,PositionGetString(POSITION_SYMBOL),volume,entry,stop,loss))
         {LogEvent("ORDER_BLOCKED","Open position without reliable stop/risk");return false;}
       risk+=MathMax(0.0,-loss);
      }
    if(count>=InpMaxConcurrentPositions)
      {LogEvent("ORDER_BLOCKED","Account concurrent position cap reached");return false;}
+   // Up to three positions may be unprotected/losing. Further scale-ins
+   // require ALL existing account positions to have protected profits.
+   if(count>=3 && unprotected_or_losing>0)
+     {LogEvent("ORDER_BLOCKED","Scaling beyond three requires all positions profitable and protected");return false;}
    double equity=AccountInfoDouble(ACCOUNT_EQUITY);
    if(equity<=0.0 || risk+additional_risk>=equity*InpMaxOpenRiskPercent/100.0)
      {LogEvent("ORDER_BLOCKED","Existing aggregate stop risk reached account cap");return false;}
@@ -1320,8 +1485,8 @@ double GetTodayNet()
 
 bool DailyRiskLimitReached(string &reason)
   {
-   if(DemoWebsiteNoDailyLimitsEnabled()){reason="";return false;}
-   // Do not bypass the 2% daily loss guard when unlimited daily entries are enabled.
+   reason="";
+   // Unlimited entry count must NEVER bypass the account's daily loss limit.
    if(!HistorySelect(StartOfDay(ServerNow()),ServerNow()))
      {reason="Daily history unavailable; cannot validate daily loss";return(true);}
    int entries=CountTodayEntries();
@@ -1354,8 +1519,8 @@ bool IsHighImpactNewsWindow(string &reason)
    datetime now=ServerNow();
    MqlCalendarValue values[];
    int found=CalendarValueHistory(values,
-                                  now-InpNewsMinutesBefore*60,
-                                  now+InpNewsMinutesAfter*60,
+                                  now-InpNewsMinutesAfter*60,
+                                  now+InpNewsMinutesBefore*60,
                                   "",
                                   InpNewsCurrency);
    if(found<0)
@@ -1387,17 +1552,52 @@ bool IsHighImpactNewsWindow(string &reason)
 
 bool IsWithinTradingHours()
   {
-   if(!InpUseTradingHours)
+   datetime now=ServerNow();
+   if(InpUseTradingHours)
+     {
+      MqlDateTime current;
+      TimeToStruct(now,current);
+      int hour=current.hour;
+      if(InpTradeStartHour!=InpTradeEndHour)
+        {
+         bool manual_ok=InpTradeStartHour<InpTradeEndHour ?
+                         (hour>=InpTradeStartHour && hour<InpTradeEndHour) :
+                         (hour>=InpTradeStartHour || hour<InpTradeEndHour);
+         if(!manual_ok)
+            return(false);
+        }
+     }
+
+   if(!InpUseBrokerSessionBuffers)
       return(true);
 
-   MqlDateTime now_struct;
-   TimeToStruct(ServerNow(),now_struct);
-   int hour=now_struct.hour;
-   if(InpTradeStartHour==InpTradeEndHour)
-      return(true);
-   if(InpTradeStartHour<InpTradeEndHour)
-      return(hour>=InpTradeStartHour && hour<InpTradeEndHour);
-   return(hour>=InpTradeStartHour || hour<InpTradeEndHour);
+   MqlDateTime current;
+   TimeToStruct(now,current);
+   datetime today=StartOfDay(now);
+   // Include previous weekday's session for instruments that cross midnight.
+   for(int day_offset=-1;day_offset<=0;day_offset++)
+     {
+      int weekday=(current.day_of_week+day_offset+7)%7;
+      datetime day_start=today+(datetime)(day_offset*86400);
+      for(uint index=0;index<32;index++)
+        {
+         datetime from=0,to=0;
+         if(!SymbolInfoSessionTrade(g_symbol,(ENUM_DAY_OF_WEEK)weekday,index,from,to))
+            break;
+         int open_seconds=(int)((long)from%86400);
+         int close_seconds=(int)((long)to%86400);
+         datetime opens=day_start+(datetime)open_seconds;
+         datetime closes=day_start+(datetime)close_seconds;
+         if(closes<=opens)
+            closes+=86400;
+         if(now<opens || now>=closes)
+            continue;
+         return(now-opens >= InpAfterSessionOpenMinutes*60 &&
+                closes-now > InpBeforeSessionCloseMinutes*60);
+        }
+     }
+   // Fail closed if the broker does not expose an active trade session.
+   return(false);
   }
 
 //+------------------------------------------------------------------+
@@ -1452,8 +1652,34 @@ double ExecutionRiskBudget(const ENUM_ORDER_TYPE order_type,const double entry,c
       if(minimum<=0.0 || !OrderCalcProfit(order_type,g_symbol,minimum,entry,stop_loss,loss))return 0.0;
       budget=MathMax(budget,MathAbs(loss));
      }
-   return DemoWebsiteNoDailyLimitsEnabled() ? budget : MathMin(budget,daily);
+   return MathMin(budget,daily); // Daily loss allowance applies in every Demo mode.
   }
+// Scales DOWN lot size when closed-bar ATR exceeds its trailing baseline.
+// This is additional to ATR-derived stop distance and the account risk ceiling.
+double VolatilityLotFactor()
+  {
+   if(!InpUseVolatilityLotReduction)
+      return(1.0);
+   double values[];
+   int count=CopyBuffer(g_entry_atr_handle,0,1,InpVolatilityLookbackBars,values);
+   if(count<20)
+      return(0.0); // Fail closed: never guess volatility with missing ATR history.
+   double total=0.0;
+   for(int i=0;i<count-1;i++)
+     {
+      if(!MathIsValidNumber(values[i]) || values[i]<=0.0)
+         return(0.0);
+      total+=values[i];
+     }
+   double baseline=total/(count-1);
+   double current=values[count-1];
+   if(!MathIsValidNumber(current) || current<=0.0 || baseline<=0.0)
+      return(0.0);
+   if(current<=baseline*InpHighVolAtrRatio)
+      return(1.0);
+   return(MathMax(InpMinVolLotFactor,MathMin(1.0,baseline/current)));
+  }
+
 double CalculateVolume(const ENUM_ORDER_TYPE order_type,const double entry,const double stop_loss)
   {
    if(InpRiskPercent<=0.0 || entry<=0.0 || stop_loss<=0.0)
@@ -1723,7 +1949,7 @@ void NABDProcessWebsiteApproval()
       HasOwnPendingOrder() || HasForeignNettingExposure())
      {NABDWebsiteBlocked(id,"parallel entry incompatible with hedging, account exposure limit, or pending order",105);return;}
    if(g_cycle_closing){NABDWebsiteBlocked(id,"previous cycle is closing",106);return;}
-   if(!IsWithinTradingHours()){NABDWebsiteBlocked(id,"outside allowed trading hours",107);return;}
+   if(!IsWithinTradingHours()){NABDWebsiteBlocked(id,"broker session closed or open/close time buffer",107);return;}
    if(!DemoWebsiteNoDailyLimitsEnabled() && InpUseSmallProfit && g_last_cycle_end>0 &&
       ServerNow()-g_last_cycle_end<InpCycleCooldownSeconds)
      {NABDWebsiteBlocked(id,"cycle cooldown active",108);return;}
@@ -1938,7 +2164,8 @@ string NBPositions(const long offset)
       ulong ticket=PositionGetTicket(i);
       if(!ticket || !IsOwnPositionSelected())continue;
       if(n++>0)json+=",";
-      json+="{\"ticket\":"+NBQ((string)ticket)+",\"side\":"+NBQ(PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY?"BUY":"SELL")+
+      json+="{\"ticket\":"+NBQ((string)ticket)+",\"position_id\":"+NBQ((string)PositionGetInteger(POSITION_IDENTIFIER))+
+             ",\"side\":"+NBQ(PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY?"BUY":"SELL")+
             ",\"volume\":"+NBD(PositionGetDouble(POSITION_VOLUME))+
             ",\"entry\":"+NBD(PositionGetDouble(POSITION_PRICE_OPEN),g_digits)+
             ",\"sl\":"+NBD(PositionGetDouble(POSITION_SL),g_digits)+",\"tp\":"+NBD(PositionGetDouble(POSITION_TP),g_digits)+
@@ -2186,7 +2413,8 @@ void NBBOnTimer()
       NBStatus("Loading economic calendar from MT5...");NBUpdateCalendar(offset);
       NBStatus("Loading M5, M15, H1 and H4 history from MT5...");
       candles="{\"M5\":"+NBCandles(PERIOD_M5,offset)+",\"M15\":"+NBCandles(PERIOD_M15,offset)+
-        ",\"H1\":"+NBCandles(PERIOD_H1,offset)+",\"H4\":"+NBCandles(PERIOD_H4,offset)+"}";
+        ",\"H1\":"+NBCandles(PERIOD_H1,offset)+",\"H4\":"+NBCandles(PERIOD_H4,offset)+
+        ",\"M1\":"+NBCandles(PERIOD_M1,offset,90)+"}";
       calendar=g_nb_calendar;
       if(btcOneSecond){cachedBtcCandles=candles;lastBtcHistory=GetTickCount64();}
         }

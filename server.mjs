@@ -6,6 +6,7 @@ import {randomBytes, timingSafeEqual, createHash} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
 import {analyze, previewFlexibleAnalysis, sourceAnalysis, cleanSnapshot, trackPlan, positionSize, text, defaults, botHeartbeatFresh, BOT_CONTROL_TTL} from './engine.mjs';
 import {mt5Archive} from './archive.mjs';
+import {summarizeGoldPerformance} from './performance.mjs';
 import {createMarketFeed} from './market.mjs';
 import {createNewsFeed} from './news.mjs';
 
@@ -72,15 +73,17 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     btcScalpDemoAutoExecution: process.env.NABD_BTC_SCALP_DEMO_AUTOTRADE === 'true',
     btcFusionDemoAutoExecution: process.env.NABD_BTC_FUSION_DEMO_AUTOTRADE === 'true',
     scalpDemoAutoExecution: process.env.NABD_SCALP_DEMO_AUTOTRADE === 'true',
+    goldFusionDemoAutoExecution: process.env.NABD_GOLD_FUSION_DEMO_AUTOTRADE === 'true',
     btcMagicRebindEnabled: process.env.NABD_BTC_MAGIC_REBIND_ONCE === 'true', ...config};
   if (!['EA','DASHBOARD'].includes(cfg.signalSource)) throw new Error('SIGNAL_SOURCE must be EA or DASHBOARD');
   if (typeof cfg.publicationEnabled !== 'boolean') throw new Error('publicationEnabled must be a boolean');
   if (typeof cfg.goldOnly !== 'boolean') throw new Error('goldOnly must be a boolean');
-  if (!['EMA_LEGACY','SCALP'].includes(cfg.goldSignalStrategy)) throw new Error('Invalid NABD_GOLD_SIGNAL_STRATEGY');
+  if (!['EMA_LEGACY','SCALP','FUSION'].includes(cfg.goldSignalStrategy)) throw new Error('Invalid NABD_GOLD_SIGNAL_STRATEGY');
   if (!['EMA_LEGACY','SCALP','FUSION'].includes(cfg.btcSignalStrategy)) throw new Error('Invalid NABD_BTC_SIGNAL_STRATEGY');
   if (typeof cfg.btcScalpDemoAutoExecution !== 'boolean') throw new Error('Invalid NABD_BTC_SCALP_DEMO_AUTOTRADE');
   if (typeof cfg.btcFusionDemoAutoExecution !== 'boolean') throw new Error('Invalid NABD_BTC_FUSION_DEMO_AUTOTRADE');
   if (typeof cfg.scalpDemoAutoExecution !== 'boolean') throw new Error('Invalid NABD_SCALP_DEMO_AUTOTRADE');
+  if (typeof cfg.goldFusionDemoAutoExecution !== 'boolean') throw new Error('Invalid NABD_GOLD_FUSION_DEMO_AUTOTRADE');
   // Restore the original Telegram candidate sources without relaxing order controls.
   const telegramPolicy = config.telegramPolicy ?? process.env.TELEGRAM_SIGNAL_POLICY ?? 'LEGACY';
   if (!['LEGACY', 'STRICT'].includes(telegramPolicy)) throw new Error('Invalid TELEGRAM_SIGNAL_POLICY');
@@ -361,6 +364,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     const btc = /^BTCUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(selected.symbol);
     if (btc && cfg.goldOnly) return {ready:false,reason:'GOLD_ONLY',plan:null};
     const scalpGold = !btc && cfg.goldSignalStrategy === 'SCALP';
+    const fusionGold = !btc && cfg.goldSignalStrategy === 'FUSION';
     const fusionBtc = btc && cfg.btcSignalStrategy === 'FUSION';
     const scalpBtc = btc && cfg.btcSignalStrategy === 'SCALP';
     if (fusionBtc && !cfg.btcFusionDemoAutoExecution) return {ready:false,reason:'BTC_FUSION_RECOMMENDATIONS_ONLY',plan:null};
@@ -368,9 +372,12 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     // Explicit Demo-only opt-in; the gold scalp mode cannot inherit old live order permissions.
     if (scalpGold && !cfg.scalpDemoAutoExecution)
       return {ready:false,reason:'SCALP_RECOMMENDATIONS_ONLY',plan:null};
+    // Fusion is a different strategy and cannot inherit old gold scalp permissions.
+    if (fusionGold && !cfg.goldFusionDemoAutoExecution)
+      return {ready:false,reason:'GOLD_FUSION_RECOMMENDATIONS_ONLY',plan:null};
     // Independent server cap, in addition to MT5's local 3-entries/day and risk limit.
     // Never rely on a stale or missing risk configuration to authorize an order.
-    if ((scalpGold || scalpBtc || fusionBtc) && !(selected?.execution?.risk_percent > 0 &&
+    if ((scalpGold || fusionGold || scalpBtc || fusionBtc) && !(selected?.execution?.risk_percent > 0 &&
       selected.execution.risk_percent <= 0.5 && selected.execution.max_daily_loss_percent > 0 &&
       selected.execution.max_daily_loss_percent <= 2 &&
       selected.execution.news_filter === true))
@@ -380,7 +387,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       brokerGoldMarket(selected,clock(),{goldStrategy:cfg.goldSignalStrategy})?.analysis.plan;
     return websiteTradeDecision({enabled: cfg.demoRecommendationExecution && cfg.publicationEnabled,
       snapshot: selected, market, analysisPlan, costs: costStatus(selected),
-      requiredStrategy:scalpGold ? 'NABD-GOLD-SCALP-M5M15-V1' : scalpBtc ? 'NABD-BTC-SCALP-M5M15-V1' : fusionBtc ? 'NABD-BTC-FUSION-M5M15-V2' : null,
+      requiredStrategy:scalpGold ? 'NABD-GOLD-SCALP-M5M15-V1' : fusionGold ? 'NABD-GOLD-REGIME-FUSION-V1' : scalpBtc ? 'NABD-BTC-SCALP-M5M15-V1' : fusionBtc ? 'NABD-BTC-FUSION-M5M15-V2' : null,
       durable: typeof commandJournal?.claimWebsite === 'function', now: clock(), tradeSizing});
   }
   // Independent, read-only Bitcoin health. Never classify a fresh Coinbase
@@ -750,6 +757,9 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
             websiteEntries:commandJournal?.websiteEntries ? (await commandJournal.websiteEntries(entrySourceKey(btcSnapshot))).map(record => ({...record,signal_code:recommendationCode(record.plan_id || record.plan?.id),broker_fill_confirmed:Boolean(verifiedBrokerDeal(record,btcSnapshot)),broker_deal_ticket:verifiedBrokerDeal(record,btcSnapshot)?.ticket||null})) : [],
             websiteDecisions:commandJournal?.websiteDecisions ? (await commandJournal.websiteDecisions(entrySourceKey(btcSnapshot))).map(record => ({...record,signal_code:recommendationCode(record.plan_id)})) : []} : null,
           deals: db.prepare('SELECT data FROM deals ORDER BY time DESC LIMIT 1000').all().map(x => JSON.parse(x.data)),
+          performance: summarizeGoldPerformance({
+            deals: db.prepare('SELECT data FROM deals ORDER BY time DESC LIMIT 5000').all().map(x => JSON.parse(x.data)),
+            positions: snapshot?.positions ?? [], account: snapshot?.account ?? null, now}),
           commands: commandJournal ? await commandJournal.list(clock()) : db.prepare('SELECT * FROM commands ORDER BY id DESC LIMIT 100').all(),
           lastUpdate: snapshot?.received_at ?? null});
       }
@@ -951,6 +961,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           websiteMode: Boolean(snapshot?.execution.website_recommendations),
           goldSignalStrategy: cfg.goldSignalStrategy,
           scalpDemoAutoExecution: cfg.scalpDemoAutoExecution,
+          goldFusionDemoAutoExecution: cfg.goldFusionDemoAutoExecution,
           websiteAnalysisStatus: gold?.analysis?.status ?? null,
           websiteAnalysisReason: gold?.analysis?.reason ?? null,
           flexShadow: flex ? {strategy: flex.strategy, planReady: Boolean(flex.plan),
