@@ -56,6 +56,31 @@ test('a failed news load retries even while live market events keep arriving', a
   assert.equal(calls, 2); assert.equal(h.title(), 'Recovered news');
 });
 
+test('waiting FUSION displays prerequisite results and Arabic reason without an entry score',async t=>{
+ const h=workspace(t,now=>headline(now,'Test'));await flush();
+ const data=h.marketData(),m=data.markets.XAUUSD;
+ m.analysis={...m.analysis,reason:'REGIME_TRANSITION_NO_ENTRY',
+   reason_label:'السوق في مرحلة انتقالية',score:null,checks:[],calendar_available:true,
+   readinessChecks:[{name:'سعر حديث',pass:true},{name:'حالة السوق',pass:false},
+     {name:'تقييم لاحق',pass:null}]};
+ h.market(data);
+ assert.equal(h.get('scalp-reason').textContent,'السوق في مرحلة انتقالية');
+ assert.equal(h.get('scalp-score').textContent,'— / 100');
+ const rows=h.get('scalp-checks').children;
+ assert.equal(rows.length,4);
+ assert.match(rows[0].textContent,/لا تُحسب كنقاط دخول/);
+ assert.equal(rows[1].children[0].textContent,'✓');
+ assert.equal(rows[2].children[0].textContent,'○');
+ assert.equal(rows[3].children[0].textContent,'…');
+ assert.match(rows[3].children[1].textContent,/لم يُفحص بعد/);
+ // Real entry conditions take precedence; prerequisites cannot inflate score.
+ m.analysis.checks=[{name:'شرط دخول',pass:false}];m.analysis.score=0;
+ h.market(data);
+ assert.equal(h.get('scalp-checks').children.length,1);
+ assert.equal(h.get('scalp-checks').children[0].children[1].textContent,'شرط دخول');
+ assert.equal(h.get('scalp-score').textContent,'0 / 100');
+});
+
 test('silent news events recover over HTTP without interrupting an active market stream', async t => {
   let calls = 0;
   const h = workspace(t, now => headline(now, ++calls === 1 ? 'Initial news' : 'Fresh news'));

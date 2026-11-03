@@ -113,17 +113,20 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     put('scalp-status', p ? 'متابعة إشارة محفوظة' : alignmentWait ? 'مراقبة آمنة' : states[state]);
     $('scalp-status').className = 'pill ' + (p ? 'good' : alignmentWait || state === 'WATCH' ? 'warn' : 'neutral');
     put('scalp-reason', data.membersOnly ? 'سجّل الدخول بحساب مؤكد ومخوّل لمشاهدة التوصيات.' : !live && m?.quote ? 'إصدار فرص جديدة متوقف. نحتفظ بالشارت والتحليل السابق حتى يعود مصدر حديث.'
-      : p ? `الإشارة صدرت ${time(p.issued_at)} ومستوياتها ثابتة. الشروط الحالية لفرصة جديدة: ${a?.reason || 'تجري المتابعة.'}` : a?.reason || 'يجري الاتصال بمصدر السوق.');
+      : p ? `الإشارة صدرت ${time(p.issued_at)} ومستوياتها ثابتة. الشروط الحالية لفرصة جديدة: ${a?.reason_label || a?.reason || 'تجري المتابعة.'}` : a?.reason_label || a?.reason || 'يجري الاتصال بمصدر السوق.');
     const score = live && a?.checks?.length && Number.isFinite(a.score) && a.score >= 0 && a.score <= 100 ? a.score : null;
     put('scalp-score', score === null ? '— / 100' : `${score} / 100`);
     $('scalp-score').title = score === null ? 'تقييم توافق الشروط غير متاح حاليًا.' : 'توافق الشروط، وليس احتمال نجاح الصفقة.';
     $('scalp-score-fill').style.width = `${score ?? 0}%`;
-    const checks = (a?.checks || []).map(ch => {const row = node('div', 'check'); row.append(node('span', ch.pass ? 'pass' : 'fail', ch.pass ? '✓' : '○'), node('span', '', ch.name)); return row;});
+    const entryChecks=a?.checks || [], readinessOnly=!entryChecks.length && a?.readinessChecks?.length;
+    const shownChecks=entryChecks.length?entryChecks:a?.readinessChecks || [];
+    const checks = shownChecks.map(ch => {const row = node('div', 'check'); row.append(node('span', ch.pass === true ? 'pass' : ch.pass === false ? 'fail' : 'subtle', ch.pass === true ? '✓' : ch.pass === false ? '○' : '…'), node('span', '', ch.name+(ch.pass==null?' · لم يُفحص بعد':''))); return row;});
+    if(readinessOnly)checks.unshift(empty('جاهزية التحليل: هذه المتطلبات لا تُحسب كنقاط دخول. تظهر شروط الصفقة بعد تحديد حالة السوق واجتياز المتطلبات.'));
     if (m && state === 'WARMING') checks.push(empty(broker
       ? `ننتظر تحميل ${a.required_bars} شمعة مغلقة لكل إطار من البروكر؛ لا يلزم تجميعها من الصفر.`
       : `${m.minute_count} دقيقة مرصودة · نحتاج نحو 110 دقائق متصلة لتأكيد اتجاه M5.`));
     if (a && !a.calendar_available) checks.push(empty('التقويم الاقتصادي غير متصل؛ عناوين RSS لا تغطي كل مواعيد البيانات.'));
-    $('scalp-checks').replaceChildren(...(checks.length ? checks : [empty('تظهر شروط المضاربة بعد اكتمال الشموع.')]));
+    $('scalp-checks').replaceChildren(...(checks.length ? checks : [empty(a?.reason_label || a?.reason || 'ننتظر بيانات كافية لتقييم شروط الدخول.')]));
     $('live-frames').replaceChildren(...(broker ? ['M5', 'M15', 'H1', 'H4'] : ['M1', 'M5', 'M15']).map(f => {const row = node('div', 'frame'), frame = a?.frames?.[f];
       row.append(node('strong', '', tfLabels[f]), node('span', 'frame-side ' + (live && frame?.direction === 'BUY' ? 'buy' : live && frame?.direction === 'SELL' ? 'sell' : ''), side(frame?.direction)));
       row.title = `${frame?.count || 0} شمعة مغلقة · ${live ? 'سياق حالي' : 'آخر سياق متاح'}`; return row;}));

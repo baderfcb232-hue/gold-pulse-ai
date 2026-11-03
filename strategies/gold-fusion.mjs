@@ -146,30 +146,47 @@ const openingRangeProxy=bars=>{
 
 export function analyzeGoldFusion(snapshot,now=Date.now()/1000,settings=defaults) {
   const base=analyze(snapshot,now,settings);
+  // Display-only prerequisites. A pending check is never treated as passed,
+  // and these checks never enter the weighted entry score or authorize a plan.
+  const readinessChecks=[
+    'وصول سعر ذهب حديث من MT5',
+    'توفر 220 شمعة مغلقة لكل فريم',
+    'حداثة شموع M5 وM15 وH1 وH4',
+    'صلاحية السعر ومواصفات عقد الوسيط',
+    'السبريد والتذبذب ضمن حدود الاستراتيجية',
+    'السعر قريب من إغلاق شمعة الدخول',
+    'التقويم متاح وخارج نافذة منع الأخبار',
+    'تحديد حالة سوق مناسبة لتقييم الدخول'
+  ].map(name=>({name,pass:null}));
+  const gate=(index,pass)=>(readinessChecks[index].pass=Boolean(pass));
   const empty={...base,strategy:GOLD_FUSION_STRATEGY,decision:'WAIT',
-    plan:null,score:null,checks:[],risk:'CAUTION',regime:'WAIT',reasons:[]};
+    plan:null,score:null,checks:[],readinessChecks,risk:'CAUTION',regime:'WAIT',reasons:[]};
   const wait=(code,risk='CAUTION',extra={})=>({...empty,risk,reasons:[code],...extra});
   if(!/^XAUUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(snapshot?.symbol||''))
     return wait('GOLD_ONLY', 'BLOCKED');
-  if(base.connection!=='LIVE')return wait('STALE_OR_DISCONNECTED_GOLD_FEED','BLOCKED');
-  if(Object.values(base.frames).some(x=>x.direction==='UNKNOWN'))
+  if(!gate(0,base.connection==='LIVE'))return wait('STALE_OR_DISCONNECTED_GOLD_FEED','BLOCKED');
+  if(!gate(1,!Object.values(base.frames).some(x=>x.direction==='UNKNOWN')))
     return wait('NEED_220_CLOSED_M5_M15_H1_H4','BLOCKED');
+  gate(2,true);
   for(const tf of Object.keys(TF_SECONDS)) {
     const last=snapshot.candles?.[tf]?.at(-1),step=TF_SECONDS[tf];
-    if(!last || now-(last.time+step)>step+120 || last.time+step>now+2)
+    if(!last || now-(last.time+step)>step+120 || last.time+step>now+2) {
+      gate(2,false);
       return wait('STALE_'+tf,'BLOCKED');
+    }
   }
   const spec=snapshot.spec,spread=snapshot.ask-snapshot.bid;
-  if(!(spec?.point>0&&spec?.tick_size>0&&snapshot.bid>0&&snapshot.ask>=snapshot.bid))
+  if(!gate(3,spec?.point>0&&spec?.tick_size>0&&snapshot.bid>0&&snapshot.ask>=snapshot.bid))
     return wait('INVALID_GOLD_QUOTE_OR_CONTRACT','BLOCKED');
   const m5=snapshot.candles.M5,m15=snapshot.candles.M15,last=m5.at(-1),prev=m5.at(-2);
   const closes=m5.map(x=>x.close),atr5=atr(m5,14);
   const maxPoints=Math.min(settings.maxSpreadPoints||80,snapshot.ea?.settings?.max_spread_points||80);
-  if(!(atr5>0) || spread/spec.point>maxPoints || spread>atr5*.20)
+  if(!gate(4,!(!(atr5>0) || spread/spec.point>maxPoints || spread>atr5*.20)))
     return wait('GOLD_SPREAD_OR_ATR_UNSAFE','BLOCKED');
-  if(Math.abs((snapshot.ask+snapshot.bid)/2-last.close)>atr5*.6)
+  if(!gate(5,!(Math.abs((snapshot.ask+snapshot.bid)/2-last.close)>atr5*.6)))
     return wait('GOLD_PRICE_MOVED_FROM_CLOSED_BAR','BLOCKED');
   const news=goldNewsWindow(snapshot.calendar,now,{calendarTtl:settings.calendarTtl||900});
+  gate(6,!news.blocked);
   if(news.blocked){
     const shadow=goldNewsScalpShadow(snapshot,now,news);
     return wait(news.code,'BLOCKED',{news_block:news.event,
@@ -190,7 +207,9 @@ export function analyzeGoldFusion(snapshot,now=Date.now()/1000,settings=defaults
   const breakout=volumeConfirmed && (brBuy||brSell) && adx5>=20;
   const regime=breakout?'BREAKOUT':adx5>=22&&m15Side!=='WAIT'?'TREND':
     adx5<19?'RANGE':'TRANSITION';
-  if(regime==='TRANSITION')return wait('REGIME_TRANSITION_NO_ENTRY','CAUTION',{regime,indicators:{adx:adx5}});
+  gate(7,regime!=='TRANSITION');
+  if(regime==='TRANSITION')return wait('REGIME_TRANSITION_NO_ENTRY','CAUTION',{regime,indicators:{adx:adx5},
+    reason_label:'السوق في مرحلة انتقالية؛ ننتظر اتجاهًا أو نطاقًا أو اختراقًا واضحًا قبل تقييم شروط الدخول.'});
   let side='WAIT',checks=[];
   const add=(name,pass,weight)=>checks.push({name,pass:Boolean(pass),weight});
   if(regime==='BREAKOUT') {

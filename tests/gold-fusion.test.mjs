@@ -15,6 +15,32 @@ const event=(name,time=NOW,importance=3,id='N')=>({id,name,time,importance,curre
 const cal=(events,updated_at=NOW)=>({status:'ok',updated_at,events});
 const raw=()=>{const s=fixture();s.symbol='XAUUSD.m';s.bid=s.candles.M5.at(-1).close-.01;s.ask=s.bid+.03;s.positions=[];s.deals=[];return s;};
 
+test('transition exposes prerequisite results without inventing a scored entry',()=>{
+ const x=raw();
+ // Exact power-of-two prices avoid rounding drift in a flat EMA fixture.
+ for(const b of x.candles.M15)Object.assign(b,{open:4096,close:4096,high:4096.3,low:4095.7});
+ const s=cleanSnapshot(x,NOW),a=analyzeGoldFusion(s,NOW);
+ assert.equal(a.regime,'TRANSITION');
+ assert.deepEqual(a.reasons,['REGIME_TRANSITION_NO_ENTRY']);
+ assert.equal(a.plan,null);assert.equal(a.score,null);assert.deepEqual(a.checks,[]);
+ assert.equal(a.readinessChecks.length,8);
+ assert.ok(a.readinessChecks.slice(0,7).every(c=>c.pass===true));
+ assert.equal(a.readinessChecks[7].pass,false);
+ const visible=brokerGoldMarket(s,NOW,{goldStrategy:'FUSION'}).analysis;
+ assert.deepEqual(visible.readinessChecks,a.readinessChecks);
+ assert.match(visible.reason_label,/مرحلة انتقالية/);
+});
+
+test('failed prerequisites stop evaluation and keep subsequent checks pending',()=>{
+ const x=raw();x.ask=x.bid+10;
+ const spread=analyzeGoldFusion(cleanSnapshot(x,NOW),NOW);
+ assert.equal(spread.plan,null);assert.equal(spread.readinessChecks[4].pass,false);
+ assert.ok(spread.readinessChecks.slice(5).every(c=>c.pass===null));
+ const stale=analyzeGoldFusion(cleanSnapshot(raw(),NOW),NOW+30);
+ assert.equal(stale.readinessChecks[0].pass,false);
+ assert.ok(stale.readinessChecks.slice(1).every(c=>c.pass===null));
+});
+
 test('FOMC, NFP, CPI and PCE are recognized from the MT5 USD calendar',()=>{
  for(const name of ['FOMC Statement','Nonfarm Payrolls (NFP)','CPI m/m','Core PCE Price Index','Federal Funds Rate'])
    assert.equal(classifyGoldCalendarEvent(event(name)),'HIGH_TARGET',name);
