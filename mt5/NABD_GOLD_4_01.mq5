@@ -1090,6 +1090,7 @@ bool ConcurrentWebsiteEntryAllowed(const double additional_risk)
    // overlapping recommendations on the same symbol without merging stops.
    if(!IsHedgingAccount() && CountOwnPositions()>0)return false;
    int count=0;
+   int unprotected_or_losing=0;
    double risk=0.0;
    for(int i=0;i<PositionsTotal();i++)
      {
@@ -1099,12 +1100,19 @@ bool ConcurrentWebsiteEntryAllowed(const double additional_risk)
       double stop=PositionGetDouble(POSITION_SL),volume=PositionGetDouble(POSITION_VOLUME);
       double entry=PositionGetDouble(POSITION_PRICE_OPEN),loss=0.0;
       ENUM_ORDER_TYPE kind=PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY?ORDER_TYPE_BUY:ORDER_TYPE_SELL;
+      bool protected_profit=(kind==ORDER_TYPE_BUY ? stop>=entry : stop<=entry);
+      if(PositionGetDouble(POSITION_PROFIT)+PositionGetDouble(POSITION_SWAP)<=0.0 || !protected_profit)
+         unprotected_or_losing++;
       if(stop<=0.0 || volume<=0.0 || !OrderCalcProfit(kind,PositionGetString(POSITION_SYMBOL),volume,entry,stop,loss))
         {LogEvent("ORDER_BLOCKED","Open position without reliable stop/risk");return false;}
       risk+=MathMax(0.0,-loss);
      }
    if(count>=InpMaxConcurrentPositions)
      {LogEvent("ORDER_BLOCKED","Account concurrent position cap reached");return false;}
+   // Up to three positions may be unprotected/losing. Further scale-ins
+   // require ALL existing account positions to have protected profits.
+   if(count>=3 && unprotected_or_losing>0)
+     {LogEvent("ORDER_BLOCKED","Scaling beyond three requires all positions profitable and protected");return false;}
    double equity=AccountInfoDouble(ACCOUNT_EQUITY);
    if(equity<=0.0 || risk+additional_risk>=equity*InpMaxOpenRiskPercent/100.0)
      {LogEvent("ORDER_BLOCKED","Existing aggregate stop risk reached account cap");return false;}
@@ -1460,8 +1468,8 @@ double GetTodayNet()
 
 bool DailyRiskLimitReached(string &reason)
   {
-   if(DemoWebsiteNoDailyLimitsEnabled()){reason="";return false;}
-   // Do not bypass the 2% daily loss guard when unlimited daily entries are enabled.
+   reason="";
+   // Unlimited entry count must NEVER bypass the account's daily loss limit.
    if(!HistorySelect(StartOfDay(ServerNow()),ServerNow()))
      {reason="Daily history unavailable; cannot validate daily loss";return(true);}
    int entries=CountTodayEntries();
@@ -1627,7 +1635,7 @@ double ExecutionRiskBudget(const ENUM_ORDER_TYPE order_type,const double entry,c
       if(minimum<=0.0 || !OrderCalcProfit(order_type,g_symbol,minimum,entry,stop_loss,loss))return 0.0;
       budget=MathMax(budget,MathAbs(loss));
      }
-   return DemoWebsiteNoDailyLimitsEnabled() ? budget : MathMin(budget,daily);
+   return MathMin(budget,daily); // Daily loss allowance applies in every Demo mode.
   }
 double CalculateVolume(const ENUM_ORDER_TYPE order_type,const double entry,const double stop_loss)
   {
