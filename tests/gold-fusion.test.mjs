@@ -8,6 +8,7 @@ import {fixture,NOW} from './fixtures.mjs';
 import {analyzeGoldFusion,GOLD_FUSION_STRATEGY} from '../strategies/gold-fusion.mjs';
 import {classifyGoldCalendarEvent,goldNewsWindow,goldNewsScalpShadow} from '../strategies/gold-news-scalp.mjs';
 import {brokerGoldMarket} from '../broker-market.mjs';
+import {websiteTradeDecision} from '../website-entry.mjs';
 import {createApplication} from '../server.mjs';
 
 const event=(name,time=NOW,importance=3,id='N')=>({id,name,time,importance,currency:'USD'});
@@ -126,4 +127,49 @@ test('fusion trend engine can produce symmetric, well-oriented BUY and SELL plan
    assert.ok(side==='BUY'?p.sl<p.entry&&p.entry<p.tp1:p.tp1<p.entry&&p.entry<p.sl);
    assert.equal(p.status,'TRACKING');
  }
+});
+
+test('FUSION real website route is eligible on a matching funded Demo account, not BTC',()=>{
+  const x=raw();
+  x.execution={...x.execution,enabled:true,main_connected:true,remote_control:true,
+    paused:false,demo:true,website_recommendations:true,demo_recommendations:true,
+    website_since:NOW-10,risk_percent:.5,max_daily_loss_percent:2,news_filter:true};
+  x.account={currency:'USD',balance:10000,equity:10000,free_margin:10000,floating:0};
+  x.ea={heartbeat_at:NOW,checked_at:NOW,emergency_stop:false,
+    settings:{ema_fast:8,ema_slow:21,bias_seconds:900,entry_seconds:300,max_spread_points:80,
+      reward_risk:1,news_before_minutes:30,news_after_minutes:30},signal:null};
+  const snapshot=cleanSnapshot(x,NOW),market=brokerGoldMarket(snapshot,NOW,{goldStrategy:'FUSION'});
+  assert.equal(market.analysis.status,'READY');
+  assert.ok(market.analysis.plan);
+  const plan={...market.analysis.plan,id:'gold-fusion-demo-integration',status:'TRACKING'};
+  const args={enabled:true,snapshot,market:{...market,currentSignal:plan},analysisPlan:plan,
+    costs:{ready:true},durable:true,now:NOW,requiredStrategy:GOLD_FUSION_STRATEGY};
+  const ready=websiteTradeDecision(args);
+  assert.equal(ready.reason,'WEBSITE_READY',JSON.stringify({reason:ready.reason,plan:ready.plan}));
+  assert.equal(ready.plan.tp,plan.tp1);
+  assert.equal(ready.plan.sl,plan.sl);
+  assert.equal(ready.plan.expires_at,NOW+15);
+  assert.equal(websiteTradeDecision({...args,durable:false}).reason,'DURABLE_ENTRY_JOURNAL_REQUIRED');
+  const stale=structuredClone(snapshot);stale.ea.heartbeat_at=NOW-20;
+  assert.equal(websiteTradeDecision({...args,snapshot:stale}).reason,'STALE_MT5');
+  const btc=structuredClone(snapshot);btc.symbol='BTCUSD.m';
+  assert.equal(websiteTradeDecision({...args,snapshot:btc}).ready,false);
+});
+
+test('healthz exposes FUSION Demo configured state and blockers without claiming execution',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'nabd-fusion-health-'));
+  const app=createApplication({dataDir:dir,clock:()=>NOW,config:{
+    goldSignalStrategy:'FUSION',goldFusionDemoAutoExecution:true,
+    demoRecommendationExecution:true,publicationEnabled:true
+  }});
+  await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
+  t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
+  const base='http://127.0.0.1:'+app.server.address().port;
+  const health=await (await fetch(base+'/healthz')).json();
+  assert.equal(health.goldFusion.selected,true);
+  assert.equal(health.goldFusion.demoAutoConfigured,true);
+  assert.equal(health.goldFusion.accountMode,'DEMO_ONLY');
+  assert.equal(health.goldFusion.executionReady,false);
+  assert.notEqual(health.goldFusion.executionReason,'WEBSITE_READY');
+  assert.equal(health.goldFusion.strategy,'FUSION');
 });
