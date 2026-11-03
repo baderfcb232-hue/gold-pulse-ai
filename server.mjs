@@ -574,6 +574,17 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
             costs: costStatus().status, prerequisites: state.publicationReadiness, telegram: {...telegramReadiness(), faultAlerts: messaging.faultAlerts, configured: messaging.configured,
               mode: messaging.mode, verification: messaging.verification, testDelivery: messaging.testDelivery}},
           goldOnly: cfg.goldOnly, websiteBridge: state.websiteBridge, btc: btcHealth(),
+          goldFusion: {strategy: cfg.goldSignalStrategy,
+            selected: cfg.goldSignalStrategy === 'FUSION',
+            demoAutoConfigured: cfg.goldSignalStrategy === 'FUSION' &&
+              cfg.goldFusionDemoAutoExecution === true &&
+              cfg.demoRecommendationExecution === true &&
+              cfg.publicationEnabled === true,
+            executionReady: cfg.goldSignalStrategy === 'FUSION' &&
+              state.websiteExecution?.ready === true,
+            executionReason: cfg.goldSignalStrategy === 'FUSION'
+              ? (state.websiteExecution?.reason || 'UNKNOWN') : 'GOLD_FUSION_NOT_SELECTED',
+            accountMode: 'DEMO_ONLY'},
           mt5: {connection: state.connection, signalSourceReady: state.signalSourceReady,
             quoteAgeSeconds: state.quoteAge, lastQuoteAt: state.lastUpdate, lastIngestAt: snapshot?.received_at ?? null},
           markets: Object.fromEntries(Object.entries(sources).map(([symbol, source]) => [symbol, {
