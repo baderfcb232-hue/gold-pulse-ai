@@ -53,6 +53,9 @@ input bool            InpEnableLiveTrading      = true;       // Explicit safety
 
 //--- time and news protection
 input group "Trading schedule and news"
+input bool            InpUseBrokerSessionBuffers = true; // Gold broker session time buffers
+input int             InpAfterSessionOpenMinutes = 30;
+input int             InpBeforeSessionCloseMinutes = 60;
 input bool            InpUseTradingHours        = false;
 input int             InpTradeStartHour         = 7;           // Broker server time
 input int             InpTradeEndHour           = 20;          // Broker server time, exclusive
@@ -317,7 +320,9 @@ int OnInit()
       !MathIsValidNumber(InpBasketProfitTarget) || InpBasketProfitTarget<=0.0 ||
       !MathIsValidNumber(InpExitCostPerLot) || InpExitCostPerLot<0.0 ||
       !MathIsValidNumber(InpCloseBufferMoney) || InpCloseBufferMoney<0.0 ||
-      InpCycleCooldownSeconds<0 || InpDeviationPoints<0 || InpMagicNumber<=0)
+      InpCycleCooldownSeconds<0 || InpDeviationPoints<0 || InpMagicNumber<=0 ||
+       InpAfterSessionOpenMinutes<0 || InpAfterSessionOpenMinutes>240 ||
+       InpBeforeSessionCloseMinutes<0 || InpBeforeSessionCloseMinutes>240)
      {
       Print("Invalid risk or small-profit settings.");
       return(INIT_PARAMETERS_INCORRECT);
@@ -657,7 +662,7 @@ bool BuildSignal(SignalData &signal)
    ZeroMemory(signal);
    signal.reason="Waiting for native scalp setup";
    if(HasOwnPosition() || HasOwnPendingOrder() || HasForeignNettingExposure() || g_cycle_closing)return false;
-   if(!IsWithinTradingHours()){signal.reason="Outside configured hours";return false;}
+   if(!IsWithinTradingHours()){signal.reason="Outside allowed trading hours or broker open/close buffer";return false;}
    if(DailyRiskLimitReached(signal.reason) || IsHighImpactNewsWindow(signal.reason))return false;
    MqlTick tick;
    if(!SymbolInfoTick(g_symbol,tick) || ServerNow()-tick.time>10 || tick.time>ServerNow()+2)
@@ -684,7 +689,7 @@ bool BuildSignal(SignalData &signal)
 bool PlaceSignal(const SignalData &signal)
   {
    g_website_attempt_code=0;g_website_attempt_retcode=0;g_website_attempt_deal_ticket=0;
-   if(!ExecutionPermissionsAvailable() ||
+   if(!ExecutionPermissionsAvailable() || !IsWithinTradingHours() ||
       (!DemoWebsiteNoDailyLimitsEnabled() && HasOwnPosition()) ||
       (DemoWebsiteNoDailyLimitsEnabled() && !ConcurrentWebsiteEntryAllowed()) ||
       HasOwnPendingOrder() || HasForeignNettingExposure() || g_cycle_closing)
@@ -1453,17 +1458,52 @@ bool IsHighImpactNewsWindow(string &reason)
 
 bool IsWithinTradingHours()
   {
-   if(!InpUseTradingHours)
+   datetime now=ServerNow();
+   if(InpUseTradingHours)
+     {
+      MqlDateTime current;
+      TimeToStruct(now,current);
+      int hour=current.hour;
+      if(InpTradeStartHour!=InpTradeEndHour)
+        {
+         bool manual_ok=InpTradeStartHour<InpTradeEndHour ?
+                         (hour>=InpTradeStartHour && hour<InpTradeEndHour) :
+                         (hour>=InpTradeStartHour || hour<InpTradeEndHour);
+         if(!manual_ok)
+            return(false);
+        }
+     }
+
+   if(!InpUseBrokerSessionBuffers)
       return(true);
 
-   MqlDateTime now_struct;
-   TimeToStruct(ServerNow(),now_struct);
-   int hour=now_struct.hour;
-   if(InpTradeStartHour==InpTradeEndHour)
-      return(true);
-   if(InpTradeStartHour<InpTradeEndHour)
-      return(hour>=InpTradeStartHour && hour<InpTradeEndHour);
-   return(hour>=InpTradeStartHour || hour<InpTradeEndHour);
+   MqlDateTime current;
+   TimeToStruct(now,current);
+   datetime today=StartOfDay(now);
+   // Include previous weekday's session for instruments that cross midnight.
+   for(int day_offset=-1;day_offset<=0;day_offset++)
+     {
+      int weekday=(current.day_of_week+day_offset+7)%7;
+      datetime day_start=today+(datetime)(day_offset*86400);
+      for(uint index=0;index<32;index++)
+        {
+         datetime from=0,to=0;
+         if(!SymbolInfoSessionTrade(g_symbol,(ENUM_DAY_OF_WEEK)weekday,index,from,to))
+            break;
+         int open_seconds=(int)((long)from%86400);
+         int close_seconds=(int)((long)to%86400);
+         datetime opens=day_start+(datetime)open_seconds;
+         datetime closes=day_start+(datetime)close_seconds;
+         if(closes<=opens)
+            closes+=86400;
+         if(now<opens || now>=closes)
+            continue;
+         return(now-opens >= InpAfterSessionOpenMinutes*60 &&
+                closes-now > InpBeforeSessionCloseMinutes*60);
+        }
+     }
+   // Fail closed if the broker does not expose an active trade session.
+   return(false);
   }
 
 //+------------------------------------------------------------------+
@@ -1789,7 +1829,7 @@ void NABDProcessWebsiteApproval()
       HasOwnPendingOrder() || HasForeignNettingExposure())
      {NABDWebsiteBlocked(id,"parallel entry incompatible with hedging, account exposure limit, or pending order",105);return;}
    if(g_cycle_closing){NABDWebsiteBlocked(id,"previous cycle is closing",106);return;}
-   if(!IsWithinTradingHours()){NABDWebsiteBlocked(id,"outside allowed trading hours",107);return;}
+   if(!IsWithinTradingHours()){NABDWebsiteBlocked(id,"broker session closed or open/close time buffer",107);return;}
    if(!DemoWebsiteNoDailyLimitsEnabled() && InpUseSmallProfit && g_last_cycle_end>0 &&
       ServerNow()-g_last_cycle_end<InpCycleCooldownSeconds)
      {NABDWebsiteBlocked(id,"cycle cooldown active",108);return;}
