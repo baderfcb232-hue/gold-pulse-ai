@@ -257,9 +257,10 @@ export function analyzeGoldFusion(snapshot,now=Date.now()/1000,settings=defaults
     openingRangeProxy:openingRangeProxy(m5)};
   const partial={...empty,regime,checks,score,indicators:context,risk:'ASSESSED',
     reasons:checks.filter(x=>!x.pass).map(x=>x.name)};
-  // Lower-ADX early trends need a higher score and more agreeing signals.
-  if(side==='WAIT' || score<(earlyTrend?85:75) ||
-      checks.filter(x=>x.pass).length<(earlyTrend?5:4))
+  // Lower-ADX early TRENDS need more confirmation; normal BREAKOUT gates stay unchanged.
+  const strictEarlyTrend=earlyTrend && regime==='TREND';
+  if(side==='WAIT' || score<(strictEarlyTrend?85:75) ||
+      checks.filter(x=>x.pass).length<(strictEarlyTrend?5:4))
     return {...partial,risk:'CAUTION',reasons:side==='WAIT'?['NO_REGIME_ENTRY_SETUP']:
       ['INSUFFICIENT_INDEPENDENT_CONFIRMATION']};
   const buy=side==='BUY';
