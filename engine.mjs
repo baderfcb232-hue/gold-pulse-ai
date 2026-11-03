@@ -85,6 +85,22 @@ export function cleanSnapshot(raw, now = Date.now() / 1000) {
         tick_volume: number(c.tick_volume ?? 0, 'tick volume', {min: 0})};
     });
   }
+  // Only GOLD research reads optional M1 closed candles. BTC path stays unchanged.
+  if (/^XAUUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(symbol) && raw.candles?.M1 != null) {
+    const rows=raw.candles.M1;
+    if(!Array.isArray(rows) || rows.length>120)throw new Error('Invalid gold M1 candles');
+    let previous=0;
+    candles.M1=rows.map(c=>{
+      const time=number(c.time,'gold M1 time',{min:1,max:now});
+      if(time<=previous || time+60>now+2)throw new Error('Unclosed or unordered gold M1 candle');
+      previous=time;
+      const open=number(c.open,'gold M1 open',{min:0.000001});
+      const close=number(c.close,'gold M1 close',{min:0.000001});
+      const low=number(c.low,'gold M1 low',{min:0.000001,max:Math.min(open,close)});
+      const high=number(c.high,'gold M1 high',{min:Math.max(open,close)});
+      return {time,open,high,low,close,tick_volume:number(c.tick_volume??0,'gold M1 volume',{min:0})};
+    });
+  }
   // Optional bridge 3.04 daily history. Old bridges remain compatible.
   let daily_candles = [];
   if (raw.daily_candles != null) {
