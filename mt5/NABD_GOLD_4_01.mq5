@@ -1519,8 +1519,8 @@ bool IsHighImpactNewsWindow(string &reason)
    datetime now=ServerNow();
    MqlCalendarValue values[];
    int found=CalendarValueHistory(values,
-                                  now-InpNewsMinutesBefore*60,
-                                  now+InpNewsMinutesAfter*60,
+                                  now-InpNewsMinutesAfter*60,
+                                  now+InpNewsMinutesBefore*60,
                                   "",
                                   InpNewsCurrency);
    if(found<0)
