@@ -751,6 +751,9 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
             websiteEntries:commandJournal?.websiteEntries ? (await commandJournal.websiteEntries(entrySourceKey(btcSnapshot))).map(record => ({...record,signal_code:recommendationCode(record.plan_id || record.plan?.id),broker_fill_confirmed:Boolean(verifiedBrokerDeal(record,btcSnapshot)),broker_deal_ticket:verifiedBrokerDeal(record,btcSnapshot)?.ticket||null})) : [],
             websiteDecisions:commandJournal?.websiteDecisions ? (await commandJournal.websiteDecisions(entrySourceKey(btcSnapshot))).map(record => ({...record,signal_code:recommendationCode(record.plan_id)})) : []} : null,
           deals: db.prepare('SELECT data FROM deals ORDER BY time DESC LIMIT 1000').all().map(x => JSON.parse(x.data)),
+          performance: summarizeGoldPerformance({
+            deals: db.prepare('SELECT data FROM deals ORDER BY time DESC LIMIT 5000').all().map(x => JSON.parse(x.data)),
+            positions: snapshot?.positions ?? [], account: snapshot?.account ?? null, now}),
           commands: commandJournal ? await commandJournal.list(clock()) : db.prepare('SELECT * FROM commands ORDER BY id DESC LIMIT 100').all(),
           lastUpdate: snapshot?.received_at ?? null});
       }
