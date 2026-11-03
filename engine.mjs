@@ -151,7 +151,8 @@ export function cleanSnapshot(raw, now = Date.now() / 1000) {
       floating: number(raw.account.floating, 'floating')
     } : null,
     positions: Array.isArray(raw.positions) ? raw.positions.slice(0, 200).map(p => ({
-      ticket: text(p.ticket, 25), side: p.side === 'BUY' ? 'BUY' : 'SELL',
+      ticket: text(p.ticket, 25), position_id: text(p.position_id ?? p.ticket, 25),
+      side: p.side === 'BUY' ? 'BUY' : 'SELL',
       volume: number(p.volume, 'position volume', {min: 0}),
       entry: number(p.entry, 'position entry', {min: 0}),
       sl: number(p.sl ?? 0, 'position sl', {min: 0}), tp: number(p.tp ?? 0, 'position tp', {min: 0}),
