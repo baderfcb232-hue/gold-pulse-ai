@@ -31,7 +31,7 @@ def synthetic_candles(rows=2200):
         drift = 0.00008 * math.sin(i / 55) + 0.00003 * math.sin(i / 8)
         move = float(rng.normal(drift, 0.00065))
         prices.append(prices[-1] * math.exp(move))
-    opens = np.asarray(prices[:-1] + [prices[-1]])
+    opens = np.asarray([prices[0]] + prices[:-1])
     closes = np.asarray(prices)
     highs = np.maximum(opens, closes) + rng.uniform(.15, .8, rows)
     lows = np.minimum(opens, closes) - rng.uniform(.15, .8, rows)
