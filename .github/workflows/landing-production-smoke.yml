@@ -5,6 +5,13 @@ on:
     paths:
       - 'public/landing.html'
       - 'public/landing-en.html'
+      - 'public/manifest.webmanifest'
+      - 'public/pwa-register.js'
+      - 'public/sw.js'
+      - 'public/offline.html'
+      - 'public/nabd-app-icon-192.png'
+      - 'public/nabd-app-icon-512.png'
+      - 'public/nabd-apple-touch-180.png'
       - 'public/nabd-mark.svg'
       - 'public/marketing-i18n.css'
       - 'public/market-motion.css'
@@ -34,6 +41,12 @@ jobs:
             '/market-motion.css': (b'nabd-market-pulse-draw',b'prefers-reduced-motion'),
             '/language-pref.js': (b'menu.open=false',b'localStorage'),
             '/nabd-mark.svg': (b'<svg',b'#0F766E',b'#D4A24C'),
+            '/manifest.webmanifest': (b'nabd-app-icon-192.png',b'nabd-app-icon-512.png',b'standalone'),
+            '/sw.js': (b'nabd-offline-shell-v1',b'fetch(req)'),
+            '/offline.html': (b'Offline',b'MT5'),
+            '/nabd-app-icon-192.png': (b'PNG',),
+            '/nabd-app-icon-512.png': (b'PNG',),
+            '/nabd-apple-touch-180.png': (b'PNG',),
             '/landing.css?v=phase2-1': (b'.hero-visual',b'prefers-reduced-motion'),
             '/dashboard': (b'id="market-symbols"', b'/app.js'),
           }
