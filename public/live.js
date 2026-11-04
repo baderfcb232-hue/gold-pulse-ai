@@ -2,7 +2,7 @@ import {drawBrokerCandles} from './broker-chart.js';
 import {initMiniSparkline} from './mini-spark.js';
 import {createMarketLoaders} from './market-loaders.js';
 import {inSignalDateRange} from './signal-date-filter.js';
-export function initLiveWorkspace({stream, api, time, num, now, notify, positionSize, getSizingContext}) {
+export function initLiveWorkspace({stream, api, time, num, now, notify, priceFeedback, positionSize, getSizingContext}) {
   const $ = id => document.getElementById(id);
   const node = (tag, cls, text) => {const n = document.createElement(tag); if (cls) n.className = cls;
     if (text != null) n.textContent = String(text); return n;};
@@ -21,13 +21,14 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, position
   let chartSourceKey = '', referenceChart = false, brokerChartData = null, brokerChartKey = '', brokerChartLoading = false;
   let lastBrokerFetch = 0, quotePolling = false, lastQuoteStamp = '', cachedBrokerQuote = null;
   const seenSignals = new Set();
-  const mini = initMiniSparkline({$,formatPrice:fmt});
+  const mini = initMiniSparkline({$,formatPrice:fmt,onQuote:(id,value,detail)=>priceFeedback?.observe(id,value,detail)});
   const loaders = typeof document.querySelectorAll === 'function' ? createMarketLoaders() : {ready(){}};
   const market = () => data?.markets?.[symbol];
   const fresh = m => Boolean(m?.quote && m.connection === 'LIVE' && now() - m.quote.time <= m.quoteTtl && Date.now() - lastServerSeen < 12000);
   const activePlan = () => {const m = market(); return fresh(m) && m.currentSignal?.expires_at > now() ? m.currentSignal : null;};
   function applyMarket(next) {
     if (data && next.serverTime < data.serverTime) return;
+    const prior=data;
     data = next; lastServerSeen = Date.now();
     loaders.ready('market');
     if (!data.markets[symbol]) symbol = 'XAUUSD';
@@ -40,10 +41,16 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, position
     // Each market must notify independently: a BTC recommendation must not be lost
     // just because the operator is currently browsing the gold chart.
     for (const item of Object.values(data.markets)) {
+      const older=prior?.markets?.[item.symbol];
+      if(initialized&&item.candle_kind==='BROKER_OHLC'&&item.connection==='LIVE'&&fresh(item)&&
+         older?.history_revision>0&&item.history_revision>older.history_revision){
+        notify('تم تحديث شموع '+(item.broker_symbol||item.name)+' من '+(item.source||'وسيط MT5')+' بنجاح.',
+          {kind:'success',eventKey:'candles:'+item.symbol+':'+item.history_revision});
+      }
       const plan = item.currentSignal;
       if (!plan || seenSignals.has(plan.id)) continue;
       if (initialized && fresh(item) && plan.expires_at > now() && $('signal-notifications').checked)
-        notify(`فرصة مضاربة ${side(plan.side)} · ${item.name} · ${fmt(plan.entry)}`);
+        notify(`فرصة مضاربة ${side(plan.side)} · ${item.name} · ${fmt(plan.entry)}`,{kind:'success',eventKey:'signal:'+plan.id});
       seenSignals.add(plan.id);
     }
     initialized = true;
@@ -81,6 +88,10 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, position
         lastQuoteStamp = stamp;
         put('live-price',fmt(q.quote.price));
         put('live-ask',fmt(q.quote.ask));put('live-bid',fmt(q.quote.bid));
+        if(q.connection==='LIVE'){
+          for(const [id,value]of [['live-price',q.quote.price],['live-ask',q.quote.ask],['live-bid',q.quote.bid]])
+            priceFeedback?.observe(id,value,{symbol,time:q.quote.time,sourceId:q.source_id});
+        }
         put('live-spread',Number.isFinite(q.point) && q.point > 0 ?
           num((q.quote.ask-q.quote.bid)/q.point,1)+' نقطة' : fmt(q.quote.ask-q.quote.bid)+' USD');
       }
@@ -99,6 +110,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, position
     put('live-update-age', m?.quote ? `عمر السعر ${Math.max(0, Math.floor(now() - m.quote.time))} ثانية` : 'بانتظار أول سعر');
     put('live-asset-title', (m?.name || (symbol === 'XAUUSD' ? 'الذهب' : 'بيتكوين')) + ' / دولار');
     put('live-price', fmt(m?.quote?.price));
+    if(live)priceFeedback?.observe('live-price',m?.quote?.price,{symbol,time:m?.quote?.time,sourceId:m?.source_id||m?.source||symbol});
     if(Number.isFinite(m?.quote?.price)&&Number.isFinite(m?.quote?.time))mini.update({symbol,price:m.quote.price,time:m.quote.time,source:m.source,sourceId:m.source_id});
     else mini.show(symbol);
     put('live-change', m?.change_from_last_close == null ? 'USD' : `${m.change_from_last_close >= 0 ? '+' : ''}${num(m.change_from_last_close, 3)}% عن آخر إغلاق`);
@@ -107,6 +119,10 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, position
     $('broker-quote-values').hidden = !quoteBroker;
     if (quoteBroker) {
       put('live-ask', fmt(m.quote.ask)); put('live-bid', fmt(m.quote.bid));
+      if(live){
+        priceFeedback?.observe('live-ask',m.quote.ask,{symbol,time:m.quote.time,sourceId:m.source_id||m.source||symbol});
+        priceFeedback?.observe('live-bid',m.quote.bid,{symbol,time:m.quote.time,sourceId:m.source_id||m.source||symbol});
+      }
       put('live-spread', Number.isFinite(m.point) && m.point > 0 ? num((m.quote.ask - m.quote.bid) / m.point, 1) + ' نقطة' : fmt(m.quote.ask - m.quote.bid) + ' USD');
     }
     const broker = m?.candle_kind === 'BROKER_OHLC';

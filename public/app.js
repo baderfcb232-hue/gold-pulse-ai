@@ -3,6 +3,8 @@ import {initLiveWorkspace} from '/live.js';
 import {inSignalDateRange} from '/signal-date-filter.js';
 import {createStateConnection} from '/state-connection.js';
 import {requestJson} from '/http.js';
+import {createToastCenter} from '/toast-ui.js';
+import {createPriceFeedback} from '/price-feedback.js';
 import {controlBlockers, marketControlStatus, marketControlWarnings, closeButtonDisplay} from '/control-readiness.js?v=stable-close-1';
 import {createCommandTracker, commandProgress, demoExecutionMessage} from '/command-feedback.js?v=mobile-controls-3';
 const $ = id => document.getElementById(id);
@@ -21,6 +23,8 @@ let lastSignalId = null, signalsStamp = '', clockOffset = 0, pendingCommand = nu
 let stateErrorShown = false;
 let privateEpoch = 0, privateReadAllowed = true, privateLoading = null, commandSending = false, privateErrorShown = false;
 const commandTracker = createCommandTracker();
+const priceFeedback = createPriceFeedback();
+const toastCenter = createToastCenter({getContainer:()=>$('toasts'),createNode:e,getHistory:()=>$('nabd-toast-history-list')});
 let controlMarket='XAUUSD';
 const controlName=()=>controlMarket==='BTCUSD'?'البيتكوين':'الذهب';
 const controlState=()=>state?.controls?.[controlMarket]||null;
@@ -35,7 +39,7 @@ const time = (t, detailed = false) => t ? new Intl.DateTimeFormat('ar-PS',{timeZ
 const now = () => (Date.now() + clockOffset) / 1000;
 const badge = (s, cls='neutral') => e('span','pill '+cls,s);
 const empty = text => e('p','empty-inline',text);
-function toast(message, error=false) {if([...$('toasts').children].some(x=>x.dataset.message===message))return;const box=e('div','toast'+(error?' error':'')); box.dataset.message=message; const b=e('button','', '×');b.setAttribute('aria-label','إغلاق التنبيه');b.onclick=()=>box.remove();box.append(b,e('span','',message));$('toasts').append(box);setTimeout(()=>box.remove(),9000);}
+function toast(message,error=false){return toastCenter.push(message,error);}
 async function api(path, options={}) {
   return requestJson(path,{...options,headers:options.body?{'Content-Type':'application/json',...options.headers}:options.headers});
 }
@@ -60,9 +64,13 @@ function renderFaultAlerts() {
   lastFaults=faults;
 }
 function applyState(raw) {
+  const previousConnection=state?effectiveConnection():null;
   state=normalize(raw);if(state.serverTime)clockOffset=state.serverTime*1000-Date.now();
+  const currentConnection=effectiveConnection();
+  if(previousConnection==='LIVE'&&currentConnection!=='LIVE')toast('انقطع استقبال بيانات MT5 الحديثة؛ أوقفت الواجهة اعتبار الأسعار صالحة.',{kind:'warning',eventKey:'bridge-offline'});
+  else if(previousConnection&&previousConnection!=='LIVE'&&currentConnection==='LIVE')toast('تم استعادة اتصال MT5 وتحديث حالة السوق.',{kind:'success',eventKey:'bridge-online'});
   renderOverview();renderNews();renderDiagnostics();renderExecution();renderLink();renderStorage();renderFaultAlerts();
-  const id=state.currentSignal?.id;if(id&&lastSignalId&&id!==lastSignalId&&$('signal-notifications').checked)toast(`إشارة ${sides[state.currentSignal.side]} جديدة — ${price(state.currentSignal.entry)}`);
+  const id=state.currentSignal?.id;if(id&&lastSignalId&&id!==lastSignalId&&$('signal-notifications').checked)toast(`إشارة ${sides[state.currentSignal.side]} جديدة — ${price(state.currentSignal.entry)}`,{kind:'success',eventKey:'signal:'+id});
   if(id)lastSignalId=id;
   const stamp=[state.historyCount,state.currentSignal?.id,state.currentSignal?.tp1_hit,state.currentSignal?.status].join(':');
   if(stamp!==signalsStamp){signalsStamp=stamp;loadSignals();}
@@ -79,6 +87,10 @@ function renderOverview(){
   const c=effectiveConnection(),live=c==='LIVE',s=state;
   renderConnection();put('symbol-label',s.symbol);put('broker-name',s.broker||'مصدر MT5');
   put('ask',price(s.ask));put('bid',price(s.bid));put('spread',s.spread==null?'—':num(s.spread,1)+' نقطة');put('quote-time',time(s.lastUpdate));
+  if(s?.lastUpdate&&effectiveConnection()==='LIVE'){
+    priceFeedback.observe('ask',s.ask,{symbol:s.symbol||'XAUUSD',time:s.lastUpdate,sourceId:s.broker||'MT5'});
+    priceFeedback.observe('bid',s.bid,{symbol:s.symbol||'XAUUSD',time:s.lastUpdate,sourceId:s.broker||'MT5'});
+  }
   const riskLabels={UNKNOWN:'المخاطرة غير معروفة',BLOCKED:'الدخول متوقف',CAUTION:'شروط غير مكتملة',ASSESSED:'تم فحص شروط الدخول'};
   const ea=s.signalSource==='MT5_EA',settings=s.bot?.settings;
   const mainReady=!ea||mainFresh();
@@ -524,7 +536,7 @@ setInterval(()=>{if(authenticated&&activeCommandBusy())loadPrivate();},2000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)fetchState();});
 await fetchState();loadSignals();loadPrivate();
 stream=new EventSource('/api/events');stream.addEventListener('state',event=>{try{stateConnection.receive(JSON.parse(event.data));}catch{stateConnection.disconnected();}});stream.onerror=()=>stateConnection.disconnected();
-initLiveWorkspace({stream,api,time,num,now,notify:toast,positionSize,getSizingContext:symbol=>{
+initLiveWorkspace({stream,api,time,num,now,notify:toast,priceFeedback,positionSize,getSizingContext:symbol=>{
   const account=symbol==='BTCUSD'?privateData?.btc?.account:privateData?.account;
   const brokerSpec=symbol===state?.symbol?state?.spec:state?.controls?.[symbol]?.spec;
   return {spec:brokerSpec,equity:account?.equity,freeMargin:account?.free_margin};
