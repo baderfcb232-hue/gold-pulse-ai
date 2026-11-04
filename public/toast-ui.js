@@ -29,7 +29,10 @@ export function createToastCenter({getContainer,createNode,getHistory=()=>null,c
      removable?.remove();
    }
    host.append(box);
-   if(kind!=='error')setTimeout(()=>{if(box.parentNode)box.remove();},9000);
+   if(kind!=='error'){
+     const timer=setTimeout(()=>{if(box.parentNode)box.remove();},9000);
+     timer?.unref?.(); // Node regression tests should not wait for cosmetic UI timers.
+   }
    const entry={kind,message:msg,time:now};
    records.unshift(entry);if(records.length>40)records.length=40;
    const history=getHistory();
