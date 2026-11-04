@@ -1,5 +1,5 @@
 import {drawBrokerCandles} from './broker-chart.js';
-import {initMiniSparkline} from './mini-spark.js';
+import {initMiniSparkline} from './mini-spark.js?v=touch-1';
 import {createMarketLoaders} from './market-loaders.js';
 import {inSignalDateRange} from './signal-date-filter.js';
 import {translateUiText,externalHeadlineForLocale,currentLocale,setLocalizedText} from './i18n-dom.js?v=v2-i18n-3';
