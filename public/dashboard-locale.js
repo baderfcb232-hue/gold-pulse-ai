@@ -1,4 +1,6 @@
-/* NABD language preference for primary dashboard controls; source messages retain original meaning. */
+/* NABD unified visual language selection. This module never changes prices or trading requests. */
+import {t,layoutFor} from '/i18n-core.js';
+import {translateStaticUi} from '/i18n-dom.js';
 (function(){
  'use strict';
  const key='nabd:dashboard:language',marketing='nabd-marketing-language';
@@ -35,7 +37,10 @@
  let lang='ar';
  try{const saved=localStorage.getItem(key)||localStorage.getItem(marketing);lang=saved==='en'?'en':'ar'}catch{}
  function translate(){
-  document.documentElement.lang=lang;document.documentElement.dir=lang==='en'?'ltr':'rtl';
+  const layout=layoutFor(lang);
+  document.documentElement.lang=layout.lang;document.documentElement.dir=layout.dir;
+  const chooser=document.getElementById('dashboard-language-choice');
+  if(chooser){const ar=chooser.querySelector('[value="ar"]'),en=chooser.querySelector('[value="en"]');if(ar)ar.textContent=t('lang.ar',lang);if(en)en.textContent=t('lang.en',lang);}
   for(const [selector,arabic,english]of pairs){
     const el=document.querySelector(selector);if(el&&el.textContent!==(lang==='en'?english:arabic))
       el.textContent=lang==='en'?english:arabic;
@@ -44,6 +49,8 @@
   const selected=document.querySelector('.nav-button.selected')?.dataset.view||'overview';
   const h=document.getElementById('view-title'),label=viewLabels[selected];
   if(h&&label&&h.textContent!==(lang==='en'?label[1]:label[0]))h.textContent=lang==='en'?label[1]:label[0];
+  translateStaticUi(document.body,lang);
+  document.dispatchEvent(new CustomEvent('nabd:language-change',{detail:{lang}}));
  }
  function init(){
   const choice=document.getElementById('dashboard-language-choice');
