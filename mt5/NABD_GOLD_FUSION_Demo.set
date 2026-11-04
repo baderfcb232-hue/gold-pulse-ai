@@ -16,6 +16,7 @@ InpDemoBrokerMinimumLot=false
 InpMaxConcurrentPositions=5
 InpMaxOpenRiskPercent=2.0
 InpRiskPercent=0.50
+InpMaxMarginUsePercent=25.0
 InpUseVolatilityLotReduction=true
 InpVolatilityLookbackBars=48
 InpHighVolAtrRatio=1.50
