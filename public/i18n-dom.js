@@ -100,6 +100,16 @@ export function translateUiText(value,locale=currentLocale()){
     const found=trim.match(pattern);
     if(found)return raw.replace(trim,format(found));
   }
+  // Convert independent, already-reviewed labels within broker status summaries.
+  // Never partly translate a safety message when any unknown Arabic fragment remains.
+  if(trim.includes(' · ')){
+    const fields=trim.split(' · ');
+    if(fields.length>1&&fields.length<=10){
+      const translated=fields.map(field=>translateUiText(field,'en'));
+      if(translated.some((field,i)=>field!==fields[i])&&translated.every(field=>!/[؀-ۿ]/.test(field)))
+        return raw.replace(trim,translated.join(' · '));
+    }
+  }
   return raw; // Do not suppress unknown server/trading safety explanations.
 }
 /* News providers sometimes publish Arabic-only headlines. Never invent an English translation;
