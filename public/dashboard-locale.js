@@ -1,6 +1,6 @@
 /* NABD unified visual language selection. This module never changes prices or trading requests. */
 import {t,layoutFor} from '/i18n-core.js';
-import {translateStaticUi,translateUiText} from '/i18n-dom.js';
+import {translateStaticUi,translateUiText,observeLocaleUi} from '/i18n-dom.js';
 (function(){
  'use strict';
  const key='nabd:dashboard:language',marketing='nabd-marketing-language';
@@ -68,6 +68,7 @@ import {translateStaticUi,translateUiText} from '/i18n-dom.js';
     if(event.target.closest('[data-view]'))queueMicrotask(translate);
   });
   translate();
+  observeLocaleUi(document.body);
  }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
