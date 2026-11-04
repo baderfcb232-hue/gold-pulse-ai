@@ -102,6 +102,14 @@ export function translateUiText(value,locale=currentLocale()){
   }
   return raw; // Do not suppress unknown server/trading safety explanations.
 }
+/* News providers sometimes publish Arabic-only headlines. Never invent an English translation;
+   the original verified article URL remains clickable. */
+export function externalHeadlineForLocale(headline,locale=currentLocale()){
+  const value=String(headline??'').trim();
+  if(localeOf(locale)!=='en')return value;
+  if(!/[؀-ۿ]/.test(value))return value;
+  return 'Headline available in Arabic at the original source — open the article';
+}
 export function translateStaticUi(root,locale=currentLocale()){
   if(!root||typeof document==='undefined'||typeof document.createTreeWalker!=='function')return;
   const lang=localeOf(locale);
