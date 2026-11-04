@@ -2,11 +2,12 @@ import {drawBrokerCandles} from './broker-chart.js';
 import {initMiniSparkline} from './mini-spark.js';
 import {createMarketLoaders} from './market-loaders.js';
 import {inSignalDateRange} from './signal-date-filter.js';
+import {translateUiText} from './i18n-dom.js';
 export function initLiveWorkspace({stream, api, time, num, now, notify, priceFeedback, positionSize, getSizingContext}) {
   const $ = id => document.getElementById(id);
   const node = (tag, cls, text) => {const n = document.createElement(tag); if (cls) n.className = cls;
-    if (text != null) n.textContent = String(text); return n;};
-  const put = (id, text) => {$(id).textContent = text ?? '—';};
+    if (text != null) n.textContent = translateUiText(text); return n;};
+  const put = (id, text) => {$(id).textContent = text==null?'—':translateUiText(text);};
   const pill = (text, cls = 'neutral') => node('span', 'pill ' + cls, text);
   const empty = text => node('p', 'empty-inline', text);
   const fmt = v => Number.isFinite(v) ? v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—';
