@@ -22,6 +22,7 @@ jobs:
           from urllib.request import Request, urlopen
           base = 'https://gold-pulse-ai.onrender.com'
           expected = {
+            '/': (b'<html lang="ar" dir="rtl">',b'DEMO PREVIEW',b'href="/dashboard"'),
             '/welcome': (b'<html lang="ar" dir="rtl">',b'DEMO PREVIEW',b'href="/dashboard"'),
             '/landing.css?v=phase2-1': (b'.hero-visual',b'prefers-reduced-motion'),
             '/dashboard': (b'id="market-symbols"', b'/app.js'),
