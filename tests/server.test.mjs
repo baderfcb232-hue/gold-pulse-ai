@@ -208,7 +208,7 @@ test('Telegram market recommendations appear in the unified private dashboard hi
 
 test('signals UI omits Telegram history and retains recommendation sections',async t=>{
   const {base}=await setup(t);
-  const html=await (await fetch(base+'/')).text();
+  const html=await (await fetch(base+'/dashboard')).text();
   const js=await (await fetch(base+'/app.js')).text();
   assert.doesNotMatch(html,/id="telegram-sent-(?:card|list)"/);
   assert.doesNotMatch(js,/renderTelegramSent|telegram-sent-list/);
