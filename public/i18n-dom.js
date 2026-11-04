@@ -62,6 +62,16 @@ const dynamicPatterns=[
   [/^(.+) \| نبض$/,m=>translateUiText(m[1],'en')+' | NABD'],
   [/^شارت (.+)$/,m=>'Chart '+m[1]],
   [/^(.+) · متابعة افتراضية$/,m=>m[1]+' · Simulated tracking']
+  [/^متبقٍ نحو (\d+) ثانية لاستلام الأمر\. لا تعِد إرساله\.$/,m=>'About '+m[1]+' seconds remain to receive the command. Do not resend it.'],
+  [/^(الذهب|البيتكوين): توقف وصول بيانات جسر MT5 لأكثر من دقيقة\. حالة الأصل الآخر مستقلة\.$/,m=>translateUiText(m[1],'en')+': MT5 bridge data has stopped for over a minute. The other asset has a separate status.'],
+  [/^(الذهب|البيتكوين): جسر MT5 متصل لكن نبض البوت قديم أو غير متاح؛ أوامر التحكم معلّقة لهذا الأصل\.$/,m=>translateUiText(m[1],'en')+': The MT5 bridge is connected but bot heartbeat is stale or unavailable. Controls for this asset are suspended.'],
+  [/^آخر سجل MT5 يحتوي على (\d+) من صفقات البوت\. اضغط الزر لفحص شروط الإغلاق وإرسال الأمر بعد التأكيد\.$/,m=>'Latest MT5 history reports '+m[1]+' bot positions. Select the button to check close conditions and submit after confirmation.'],
+  [/^آخر أسعار مسجلة · (.+)$/,m=>'Recent price history · '+translateUiText(m[1],'en')],
+  [/^آخر فحص قبل (\d+) ثانية$/,m=>'Last checked '+m[1]+' seconds ago'],
+  [/^لا يوجد سعر حقيقي قبل (.+)$/,m=>'No real price before '+m[1]],
+  [/^بيانات الشموع الحديثة (.+)$/,m=>'Recent candle data '+m[1]],
+  [/^(.+) · ([\d,.]+) شمعة مغلقة$/,m=>translateUiText(m[1],'en')+' · '+m[2]+' closed candles'],
+  [/^رسالة الخطأ: (.+)$/,m=>'Error message: '+translateUiText(m[1],'en')]
   [/^آخر تحديث (.+)$/,m=>`Last updated: ${m[1]}`]
 ];
 const originals=new WeakMap(),attrs=new WeakMap();
