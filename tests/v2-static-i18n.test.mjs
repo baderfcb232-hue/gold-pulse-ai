@@ -160,8 +160,8 @@ test('English translation remains correct across streaming updates and reverses 
 
 test('dashboard and account translation scripts are browser modules with shared locale preference',()=>{
  const dashboard=read('index.html'),account=read('accounts.html');
- assert.match(dashboard,/dashboard-locale\.js\?v=v2-i18n-3" type="module"/);
- assert.match(account,/account-language\.js\?v=v2-i18n-3" type="module"/);
+ assert.match(dashboard,/dashboard-locale\.js\?v=v2-i18n-4" type="module"/);
+ assert.match(account,/account-language\.js\?v=v2-i18n-4" type="module"/);
  assert.match(account,/id="portal-language-choice"/);
  assert.match(read('dashboard-locale.js'),/translateStaticUi\(document.body,lang\)/);
  assert.match(read('account-language.js'),/translateStaticUi\(document.body,lang\)/);
