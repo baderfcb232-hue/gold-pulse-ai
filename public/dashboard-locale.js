@@ -1,4 +1,5 @@
-/* NABD language preference for primary dashboard controls; source messages retain original meaning. */
+/* NABD presentation locale: shared AR/EN labels; source prices and execution IDs stay unchanged. */
+import {t,layoutFor} from '/i18n-core.js';
 (function(){
  'use strict';
  const key='nabd:dashboard:language',marketing='nabd-marketing-language';
@@ -35,7 +36,15 @@
  let lang='ar';
  try{const saved=localStorage.getItem(key)||localStorage.getItem(marketing);lang=saved==='en'?'en':'ar'}catch{}
  function translate(){
-  document.documentElement.lang=lang;document.documentElement.dir=lang==='en'?'ltr':'rtl';
+  const layout=layoutFor(lang);
+  document.documentElement.lang=layout.lang;document.documentElement.dir=layout.dir;
+  const languagePicker=document.getElementById('dashboard-language-choice');
+  if(languagePicker){
+    const arabic=languagePicker.querySelector('[value="ar"]');
+    const english=languagePicker.querySelector('[value="en"]');
+    if(arabic)arabic.textContent=t('lang.ar',lang);
+    if(english)english.textContent=t('lang.en',lang);
+  }
   for(const [selector,arabic,english]of pairs){
     const el=document.querySelector(selector);if(el&&el.textContent!==(lang==='en'?english:arabic))
       el.textContent=lang==='en'?english:arabic;
