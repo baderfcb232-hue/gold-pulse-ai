@@ -1,0 +1,39 @@
+/* NABD V2 identity: transparent SVG mark and genuine semantic LTR layout. */
+.brand .brand-logo-ar,.brand .brand-logo-en{width:190px;height:64px;object-fit:contain;object-position:center;flex-shrink:0}
+html[dir="rtl"] .brand .brand-logo-en,html[dir="ltr"] .brand .brand-logo-ar{display:none}
+html[dir="ltr"] .brand .brand-logo-en{display:block}
+html[dir="rtl"] .brand .brand-logo-ar{display:block}
+:root[data-nabd-theme="dark"] .brand .brand-logo{filter:brightness(1.35) saturate(.87)}
+.brand .brand-logo{max-width:100%;background:transparent;border:0}
+html[dir="ltr"] body{text-align:start}
+html[dir="ltr"] .header>.button{margin-left:auto;margin-right:0}
+html[dir="ltr"] .header>.login-trigger{margin-right:0}
+html[dir="ltr"] .market-toolbar .segmented{margin-left:auto;margin-right:0}
+html[dir="ltr"] .setup-instructions{border-right:0;border-left:1px solid var(--border);padding-right:0;padding-left:25px}
+html[dir="ltr"] .setup-instructions ol{padding-right:0;padding-left:22px}
+html[dir="ltr"] .setup-instructions li{padding-right:0;padding-left:7px}
+html[dir="ltr"] .broker-quote-values strong{text-align:left}
+html[dir="ltr"] .quote-meta,html[dir="ltr"] .page-heading,html[dir="ltr"] .card-heading{direction:ltr}
+html[dir="ltr"] .nav-footer .theme-picker,html[dir="ltr"] .nav-footer .language-picker{text-align:left}
+html[dir="ltr"] .source-caption,html[dir="ltr"] .source-label{unicode-bidi:plaintext}
+html[dir="ltr"] .number,html[dir="ltr"] .price-value,html[dir="rtl"] .number{direction:ltr;unicode-bidi:isolate;font-variant-numeric:tabular-nums}
+html[dir="ltr"] #bridge-url,html[dir="ltr"] .copy-field input{direction:ltr;text-align:left}
+@media(min-width:1181px){
+ html[dir="ltr"] .nav{left:22px;right:auto}
+ html[dir="ltr"] .main{margin-left:200px;margin-right:auto;padding-left:26px;padding-right:28px}
+ html[dir="ltr"] .header:after{left:38px;right:auto}
+ html[dir="ltr"] .nav-footer{left:22px;right:auto}
+}
+@media(max-width:1180px){
+ html[dir="ltr"] .header .nav{direction:ltr;justify-content:flex-start}
+ html[dir="ltr"] .nav-footer{direction:ltr}
+}
+@media(max-width:760px){
+ .brand .brand-logo-ar,.brand .brand-logo-en{width:156px;height:52px}
+ html[dir="ltr"] .header .nav{order:99;width:100%;direction:ltr;justify-content:flex-start}
+ html[dir="ltr"] .nav-footer{position:static;direction:ltr}
+ html[dir="ltr"] .main{margin:0;padding-inline:14px}
+ html[dir="ltr"] .setup-instructions{border:0;padding-inline:0}
+}
+@media(max-width:390px){.brand .brand-logo-ar,.brand .brand-logo-en{width:122px;height:45px}}
+@media(prefers-reduced-motion:reduce){.brand .brand-logo{transition:none!important}}
