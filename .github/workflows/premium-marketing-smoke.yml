@@ -1,0 +1,43 @@
+name: NABD premium marketing smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'public/landing.html'
+      - 'public/brand-system.css'
+      - 'public/marketing-premium.css'
+      - 'server.mjs'
+      - '.github/workflows/premium-marketing-smoke.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - name: Read-only verification after deploy
+        run: |
+          python3 - <<'PY'
+          import time
+          from urllib.request import urlopen
+          base='https://gold-pulse-ai.onrender.com'
+          checks={'/':[b'marketing-premium.css?v=1',b'DEMO PREVIEW'],
+            '/marketing-premium.css':[b'.feature-card',b'.hero h1'],
+            '/brand-system.css':[b'--nabd-brand: #0F766E'],
+            '/dashboard':[b'id="market-symbols"'],
+            '/healthz':[b'"ok":true']}
+          for attempt in range(20):
+            try:
+              for path,markers in checks.items():
+                with urlopen(base+path,timeout=12) as response:
+                  if response.status!=200:raise RuntimeError(path+' unavailable')
+                  content=response.read(150000)
+                for marker in markers:
+                  if marker not in content:raise RuntimeError(path+' missing '+repr(marker))
+              print('NABD premium marketing, dashboard and server checks passed')
+              break
+            except Exception:
+              if attempt==19:raise
+              time.sleep(12)
+          PY
