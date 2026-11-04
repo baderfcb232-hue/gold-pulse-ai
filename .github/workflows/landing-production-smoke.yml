@@ -42,7 +42,7 @@ jobs:
             '/language-pref.js': (b'menu.open=false',b'localStorage'),
             '/nabd-mark.svg': (b'<svg',b'#0F766E',b'#D4A24C'),
             '/manifest.webmanifest': (b'nabd-app-icon-192.png',b'nabd-app-icon-512.png',b'standalone'),
-            '/sw.js': (b'nabd-offline-shell-v2',b'fetch(req)'),
+            '/sw.js': (b'nabd-offline-shell-v2',b"fetch(req,{cache:'no-store'})",b"url.pathname.startsWith('/api/')"),
             '/offline.html': (b'Offline',b'MT5'),
             '/nabd-app-icon-192.png': (b'PNG',),
             '/nabd-app-icon-512.png': (b'PNG',),
@@ -59,7 +59,7 @@ jobs:
                           data=response.read(200000)
                       for marker in markers:
                           if marker not in data:
-                              raise RuntimeError(f'{path} missing expected markup')
+                              raise RuntimeError(f'{path} missing expected marker {marker!r}')
                   with urlopen(base+'/healthz',timeout=12) as response:
                       import json
                       status=json.load(response)
@@ -70,6 +70,6 @@ jobs:
               except Exception as exc:
                   if attempt == 19:
                       raise
-                  print(f'Deploy readiness retry {attempt+1}: {type(exc).__name__}')
+                  print(f'Deploy readiness retry {attempt+1}: {type(exc).__name__}: {exc}', flush=True)
                   time.sleep(12)
           PY
