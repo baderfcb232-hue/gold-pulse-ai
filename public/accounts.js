@@ -1,13 +1,14 @@
 import {requestJson} from '/http.js';
+import {translateUiText,currentLocale} from '/i18n-dom.js';
 const $ = id => document.getElementById(id);
-const node = (tag, cls, text) => {const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = String(text); return el;};
+const node = (tag, cls, text) => {const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = translateUiText(text); return el;};
 const page = ({'/auth': 'auth', '/account': 'account', '/admin': 'admin', '/privacy': 'privacy'})[location.pathname] || 'auth';
 document.querySelectorAll('[data-page]').forEach(el => {el.hidden = el.dataset.page !== page;});
 const titles = {auth: 'تسجيل الدخول', account: 'حسابي', admin: 'إدارة نبض', privacy: 'الخصوصية'};
 document.title = `${titles[page]} | نبض`;
 let member = null, csrf = '', usersPage = 0, flowToken = '', signedIn = false;
-const date = value => value ? new Intl.DateTimeFormat('ar-PS', {dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Gaza'}).format(Number(value) * 1000) : '—';
-function message(text, error = false) {const el = $('portal-message'); el.textContent = text; el.classList.toggle('error', error); el.hidden = false;}
+const date = value => value ? new Intl.DateTimeFormat(currentLocale()==='en'?'en-GB':'ar-PS', {dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Gaza'}).format(Number(value) * 1000) : '—';
+function message(text, error = false) {const el = $('portal-message'); el.textContent = translateUiText(text); el.classList.toggle('error', error); el.hidden = false;}
 async function api(path, data) {
   return requestJson(path, {method: data === undefined ? 'GET' : 'POST',
     headers: data === undefined ? {} : {'Content-Type': 'application/json', 'X-NABD-CSRF': csrf}, ...(data === undefined ? {} : {body: JSON.stringify(data)})}, 30000);
