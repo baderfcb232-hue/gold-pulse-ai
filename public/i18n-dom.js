@@ -120,6 +120,15 @@ export function externalHeadlineForLocale(headline,locale=currentLocale()){
   if(!/[؀-ۿ]/.test(value))return value;
   return 'Headline available in Arabic at the original source — open the article';
 }
+/* Preserve original text for dynamically created labels when users switch English back to Arabic. */
+export function setLocalizedText(element,value,locale=currentLocale()){
+  if(!element)return element;
+  const raw=value===null||value===undefined?'—':String(value);
+  element.textContent=localeOf(locale)==='en'?translateUiText(raw,locale):raw;
+  const textNode=element.firstChild;
+  if(textNode?.nodeType===3&&/[\u0600-\u06FF]/.test(raw))originals.set(textNode,raw);
+  return element;
+}
 export function translateStaticUi(root,locale=currentLocale()){
   if(!root||typeof document==='undefined'||typeof document.createTreeWalker!=='function')return;
   const lang=localeOf(locale);
