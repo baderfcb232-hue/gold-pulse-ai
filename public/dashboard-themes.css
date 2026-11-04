@@ -52,7 +52,7 @@
 @media(max-width:680px){.theme-picker{padding:4px 6px}.theme-picker label{font-size:10px}.theme-picker select{max-width:92px;font-size:11px}.header{flex-wrap:wrap}}
 @media(prefers-reduced-motion:reduce){.theme-picker *{transition:none!important}}
 
-/* Phase 5: phone/tablet ergonomics; preserve every existing control and its state. */
+/* Mobile phase: keep dashboard navigation, touch targets and trading controls visible. */
 @media(max-width:920px){
  .main .top-grid,.main .chart-grid,.main .bottom-grid,.main .settings-grid{grid-template-columns:minmax(0,1fr)}
  .main .card,.main .panel,.main .chart-card,.main .market-toolbar{min-width:0;max-width:100%}
