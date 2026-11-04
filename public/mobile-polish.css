@@ -1,0 +1,42 @@
+/* NABD V2 mobile layout: no API, strategy or signal-state changes. */
+.main,.main .card,.main .card-heading,.main .featured-plan,.main .chart-grid,
+.main .bottom-grid,.main .settings-grid,.main .signal-values,.main .signal-plan-extras{min-width:0}
+.main :is(.source-caption,.source-label,.reason,.signal-budget-result,.event-meta,.signal-caption){overflow-wrap:anywhere}
+.mini-market-chart:focus-visible{outline:2px solid #0f766e;outline-offset:5px;border-radius:8px}
+.mini-market-chart{touch-action:pan-y}
+.mini-market-chart svg{touch-action:pan-y}
+.mini-market-caption{min-height:26px}
+@media(max-width:760px){
+ .header{display:flex;flex-wrap:wrap;gap:10px;min-width:0}
+ .header .brand{min-width:0}
+ .header .nav{order:99;flex:1 1 100%;width:100%;min-width:0;max-width:100%;display:flex;flex-wrap:wrap;justify-content:flex-start;gap:6px;overflow:visible}
+ html[dir="ltr"] .header .nav{justify-content:flex-start}
+ .header .nav-button{min-height:44px;flex:1 1 auto;padding:9px 10px}
+ .header .nav-footer,.nav-footer{position:static;order:99;flex:1 1 100%;min-width:0;width:100%;margin:4px 0 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}
+ .nav-footer :is(.theme-picker,.language-picker){min-width:0}
+ .main{width:100%;min-width:0;max-width:100%;padding-inline:14px}
+ .main :is(.top-grid,.live-top-grid,.chart-grid,.bottom-grid,.settings-grid){grid-template-columns:minmax(0,1fr)}
+ .main .page-heading{flex-wrap:wrap;align-items:start}
+ .main .card-heading{flex-wrap:wrap;align-items:start}
+ .main :is(.quotes,.broker-quote-values,.signal-values,.signal-plan-extras){min-width:0}
+ .main :is(.segmented,.filter-row,.signal-actions,.broker-chart-mode){max-width:100%;flex-wrap:wrap}
+ .main .signal-actions .button{white-space:normal}
+ .main :is(.number,.value-cell strong,.signal-plan-extras strong){max-width:100%;overflow-wrap:anywhere}
+ .portal-body .portal-header{min-width:0}
+ .portal-body .portal-header :is(.portal-brand,.portal-language-picker,.theme-picker){min-width:0}
+}
+@media(max-width:420px){
+ .main .signal-values,.main .signal-plan-extras{grid-template-columns:minmax(0,1fr)}
+ .main .quotes{gap:10px}
+ .main .quote-meta{display:grid;grid-template-columns:minmax(0,1fr)}
+ .main .signal-budget-form{grid-template-columns:minmax(0,1fr)}
+ .main .timeframe-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .main .card{padding:14px}
+ .main .connection-box{width:100%}
+ .portal-body .portal-header{gap:8px}
+ .portal-body .portal-header nav{max-width:100%}
+ .portal-body .portal-header .portal-language-picker{max-width:110px}
+}
+@media(prefers-reduced-motion:reduce){
+ .mini-market-card{transition:none!important;transform:none!important}
+}
