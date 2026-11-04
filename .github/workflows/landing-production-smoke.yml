@@ -1,0 +1,51 @@
+name: NABD landing production smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'public/landing.html'
+      - 'public/landing.css'
+      - 'server.mjs'
+      - '.github/workflows/landing-production-smoke.yml'
+  workflow_dispatch:
+jobs:
+  verify-public-navigation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - name: Verify deployed public landing and existing dashboard
+        run: |
+          python3 - <<'PY'
+          import time
+          from urllib.request import Request, urlopen
+          base = 'https://gold-pulse-ai.onrender.com'
+          expected = {
+            '/welcome': (b'<html lang="ar" dir="rtl">',b'DEMO PREVIEW',b'href="/dashboard"'),
+            '/landing.css?v=phase2-1': (b'.hero-visual',b'prefers-reduced-motion'),
+            '/dashboard': (b'id="market-symbols"', b'/app.js'),
+          }
+          for attempt in range(20):
+              try:
+                  for path, markers in expected.items():
+                      with urlopen(Request(base+path,headers={'User-Agent':'NABD-landing-smoke/1.0'}),timeout=12) as response:
+                          if response.status != 200:
+                              raise RuntimeError(f'{path} responded {response.status}')
+                          data=response.read(200000)
+                      for marker in markers:
+                          if marker not in data:
+                              raise RuntimeError(f'{path} missing expected markup')
+                  with urlopen(base+'/healthz',timeout=12) as response:
+                      import json
+                      status=json.load(response)
+                  if status.get('ok') is not True:
+                      raise RuntimeError('healthz did not report ok')
+                  print('NABD landing route, stylesheet, existing MT5 dashboard and server health passed.')
+                  break
+              except Exception as exc:
+                  if attempt == 19:
+                      raise
+                  print(f'Deploy readiness retry {attempt+1}: {type(exc).__name__}')
+                  time.sleep(12)
+          PY
