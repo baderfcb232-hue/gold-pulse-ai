@@ -2,23 +2,23 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#100c1b"><meta name="robots" content="noindex">
+  <meta name="theme-color" content="#0f766e"><meta name="robots" content="noindex">
   <title>حسابات نبض | NABD</title><link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/accounts.css"><script src="/accounts.js" type="module"></script>
+  <script src="/theme-init.js?v=light-default-1"></script><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/accounts.css"><link rel="stylesheet" href="/portal-premium.css?v=20261104"><script src="/accounts.js" type="module"></script>
 </head>
 <body class="portal-body">
   <a href="#portal-main" class="skip">انتقل للمحتوى</a>
   <header class="portal-header">
-    <a href="/" aria-label="نبض الذهب"><svg width="174" height="59" viewBox="0 0 214 72" role="img" aria-label="نبض · NABD"><defs><image id="portal-brand" href="/brand-logo.png" width="1536" height="1024"/></defs><svg x="144" y="2" width="68" height="68" viewBox="584 204 368 368"><use href="#portal-brand"/></svg><svg x="0" y="8" width="132" height="58" viewBox="538 592 460 240"><use href="#portal-brand"/></svg></svg></a>
+    <a href="/" aria-label="نبض — الصفحة الرئيسية" class="portal-brand"><span class="portal-brand-mark" aria-hidden="true">⌁</span><span class="portal-brand-name">نبض <b>NABD</b></span></a>
     <nav aria-label="الحساب"><a href="/dashboard">السوق</a><a href="/account">حسابي</a><a href="/admin" id="admin-link" hidden>الإدارة</a><a href="/privacy">الخصوصية</a></nav>
-    <button class="button ghost" id="member-logout" hidden>تسجيل الخروج</button>
+    <div class="theme-picker"><label for="dashboard-theme-choice">المظهر</label><select id="dashboard-theme-choice" aria-label="اختيار مظهر صفحات الحساب"><option value="light">فاتح</option><option value="dark">داكن</option><option value="system">النظام</option></select></div><button class="button ghost" id="member-logout" hidden>تسجيل الخروج</button>
   </header>
   <main id="portal-main" class="portal-main">
     <div id="portal-message" class="portal-message" role="status" aria-live="polite" hidden></div>
     <section data-page="auth" hidden>
-      <div class="auth-layout"><aside class="auth-intro"><span class="portal-kicker">NABD MEMBERS</span><h1>السوق أمامك.<br>وحسابك معك.</h1><p>مكان واحد لتوصيات نبض، تفضيلاتك وأمان حسابك.</p><div class="intro-line"></div><div class="portal-benefit"><span>01</span><div><strong>متابعة أوضح</strong><p>التوصيات وسجلها في حساب مؤكد بالبريد.</p></div></div><div class="portal-benefit"><span>02</span><div><strong>تحكّم بحسابك</strong><p>إعداداتك وجلساتك وخصوصيتك من مكان واحد.</p></div></div><a class="subtle" href="/">العودة إلى متابعة السوق ←</a></aside>
+      <div class="auth-layout"><aside class="auth-intro"><span class="portal-kicker">NABD MEMBERS</span><h1>السوق أمامك.<br>وحسابك معك.</h1><p>مكان واحد لتوصيات نبض، تفضيلاتك وأمان حسابك.</p><div class="intro-line"></div><div class="portal-benefit"><span>01</span><div><strong>متابعة أوضح</strong><p>التوصيات وسجلها في حساب مؤكد بالبريد.</p></div></div><div class="portal-benefit"><span>02</span><div><strong>تحكّم بحسابك</strong><p>إعداداتك وجلساتك وخصوصيتك من مكان واحد.</p></div></div><a class="subtle" href="/dashboard">الانتقال إلى لوحة التداول ←</a></aside>
         <article class="portal-card auth-card"><div class="auth-tabs" role="group" aria-label="نوع الدخول"><button type="button" data-auth-tab="login" class="active">تسجيل الدخول</button><button type="button" data-auth-tab="register">حساب جديد</button></div>
           <p id="auth-readiness" class="portal-note">نتحقق من جاهزية الحسابات…</p>
           <form id="member-login" data-auth-form="login"><h2>أهلًا بعودتك</h2><p class="subtle">سجّل الدخول إلى حساب نبض.</p><label>البريد الإلكتروني<input name="email" type="email" autocomplete="username" maxlength="254" required dir="ltr"></label><label>كلمة المرور<input name="password" type="password" autocomplete="current-password" maxlength="128" required></label><button class="button primary wide" type="submit">دخول</button><div class="form-links"><button type="button" class="text-button" data-auth-tab="forgot">نسيت كلمة المرور؟</button><button type="button" class="text-button" data-auth-tab="resend">إعادة رسالة التحقق</button></div></form>
