@@ -8,7 +8,7 @@ export function sparklineGeometry(samples) {
   const points=rows.map((p,i)=>({x:8+i*304/(rows.length-1),y:90-(p.price-min)/span*76,price:p.price,time:p.time}));
   return {points,path:points.map((p,i)=>(i?'L':'M')+p.x.toFixed(2)+' '+p.y.toFixed(2)).join(' ')};
 }
-export function initMiniSparkline({$,formatPrice}) {
+export function initMiniSparkline({$,formatPrice,onQuote}) {
   const card=$('mini-market-card'),stage=$('mini-market-chart');
   // Existing Node trading tests use a minimal DOM stub, not a browser SVG tree.
   // No-op in that environment; the real dashboard enables the chart normally.
@@ -26,6 +26,7 @@ export function initMiniSparkline({$,formatPrice}) {
     if(entry?.samples.length) {
       const last=entry.samples.at(-1);
       $('mini-market-last').textContent=formatPrice(last.price);
+      if(typeof onQuote==='function')onQuote('mini-market-last',last.price,{symbol,time:last.time,sourceId:entry.key});
       label.textContent='آخر أسعار مسجلة · '+(entry.source||'المصدر');
     }else{
       $('mini-market-last').textContent='—';
