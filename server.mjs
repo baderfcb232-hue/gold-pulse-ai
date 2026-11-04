@@ -936,7 +936,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         audit('COMMAND_RESULT', {id: c.id, status: b.status, message: text(b.message, 500)});
         return send(req, res, 200, {ok: true});
       }
-      const files = {'/':'index.html','/index.html':'index.html','/dashboard':'index.html',
+      const files = {'/':'landing.html','/index.html':'index.html','/dashboard':'index.html',
         '/welcome':'landing.html','/landing.css':'landing.css','/app.js':'app.js','/http.js':'http.js','/live.js':'live.js','/broker-chart.js':'broker-chart.js','/state-connection.js':'state-connection.js','/control-readiness.js':'control-readiness.js','/command-feedback.js':'command-feedback.js','/styles.css':'styles.css','/manifest.webmanifest':'manifest.webmanifest','/icon.svg':'icon.svg','/brand-logo.png':'brand-logo.png',
         '/auth':'accounts.html','/account':'accounts.html','/admin':'accounts.html','/privacy':'accounts.html','/accounts.js':'accounts.js','/accounts.css':'accounts.css'};
       if (req.method === 'GET' && files[path]) {
