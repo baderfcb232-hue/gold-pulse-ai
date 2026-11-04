@@ -1,0 +1,35 @@
+/* NABD Premium Fintech Design System v1: shared semantic color/spacing tokens.
+   Only presentation tokens; no connection to trading, risk or data APIs. */
+:root {
+  --nabd-bg: #F8FAFC;
+  --nabd-paper: #FFFFFF;
+  --nabd-soft: #EEF4F7;
+  --nabd-navy: #0F172A;
+  --nabd-text: #334155;
+  --nabd-muted: #64748B;
+  --nabd-brand: #0F766E;
+  --nabd-brand-strong: #115E59;
+  --nabd-teal: #14B8A6;
+  --nabd-gold: #D4A24C;
+  --nabd-border: #E2E8F0;
+  --nabd-green: #10B981;
+  --nabd-red: #EF4444;
+  --nabd-focus: #0F766E;
+  --nabd-radius-sm: 12px;
+  --nabd-radius-md: 18px;
+  --nabd-radius-lg: 28px;
+  --nabd-shadow-card: 0 16px 52px rgba(15,23,42,.055);
+  --nabd-shadow-hero: 0 38px 90px rgba(15,23,42,.12);
+  --nabd-space-1: 8px;
+  --nabd-space-2: 16px;
+  --nabd-space-3: 24px;
+  --nabd-space-4: 36px;
+  --nabd-space-5: 64px;
+}
+:where(a,button,input,select,textarea):focus-visible {
+  outline: 3px solid var(--nabd-focus);
+  outline-offset: 3px;
+}
+@media(prefers-reduced-motion:reduce) {
+  *,*::before,*::after {scroll-behavior:auto!important; animation-duration:.01ms!important; transition-duration:.01ms!important}
+}

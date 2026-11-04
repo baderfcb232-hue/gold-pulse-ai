@@ -1,0 +1,155 @@
+/* NABD premium landing v1.
+   Built as a safe layer over landing.css so it can be rolled back independently. */
+body {
+  background:var(--nabd-bg);
+  color:var(--nabd-navy);
+}
+.announcement {
+  background:var(--nabd-navy);
+  color:#e4f6f3;
+  font-size:11px;
+  min-height:35px;
+}
+.announcement-pulse {background:var(--nabd-teal);box-shadow:0 0 0 4px #14b8a633}
+.site-header {
+  position:sticky;top:0;z-index:30;
+  background:#fffffff0;
+  border-bottom:1px solid #e9f0f3;
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
+}
+.site-header .nav-layout {min-height:76px}
+.brand-mark {
+  background:linear-gradient(145deg,var(--nabd-brand),#123e49);
+  color:#e9faf5;
+  box-shadow:0 8px 20px #0f766e28;
+}
+.brand-word {color:var(--nabd-navy)}
+.brand-word b {color:var(--nabd-brand);font-weight:700}
+.nav-links a,.nav-login {color:#526476}
+.nav-links a:hover,.nav-login:hover {color:var(--nabd-brand)}
+.btn {border-radius:var(--nabd-radius-sm);box-shadow:none;min-height:46px}
+.btn-dark {
+  color:#fff;
+  background:var(--nabd-brand);
+  border-color:var(--nabd-brand);
+  box-shadow:0 12px 26px #0f766e28;
+}
+.btn-dark:hover {background:var(--nabd-brand-strong);border-color:var(--nabd-brand-strong);box-shadow:0 15px 32px #0f766e35}
+.btn-outline {color:var(--nabd-navy);background:#fff;border-color:#cadadf}
+.btn-outline:hover {border-color:var(--nabd-brand);color:var(--nabd-brand);background:#f0faf7}
+.hero {
+  position:relative;
+  min-height:625px;
+  padding-block:66px 100px;
+  gap:38px;
+}
+.hero::before {
+  content:"";
+  position:absolute;
+  width:min(880px,80vw);
+  height:540px;
+  background:radial-gradient(ellipse,#dcf8f2a6 0%,#dceff180 37%,transparent 74%);
+  inset-block-start:8px;
+  inset-inline-end:-12%;
+  z-index:-1;
+  pointer-events:none;
+}
+.hero .eyebrow {
+  display:inline-flex;align-items:center;
+  background:#e9f7f3;
+  border:1px solid #c9eae2;
+  color:var(--nabd-brand);
+  padding:7px 13px;
+  border-radius:999px;
+  font-size:11px;letter-spacing:.2px;
+  margin-bottom:23px;
+}
+.small-gold-dot {background:var(--nabd-teal);margin-inline-end:8px}
+.hero h1 {font-size:clamp(45px,5.1vw,73px);line-height:1.32;letter-spacing:-2.6px;margin-bottom:21px}
+.gradient-text {
+  color:var(--nabd-brand);
+  background:linear-gradient(108deg,#0f766e,#14b8a6 65%,#0e6370);
+  background-clip:text;
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+}
+.hero-lead {max-width:510px;font-size:16px;line-height:2.2;color:#526476;margin-bottom:27px}
+.hero-lead strong {color:var(--nabd-navy)}
+.lead-accent {color:var(--nabd-brand);font-weight:600}
+.hero .btn-large {min-height:55px;padding-inline:26px;font-size:14px}
+.hero-notes {font-size:11px;color:#64748b;gap:13px 17px}
+.hero-notes span {display:inline-flex;align-items:center;gap:4px}
+.hero-notes i {color:var(--nabd-brand)}
+.hero-visual {height:510px}
+.visual-orb-one {background:radial-gradient(circle,#c9e9e3,#e9f4f2 57%,transparent 72%)}
+.visual-orb-two {background:radial-gradient(circle,#e1eff7,transparent 72%)}
+.desktop-preview {
+  border:1px solid #dbe9eb;
+  box-shadow:var(--nabd-shadow-hero);
+}
+.pair.active {background:#f0faf7;border-color:#bfe5dc}
+.gold-icon {background:#e1f3ee;color:var(--nabd-brand)}
+.btc-icon {background:#fff0d7;color:#b07e26}
+.pair-bar {border-color:var(--nabd-brand)}
+.phone-preview {border-color:#14313c;box-shadow:0 25px 46px #0f172a2d}
+.phone-pill {background:#e4f7f2;color:var(--nabd-brand)}
+.phone-value i {background:var(--nabd-teal)}
+.preview-status {color:var(--nabd-brand)}
+.preview-status i {background:var(--nabd-teal)}
+.trust-strip {background:#ffffffb8;border-color:var(--nabd-border)}
+.trust-items {color:#496271;font-size:12px}
+.trust-items i {color:var(--nabd-brand)}
+.section-intro h2 span {color:var(--nabd-brand)}
+.section-intro>p {color:#536a78}
+.eyebrow {color:var(--nabd-brand)}
+.feature-card {
+  border-color:var(--nabd-border);
+  background:var(--nabd-paper);
+  border-radius:22px;
+  box-shadow:var(--nabd-shadow-card);
+  min-height:267px;
+}
+.feature-card:hover {border-color:#a5d7d0;box-shadow:0 24px 45px #0f766e15}
+.feature-icon {background:#eaf8f4;color:var(--nabd-brand)}
+.feature-card:nth-child(2) .feature-icon {background:#edf4fc;color:#38759d}
+.feature-card:nth-child(3) .feature-icon {background:#fff6e7;color:#b38129}
+.feature-card:nth-child(4) .feature-icon {background:#ebf5f4;color:#177e78}
+.feature-card h3,.trust-card h3 {color:var(--nabd-navy)}
+.feature-card p,.trust-card p {color:#5e7380}
+.feature-index {color:var(--nabd-brand)}
+.workflow-section {background:var(--nabd-soft);border-color:#e0eaef}
+.workflow-heading>p:not(.eyebrow),.workflow-steps p {color:#577080}
+.workflow-steps li {border-color:#dce7ed}
+.step-no {background:#d7efea;color:var(--nabd-brand)}
+.trust-card {background:#fff;border-color:var(--nabd-border);border-radius:20px}
+.trust-card span {color:var(--nabd-brand)}
+.contact-panel {background:#f0f8f8;border:1px solid #d7eae9}
+.contact-panel p:not(.eyebrow) {color:#56717b}
+.cta-panel {
+  background:linear-gradient(118deg,#0f172a 8%,#124b50 73%,#0f766e 130%);
+  box-shadow:0 20px 55px #0f766e20;
+}
+.cta-panel .eyebrow {color:#83e1d6}
+.cta-panel p:not(.eyebrow) {color:#d1e6e4}
+.btn-light {background:#fff;color:var(--nabd-brand)}
+.btn-light:hover {background:#e3f7f3}
+.site-footer {background:#fff;border-color:var(--nabd-border)}
+.footer-brand strong {color:var(--nabd-brand)}
+.footer-layout>span,.footer-layout>div {color:#5f7180}
+@media(max-width:920px) {
+  .hero {gap:13px}
+  .hero::before {inset-inline-end:8%;width:85%}
+  .hero-lead {margin-inline:auto}
+}
+@media(max-width:620px) {
+  .announcement {font-size:9px}
+  .site-header .nav-layout {min-height:68px}
+  .hero {padding-top:42px;padding-bottom:70px}
+  .hero h1 {font-size:clamp(39px,9vw,54px);letter-spacing:-1.4px}
+  .hero-lead {font-size:14px}
+  .hero-visual {height:315px}
+  .feature-card {min-height:235px}
+  .cta-panel {border-radius:20px}
+}
+@media(prefers-reduced-motion:reduce){.hero .gradient-text,.phone-preview,.draw-line{animation:none!important}}
