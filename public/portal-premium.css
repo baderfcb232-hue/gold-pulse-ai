@@ -1,0 +1,15 @@
+/* NABD Member Portal — Premium Fintech, visual only. */
+.portal-body{--portal-bg:#f8fafc;--portal-card:#fff;--portal-ink:#0f172a;--portal-line:#dfe8ed;--portal-muted:#64748b;--portal-brand:#0f766e;--portal-gold:#d4a24c;background:linear-gradient(180deg,#edf9f7,#f8fafc 360px);color:var(--portal-ink)}
+.portal-body .portal-header{max-width:none;background:#fffffff0;backdrop-filter:blur(16px);border-bottom:1px solid #dfe8ed;padding:14px max(32px,calc((100% - 1230px)/2));min-height:82px;position:sticky;top:0;z-index:10;gap:16px}
+.portal-body .portal-header>a:first-child{display:flex;align-items:center;gap:12px;text-decoration:none;white-space:nowrap}
+.portal-brand-mark{display:grid;place-items:center;background:linear-gradient(140deg,#0f766e,#07564f);color:#f6d599;border-radius:12px;width:42px;height:42px;font:700 31px/1 sans-serif;box-shadow:0 7px 19px #0f766e24}
+.portal-brand-name{font-size:25px;font-weight:700;color:#15363b;letter-spacing:-.7px}.portal-brand-name b{font-size:10px;color:#0f766e;margin-inline-start:4px;letter-spacing:1.3px}
+.portal-body .portal-header nav{color:#526b77;display:flex;gap:23px;align-items:center}.portal-body .portal-header nav a{font-weight:600;text-decoration:none}.portal-body .portal-header nav a:hover{color:#0f766e}
+.portal-body .portal-main{max-width:1230px;padding:45px 26px 60px}.portal-body .portal-kicker{color:#0f766e;letter-spacing:1.5px;font-weight:700}
+.portal-body .portal-heading h1,.portal-body .auth-intro h1{color:#0f172a;font-weight:700;letter-spacing:-1px}
+.portal-body .portal-card{background:#fff;border:1px solid #dfe8ed;border-radius:22px;box-shadow:0 13px 45px #0f172a0f,0 2px 9px #0f172a06;padding:30px}
+.portal-body .portal-card h2,.portal-body .portal-card h3{color:#15313b}
+.portal-body .portal-card label{color:#33485b;font-weight:600}
+.portal-body .portal-card input:not([type=checkbox]),.portal-body .portal-card select,.portal-body .portal-card textarea{background:#fbfdfe;border:1px solid #cbd9e1;border-radius:12px;color:#0f172a;min-height:48px}
+.portal-body .portal-card input:focus-visible,.portal-body .portal-card select:focus-visible{outline:3px solid #14b8a64a;outline-offset:1px;border-color:#0f766e}
+.portal-body .portal-card input::placeholder{color:#8796a3}.portal-body .portal-card .check-label{color:#526777;font-weight:500}.portal-body .check-label input{accent-color:#0f766e}
