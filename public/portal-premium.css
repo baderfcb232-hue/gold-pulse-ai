@@ -66,3 +66,22 @@
 .portal-body .theme-picker{display:inline-flex;align-items:center;gap:7px;padding:5px 8px;border:1px solid #d8e8e7;border-radius:12px;background:#fff;white-space:nowrap}
 .portal-body .theme-picker label{font-size:12px;color:inherit;font-weight:600}
 .portal-body .theme-picker select{min-height:34px;padding:4px 8px;border:1px solid #d4e1e3;border-radius:8px;max-width:120px}
+
+/* Mobile portal: keep navigation, security and logout accessible without page overflow. */
+@media(max-width:800px){
+ .portal-body .portal-header{display:flex;flex-wrap:wrap;align-items:center}
+ .portal-body .portal-header nav{order:99;flex:1 1 100%;width:100%;min-width:0;display:flex;flex-wrap:nowrap;justify-content:flex-start;gap:12px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;padding:6px 0}
+ .portal-body .portal-header nav::-webkit-scrollbar{display:none}
+ .portal-body .portal-header nav a{display:inline-flex;flex:0 0 auto;align-items:center;min-height:44px;white-space:nowrap}
+ .portal-body .portal-header .theme-picker,.portal-body .portal-header .button{min-height:44px}
+ .portal-body .portal-header .theme-picker{margin-inline-start:auto}
+ .portal-body .portal-main,.portal-body .portal-card{min-width:0;overflow-wrap:anywhere}
+ .portal-body .portal-card :is(input,select,button){max-width:100%}
+}
+@media(max-width:440px){
+ .portal-body .admin-summary{grid-template-columns:minmax(0,1fr)}
+ .portal-body .portal-header .theme-picker label{display:none}
+ .portal-body .portal-header .theme-picker select{min-height:44px}
+ .portal-body .portal-card .form-links{gap:10px}
+ .portal-body .portal-heading{align-items:flex-start}
+}
