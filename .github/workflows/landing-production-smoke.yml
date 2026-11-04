@@ -4,6 +4,9 @@ on:
     branches: [main]
     paths:
       - 'public/landing.html'
+      - 'public/landing-en.html'
+      - 'public/marketing-i18n.css'
+      - 'public/language-pref.js'
       - 'public/landing.css'
       - 'server.mjs'
       - '.github/workflows/landing-production-smoke.yml'
@@ -22,8 +25,11 @@ jobs:
           from urllib.request import Request, urlopen
           base = 'https://gold-pulse-ai.onrender.com'
           expected = {
-            '/': (b'<html lang="ar" dir="rtl">',b'DEMO PREVIEW',b'href="/dashboard"'),
-            '/welcome': (b'<html lang="ar" dir="rtl">',b'DEMO PREVIEW',b'href="/dashboard"'),
+            '/': (b'<html lang="ar" dir="rtl">',b'DEMO PREVIEW',b'href="/dashboard"',b'mobile-menu'),
+            '/welcome': (b'<html lang="ar" dir="rtl">',b'DEMO PREVIEW',b'href="/dashboard"',b'mobile-menu'),
+            '/en': (b'<html lang="en" dir="ltr">',b'mobile-menu',b'href="/dashboard"'),
+            '/marketing-i18n.css': (b'.mobile-menu nav',b'@media(max-width:920px)'),
+            '/language-pref.js': (b'menu.open=false',b'localStorage'),
             '/landing.css?v=phase2-1': (b'.hero-visual',b'prefers-reduced-motion'),
             '/dashboard': (b'id="market-symbols"', b'/app.js'),
           }
