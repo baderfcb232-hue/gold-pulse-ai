@@ -4,6 +4,7 @@ import {readFileSync,mkdtempSync,rmSync} from 'node:fs';
 import {inflateSync} from 'node:zlib';
 import {tmpdir} from 'node:os';import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
+import {runInNewContext} from 'node:vm';
 import {createApplication} from '../server.mjs';
 const read=p=>readFileSync(new URL('../public/'+p,import.meta.url));
 test('NABD PWA offers real raster icons, properly sized and decodable',()=>{
@@ -44,6 +45,28 @@ test('offline mode shows an honest notice and never caches market APIs or broker
   const p=new URL('../public/'+filename,import.meta.url).pathname;
   assert.equal(spawnSync(process.execPath,['--check',p],{encoding:'utf8'}).status,0,filename+' syntax');
  }
+});
+test('service worker rejects stale HTML and returns only the explicit offline notice on network failure',async()=>{
+ const source=read('sw.js').toString(),listeners={};
+ const fallback={kind:'offline-notice'},requests=[];
+ const self={location:{origin:'https://nabd.test'},addEventListener:(type,fn)=>{listeners[type]=fn}};
+ const caches={match:async key=>key==='/offline.html'?fallback:null};
+ const fetch=async(req,opts)=>{requests.push({req,opts});throw new Error('network offline');};
+ runInNewContext(source,{self,caches,fetch,URL});
+ let answer;
+ listeners.fetch({request:{url:'https://nabd.test/dashboard',method:'GET',mode:'navigate'},respondWith:p=>{answer=p}});
+ assert.equal(await answer,fallback);
+ assert.equal(requests.length,1);
+ assert.equal(requests[0].opts.cache,'no-store');
+ let intercepted=false;
+ for(const request of [
+  {url:'https://nabd.test/api/market',method:'GET',mode:'cors'},
+  {url:'https://nabd.test/api/orders',method:'POST',mode:'navigate'},
+  {url:'https://external.test/dashboard',method:'GET',mode:'navigate'}
+ ]){
+  listeners.fetch({request,respondWith(){intercepted=true}});
+ }
+ assert.equal(intercepted,false,'MT5 and cross-origin requests remain untouched');
 });
 test('Arabic English dashboard account and marketing routes expose install meta',()=>{
  for(const file of ['index.html','accounts.html','landing.html','landing-en.html']){
