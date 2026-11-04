@@ -49,3 +49,9 @@ test('new /welcome route is isolated and existing dashboard and API still respon
   assert.equal(health.status,200);
   assert.equal((await health.json()).ok,true);
 });
+
+test('mobile marketing navigation is bilingual',()=>{
+  for(const name of ['landing.html','landing-en.html'])
+    assert.match(readFileSync(new URL('../public/'+name,import.meta.url),'utf8'),/<details class="mobile-menu">/);
+  assert.match(readFileSync(new URL('../public/dashboard-themes.css',import.meta.url),'utf8'),/Mobile phase: keep dashboard navigation/);
+});
