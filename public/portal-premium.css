@@ -61,3 +61,8 @@
 :root[data-nabd-theme="dark"] .portal-body .button.ghost,:root[data-nabd-theme="dark"] .portal-body .theme-picker{background:#20353b;color:#d3f2ec;border-color:#496269}
 :root[data-nabd-theme="dark"] .portal-body .theme-picker select{background:#14282e;color:#eff;border-color:#496269}
 :root[data-nabd-theme="dark"] .portal-body .secret-code{background:#0f1e25;color:#ccefeb;border-color:#315b56}
+
+/* Accessible theme picker is self-contained; portal does not load dashboard CSS. */
+.portal-body .theme-picker{display:inline-flex;align-items:center;gap:7px;padding:5px 8px;border:1px solid #d8e8e7;border-radius:12px;background:#fff;white-space:nowrap}
+.portal-body .theme-picker label{font-size:12px;color:inherit;font-weight:600}
+.portal-body .theme-picker select{min-height:34px;padding:4px 8px;border:1px solid #d4e1e3;border-radius:8px;max-width:120px}
