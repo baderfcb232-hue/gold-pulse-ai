@@ -4,6 +4,12 @@ on:
     branches: [main]
     paths:
       - 'public/accounts.html'
+      - 'public/accounts.js'
+      - 'public/account-language.js'
+      - 'public/i18n-dom.js'
+      - 'public/account-static-en.js'
+      - 'public/attribute-static-en.js'
+      - 'public/runtime-status-en.js'
       - 'public/nabd-mark.svg'
       - 'public/portal-premium.css'
       - 'server.mjs'
@@ -24,11 +30,14 @@ jobs:
           from urllib.request import urlopen
           base='https://gold-pulse-ai.onrender.com'
           expected={
-            '/auth': [b'portal-premium.css?v=20261104',b'nabd-mark.svg?v=v2-1',b'member-login',b'member-register'],
+            '/auth': [b'portal-premium.css?v=20261104',b'nabd-mark.svg?v=v2-1',b'account-language.js?v=v2-i18n-1',b'portal-language-choice',b'member-login',b'member-register'],
             '/account': [b'portal-premium.css?v=20261104',b'member-mt5-form'],
             '/admin': [b'portal-premium.css?v=20261104',b'admin-users'],
             '/privacy': [b'portal-premium.css?v=20261104',b'privacy-copy'],
-            '/portal-premium.css': [b'#0f766e',b'data-nabd-theme="dark"',b'Mobile portal: keep navigation'],
+            '/portal-premium.css': [b'#0f766e',b'data-nabd-theme="dark"',b'Mobile portal: keep navigation',b'portal-language-picker'],
+            '/account-language.js': [b'portal-language-choice',b'translateStaticUi'],
+            '/account-static-en.js': [b'accountStaticEnglish',b'Privacy'],
+            '/attribute-static-en.js': [b'attributeStaticEnglish',b'Site sections'],
             '/nabd-mark.svg': [b'<svg',b'#0F766E',b'#D4A24C'],
             '/': [b'DEMO PREVIEW',b'href="/dashboard"'],
             '/dashboard': [b'id="market-symbols"',b'dashboard-theme-choice'],

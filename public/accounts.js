@@ -1,13 +1,14 @@
 import {requestJson} from '/http.js';
+import {translateUiText,currentLocale,setLocalizedText} from '/i18n-dom.js';
 const $ = id => document.getElementById(id);
-const node = (tag, cls, text) => {const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = String(text); return el;};
+const node = (tag, cls, text) => {const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) setLocalizedText(el,text); return el;};
 const page = ({'/auth': 'auth', '/account': 'account', '/admin': 'admin', '/privacy': 'privacy'})[location.pathname] || 'auth';
 document.querySelectorAll('[data-page]').forEach(el => {el.hidden = el.dataset.page !== page;});
 const titles = {auth: 'تسجيل الدخول', account: 'حسابي', admin: 'إدارة نبض', privacy: 'الخصوصية'};
 document.title = `${titles[page]} | نبض`;
 let member = null, csrf = '', usersPage = 0, flowToken = '', signedIn = false;
-const date = value => value ? new Intl.DateTimeFormat('ar-PS', {dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Gaza'}).format(Number(value) * 1000) : '—';
-function message(text, error = false) {const el = $('portal-message'); el.textContent = text; el.classList.toggle('error', error); el.hidden = false;}
+const date = value => value ? new Intl.DateTimeFormat(currentLocale()==='en'?'en-GB':'ar-PS', {dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Gaza'}).format(Number(value) * 1000) : '—';
+function message(text, error = false) {const el = $('portal-message'); setLocalizedText(el,text); el.classList.toggle('error', error); el.hidden = false;}
 async function api(path, data) {
   return requestJson(path, {method: data === undefined ? 'GET' : 'POST',
     headers: data === undefined ? {} : {'Content-Type': 'application/json', 'X-NABD-CSRF': csrf}, ...(data === undefined ? {} : {body: JSON.stringify(data)})}, 30000);
@@ -167,7 +168,7 @@ async function users() {
     const state = node('td'), actions = node('td');
     if (u.role === 'admin') state.append(node('span', 'pill outline', 'حساب المسؤول'));
     else {
-      const select = node('select'); select.setAttribute('aria-label', 'حالة حساب ' + u.name);
+      const select = node('select'); select.setAttribute('aria-label', currentLocale()==='en' ? 'Account status: ' + u.name : 'حالة حساب ' + u.name);
       for (const [value, label] of Object.entries(states)) {const option = node('option', '', label); option.value = value; select.append(option);} select.value = u.status;
       const label = node('label', 'check-label'), permission = node('input'); permission.type = 'checkbox'; permission.checked = u.recommendations; label.append(permission, node('span', '', 'التوصيات')); state.append(select, label);
       const save = node('button', 'button ghost', 'حفظ'); save.onclick = async () => {save.disabled = true; try {await api('/api/admin/users/update', {id: u.id, status: select.value, recommendations: permission.checked}); message('تم حفظ حالة المستخدم وصلاحيته.'); await users();} catch (error) {message(error.message, true);} finally {save.disabled = false;}};
@@ -286,7 +287,7 @@ async function adminMt5Hosting() {
 }
 $('admin-mt5-hosting-refresh').onclick = () => adminMt5Hosting().catch(error => message(error.message, true));
 const events = {REGISTER: 'إنشاء حساب', EMAIL_VERIFIED: 'تأكيد البريد', LOGIN: 'تسجيل دخول', PASSWORD_RESET: 'استعادة كلمة المرور', PASSWORD_CHANGED: 'تغيير كلمة المرور', MFA_ENABLED: 'تفعيل التحقق بخطوتين', DELETION_REQUESTED: 'طلب حذف', USER_UPDATED: 'تحديث مستخدم', RESET_SENT: 'إرسال رابط استعادة', BACKUP_CREATED: 'نسخ خارجي', BACKUP_EXPORTED: 'تصدير نسخة مشفرة', BACKUP_RESTORED: 'استعادة نسخة'};
-async function audit() {const response = await api('/api/admin/audit'); $('admin-audit').replaceChildren(...response.events.map(event => {const row = node('div', 'audit-row'); row.append(node('strong', '', events[event.event] || event.event), node('p', '', date(event.time)), node('p', '', `المنفّذ: ${event.actor || 'النظام'}${event.subject ? ' · الحساب: ' + event.subject : ''}`)); return row;}));}
+async function audit() {const response = await api('/api/admin/audit'); $('admin-audit').replaceChildren(...response.events.map(event => {const row = node('div', 'audit-row'); row.append(node('strong', '', events[event.event] || event.event), node('p', '', date(event.time)), node('p', '', currentLocale()==='en' ? `Performed by: ${event.actor || 'system'}${event.subject ? ' · Account: ' + event.subject : ''}` : `المنفّذ: ${event.actor || 'النظام'}${event.subject ? ' · الحساب: ' + event.subject : ''}`)); return row;}));}
 $('refresh-audit').onclick = () => audit().catch(error => message(error.message, true));
 async function overview() {
   const response = await api('/api/admin/overview'), sum = response.counts.reduce((total, x) => total + Number(x.count), 0), ops = response.operational;

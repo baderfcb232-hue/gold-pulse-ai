@@ -37,7 +37,7 @@ export function createToastCenter({getContainer,createNode,getHistory=()=>null,c
    records.unshift(entry);if(records.length>40)records.length=40;
    const history=getHistory();
    if(history){
-     const row=createNode('li','',new Date(now).toLocaleTimeString()+' · '+msg);
+     const row=createNode('li','',new Date(now).toLocaleTimeString(typeof document!=='undefined'&&document.documentElement?.lang==='en'?'en-GB':'ar-PS',{timeZone:'Asia/Gaza'})+' · '+msg);
      row.dataset.kind=kind;
      history.prepend(row);
      while(history.children.length>40)history.lastElementChild.remove();

@@ -2,11 +2,12 @@ import {drawBrokerCandles} from './broker-chart.js';
 import {initMiniSparkline} from './mini-spark.js';
 import {createMarketLoaders} from './market-loaders.js';
 import {inSignalDateRange} from './signal-date-filter.js';
+import {translateUiText,externalHeadlineForLocale,currentLocale,setLocalizedText} from './i18n-dom.js';
 export function initLiveWorkspace({stream, api, time, num, now, notify, priceFeedback, positionSize, getSizingContext}) {
   const $ = id => document.getElementById(id);
   const node = (tag, cls, text) => {const n = document.createElement(tag); if (cls) n.className = cls;
-    if (text != null) n.textContent = String(text); return n;};
-  const put = (id, text) => {$(id).textContent = text ?? '—';};
+    if (text != null) setLocalizedText(n,text); return n;};
+  const put = (id, text) => {setLocalizedText($(id),text);};
   const pill = (text, cls = 'neutral') => node('span', 'pill ' + cls, text);
   const empty = text => node('p', 'empty-inline', text);
   const fmt = v => Number.isFinite(v) ? v.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '—';
@@ -348,7 +349,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, priceFee
       row.append(title, levels, pill(status[p.status] || p.status, p.status === 'SL' ? 'bad' : p.status === 'TP2' ? 'good' : 'neutral')); return row;}) : [empty('لا توجد إشارات مؤكدة في هذا السجل بعد. فرص المراقبة تظهر على الرئيسية.') ]));
   }
   function article(item, compact = false) {
-    const card = node('article', compact ? 'headline-preview' : 'news-card'), link = node('a', 'headline-link', item.title);
+    const card = node('article', compact ? 'headline-preview' : 'news-card'), link = node('a', 'headline-link', externalHeadlineForLocale(item.title));
     link.href = item.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.dir = 'auto';
     const meta = node('div', 'event-meta'); meta.append(pill(item.source_name, 'outline'), node('small', 'subtle', time(item.published_at, true)));
     card.append(meta, link);
@@ -359,7 +360,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, priceFee
     if (!news) return;
     const filter = $('headline-filter').value, list = news.items.filter(x => filter === 'ALL' || x.category === filter);
     put('headline-count', `${list.length} خبر · وقت غزة`); put('headline-note', news.note);
-    const stamp = `${news.revision}:${filter}:${news.items.length}`;
+    const stamp = `${news.revision}:${filter}:${news.items.length}:${currentLocale()}`;
     if (stamp !== newsStamp) {newsStamp = stamp; $('headlines-list').replaceChildren(...(list.length ? list.map(x => article(x)) : [empty('لا توجد أخبار ضمن هذا الموضوع في المصادر المتصلة.')])); $('live-news-preview').replaceChildren(...(news.items.length ? news.items.slice(0, 2).map(x => article(x, true)) : [empty('يجري جلب عناوين الأخبار من المصادر.')]));}
     $('headline-sources').replaceChildren(...news.sources.map(s => {const box = node('div', 'headline-source'), success = s.status === 'LIVE';
       box.append(node('strong', '', s.name), pill(success ? 'متصل' : s.status === 'PENDING' ? 'جلب…' : 'متأخر / تعذر الجلب', success ? 'good' : 'warn'),
