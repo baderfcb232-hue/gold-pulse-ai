@@ -1,0 +1,25 @@
+/* Accessibility/field hints, translated without mutating values. */
+export const attributeStaticEnglish = Object.freeze({
+  "أقسام الموقع": "Site sections",
+  "اختيار مظهر لوحة التداول": "Select dashboard appearance",
+  "لغة واجهة نبض": "NABD interface language",
+  "السوق المرجعي": "Reference market",
+  "شارت مصغّر من أحدث الأسعار المستلمة": "Mini chart of recently received prices",
+  "مسار آخر أسعار السوق الحقيقي": "Latest real market price history",
+  "فريم شارت MT5": "MT5 chart timeframe",
+  "شموع وسيط MT5 المغلقة": "Closed MT5 broker candles",
+  "شارت TradingView المرجعي": "Reference TradingView chart",
+  "رسم شموع الذهب": "Gold candlestick chart",
+  "مثال: 0.01": "Example: 0.01",
+  "أدخل المبلغ": "Enter amount",
+  "من الإشارة أو يدويًا": "From signal or entered manually",
+  "سعر الستوب": "Stop-loss price",
+  "الأحداث المعروضة خلال هذه الجلسة": "Events displayed in this session",
+  "إغلاق": "Close",
+  "نبض — الصفحة الرئيسية": "NABD — Home",
+  "الحساب": "Account",
+  "اختيار مظهر صفحات الحساب": "Select account-page appearance",
+  "نوع الدخول": "Sign-in method",
+  "رقم حساب التداول فقط": "Trading account number only",
+  "اختيار لغة صفحات الحساب": "Select account-page language"
+});
