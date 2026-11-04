@@ -1,6 +1,6 @@
 /* NABD unified visual language selection. This module never changes prices or trading requests. */
 import {t,layoutFor} from '/i18n-core.js';
-import {translateStaticUi,translateUiText,observeLocaleUi} from '/i18n-dom.js?v=v2-i18n-3';
+import {translateStaticUi,translateUiText,observeLocaleUi} from '/i18n-dom.js?v=v2-i18n-4';
 (function(){
  'use strict';
  const key='nabd:dashboard:language',marketing='nabd-marketing-language';
