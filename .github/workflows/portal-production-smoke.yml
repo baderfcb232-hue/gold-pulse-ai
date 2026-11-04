@@ -30,7 +30,7 @@ jobs:
           from urllib.request import urlopen
           base='https://gold-pulse-ai.onrender.com'
           expected={
-            '/auth': [b'portal-premium.css?v=20261104',b'nabd-mark.svg?v=v2-1',b'account-language.js?v=v2-i18n-1',b'portal-language-choice',b'member-login',b'member-register'],
+            '/auth': [b'portal-premium.css?v=20261104',b'nabd-mark.svg?v=v2-1',b'account-language.js?v=v2-i18n-2',b'portal-language-choice',b'member-login',b'member-register'],
             '/account': [b'portal-premium.css?v=20261104',b'member-mt5-form'],
             '/admin': [b'portal-premium.css?v=20261104',b'admin-users'],
             '/privacy': [b'portal-premium.css?v=20261104',b'privacy-copy'],

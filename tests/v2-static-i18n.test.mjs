@@ -59,6 +59,12 @@ test('localized display text never overwrites unknown trading, broker or custome
   assert.equal(translateUiText('PRICE_OR_SPREAD_MOVE','en'),'PRICE_OR_SPREAD_MOVE');
   assert.equal(translateUiText('4050.27','en'),'4050.27');
   assert.equal(translateUiText('عمر السعر 7 ثانية','en'),'Quote age: 7 seconds');
+  assert.equal(translateUiText('الفحص التالي بعد 3 دقيقة حسب المصدر','en'),'Next source check in 3 minutes');
+  assert.equal(translateUiText('معامل الربح: 1.75 · الإشارات المنتهية دون حسم: 4 · النتائج الفعلية تظهر في سجل MT5 أدناه.','en'),'Profit factor: 1.75 · Expired signals without a result: 4 · Actual trades are shown in the MT5 history below.');
+  assert.equal(translateUiText('معامل الربح: غير قابل للتقييم · الإشارات المنتهية دون حسم: 0 · النتائج الفعلية تظهر في سجل MT5 أدناه.','en'),'Profit factor: Not assessable · Expired signals without a result: 0 · Actual trades are shown in the MT5 history below.');
+  assert.equal(translateUiText('تقدير الفرصة الحالية؛ لا يؤكد اعتمادها أو تنفيذها · شراء · 10:30 · دخول 4,043.51 · وقف 4,040.20','en'),'Current opportunity estimate; not a confirmation of approval or execution · Buy · 10:30 · Entry 4,043.51 · Stop loss 4,040.20');
+  assert.equal(translateUiText('تقدير آخر فرصة منتهية؛ لا يُرسل للتنفيذ · بيع · 11:42 · دخول 4,041.25 · وقف 4,043.50','en'),'Last expired opportunity estimate; not sent for execution · Sell · 11:42 · Entry 4,041.25 · Stop loss 4,043.50');
+  assert.equal(translateUiText('الفحص التالي بعد 3 دقيقة حسب المصدر','ar'),'الفحص التالي بعد 3 دقيقة حسب المصدر');
   assert.equal(translateUiText('تم تحديث شموع XAUUSD من JustMarkets بنجاح.','en'),'Candles updated successfully: XAUUSD · JustMarkets');
   assert.equal(translateUiText('إشارة شراء جديدة — 4,043.51','en'),'New Buy signal — 4,043.51');
   assert.equal(translateUiText('فرصة مضاربة بيع · الذهب · 4000','en'),'Scalping Sell opportunity · Gold · 4000');
@@ -150,8 +156,8 @@ test('English translation remains correct across streaming updates and reverses 
 
 test('dashboard and account translation scripts are browser modules with shared locale preference',()=>{
  const dashboard=read('index.html'),account=read('accounts.html');
- assert.match(dashboard,/dashboard-locale\.js\?v=v2-i18n-1" type="module"/);
- assert.match(account,/account-language\.js\?v=v2-i18n-1" type="module"/);
+ assert.match(dashboard,/dashboard-locale\.js\?v=v2-i18n-2" type="module"/);
+ assert.match(account,/account-language\.js\?v=v2-i18n-2" type="module"/);
  assert.match(account,/id="portal-language-choice"/);
  assert.match(read('dashboard-locale.js'),/translateStaticUi\(document.body,lang\)/);
  assert.match(read('account-language.js'),/translateStaticUi\(document.body,lang\)/);
