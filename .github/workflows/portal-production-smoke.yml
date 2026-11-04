@@ -37,7 +37,7 @@ jobs:
             '/portal-premium.css': [b'#0f766e',b'data-nabd-theme="dark"',b'Mobile portal: keep navigation',b'portal-language-picker'],
             '/account-language.js': [b'portal-language-choice',b'translateStaticUi'],
             '/account-static-en.js': [b'accountStaticEnglish',b'Privacy'],
-            '/attribute-static-en.js': [b'attributeStaticEnglish',b'aria'],
+            '/attribute-static-en.js': [b'attributeStaticEnglish',b'Site sections'],
             '/nabd-mark.svg': [b'<svg',b'#0F766E',b'#D4A24C'],
             '/': [b'DEMO PREVIEW',b'href="/dashboard"'],
             '/dashboard': [b'id="market-symbols"',b'dashboard-theme-choice'],
