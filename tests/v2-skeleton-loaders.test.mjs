@@ -16,8 +16,31 @@ test('initial quote/MT5 chart/news loaders reveal real states when resolved',()=
  for(const selector of ['.live-quote-card','.live-top-grid .decision-card','.featured-signal'])
    assert.equal(records.get(selector)[0].attrs.get('aria-busy'),'false');
  l.ready('chart');l.ready('news');
+ assert.equal(l.pending,true,'signal history is an independent loading state');
+ l.ready('history');
+ assert.equal(records.get('#scalp-history-list')[0].attrs.get('aria-busy'),'false');
  assert.equal(l.pending,false);
  l.destroy();
+});
+test('MT5 connection loader is independent, clears on state success or failure, and does not hide warnings',()=>{
+ const records=new Map();
+ const element=()=>({attrs:new Map(),setAttribute(k,v){this.attrs.set(k,v)},removeAttribute(k){this.attrs.delete(k)}});
+ const root={querySelectorAll(selector){if(!records.has(selector))records.set(selector,[element()]);return records.get(selector)}};
+ const success=createMarketLoaders({root,groups:['connection'],timeoutMs:0});
+ assert.equal(success.pending,true);
+ for(const selector of ['.broker-connect','#connection-hub']){
+   assert.equal(records.get(selector)[0].attrs.get('aria-busy'),'true');
+ }
+ assert.equal(records.has('#status-banner'),false,'live MT5 risk warning must not be covered');
+ success.ready('connection');
+ assert.equal(success.pending,false);
+ for(const selector of ['.broker-connect','#connection-hub']){
+   assert.equal(records.get(selector)[0].attrs.get('aria-busy'),'false');
+ }
+ const failure=createMarketLoaders({root,groups:['connection'],timeoutMs:0});
+ failure.fail('connection');
+ assert.equal(failure.pending,false,'connection errors must reveal the real error state');
+ failure.destroy();
 });
 test('visual loading does not claim synthetic prices, stays bounded and respects reduced motion',()=>{
  const css=read('market-loaders.css');
@@ -30,6 +53,14 @@ test('visual loading does not claim synthetic prices, stays bounded and respects
  assert.match(live,/loaders.ready\('market'\)/);
  assert.match(live,/loaders.ready\('chart'\)/);
  assert.match(live,/loaders.ready\('news'\)/);
+ assert.match(live,/loaders.ready\('history'\)/);
+ assert.match(live,/loaders.fail\('chart'\)/);
+ const app=read('app.js');
+ assert.match(app,/createMarketLoaders\(\{groups:\['connection'\]\}\)/);
+ assert.match(app,/connectionLoaders.ready\('connection'\)/);
+ assert.match(app,/connectionLoaders.fail\('connection'\)/);
+ assert.match(css,/#connection-hub\[data-nabd-loading="true"\]/);
+ assert.match(css,/#scalp-history-list\[data-nabd-loading="true"\]/);
  assert.doesNotMatch(js,/fetch\(|\/api\/|OrderSend|Math.random/);
  assert.equal((css.match(/\{/g)||[]).length,(css.match(/\}/g)||[]).length);
 });
