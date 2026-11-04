@@ -1,0 +1,75 @@
+/* NABD Premium V2 / Stage 1 — accessible colors and contrast only.
+   Trading calculations, quote colors by direction and backend APIs are untouched. */
+:root[data-nabd-theme="light"]{
+ --nabd-notice-error-bg:#FFF1F2;--nabd-notice-error-text:#991B1B;--nabd-notice-error-border:#FCA5A5;
+ --nabd-notice-good-bg:#ECFDF5;--nabd-notice-good-text:#065F46;--nabd-notice-good-border:#6EE7B7;
+ --nabd-notice-warning-bg:#FFFBEB;--nabd-notice-warning-text:#92400E;--nabd-notice-warning-border:#FCD34D;
+ --nabd-notice-info-bg:#EFF6FF;--nabd-notice-info-text:#1D4ED8;--nabd-notice-info-border:#93C5FD;
+}
+:root[data-nabd-theme="dark"]{
+ --nabd-notice-error-bg:#3A1F26;--nabd-notice-error-text:#FECACA;--nabd-notice-error-border:#B45360;
+ --nabd-notice-good-bg:#123127;--nabd-notice-good-text:#CCFBF1;--nabd-notice-good-border:#2DD4BF;
+ --nabd-notice-warning-bg:#3B2B12;--nabd-notice-warning-text:#FDE68A;--nabd-notice-warning-border:#EAB308;
+ --nabd-notice-info-bg:#172554;--nabd-notice-info-text:#DBEAFE;--nabd-notice-info-border:#3B82F6;
+}
+:root[data-nabd-theme] .toast-stack{z-index:100;pointer-events:none}
+:root[data-nabd-theme] .toast-stack .toast{
+ --notice-bg:var(--nabd-notice-info-bg);--notice-ink:var(--nabd-notice-info-text);
+ --notice-border:var(--nabd-notice-info-border);
+ background:var(--notice-bg);color:var(--notice-ink);
+ border:1px solid var(--notice-border);border-inline-start:4px solid var(--notice-border);
+ border-radius:13px;line-height:1.8;box-shadow:0 16px 40px #0a22342b;
+ padding:12px 14px;overflow-wrap:anywhere;
+ display:flex;align-items:flex-start;gap:10px;pointer-events:auto;
+}
+:root[data-nabd-theme] .toast-stack .toast.error,
+:root[data-nabd-theme] .toast-stack .toast[data-kind="error"]{
+ --notice-bg:var(--nabd-notice-error-bg);--notice-ink:var(--nabd-notice-error-text);--notice-border:var(--nabd-notice-error-border);
+}
+:root[data-nabd-theme] .toast-stack .toast.success,
+:root[data-nabd-theme] .toast-stack .toast[data-kind="success"]{
+ --notice-bg:var(--nabd-notice-good-bg);--notice-ink:var(--nabd-notice-good-text);--notice-border:var(--nabd-notice-good-border);
+}
+:root[data-nabd-theme] .toast-stack .toast.warning,
+:root[data-nabd-theme] .toast-stack .toast[data-kind="warning"]{
+ --notice-bg:var(--nabd-notice-warning-bg);--notice-ink:var(--nabd-notice-warning-text);--notice-border:var(--nabd-notice-warning-border);
+}
+:root[data-nabd-theme] .toast-stack .toast button{
+ float:none;order:2;margin-inline-start:auto;min-width:32px;min-height:32px;
+ display:grid;place-items:center;padding:0;border-radius:9px;cursor:pointer;
+ background:transparent;color:inherit;font-size:20px;line-height:1;font-weight:700;
+}
+:root[data-nabd-theme] .toast-stack .toast button:hover{background:color-mix(in srgb,currentColor 10%,transparent)}
+:root[data-nabd-theme] .toast-stack .toast button:focus-visible{outline:3px solid currentColor;outline-offset:2px}
+:root[data-nabd-theme] .toast-stack .toast span{display:block;flex:1;min-width:0}
+:root[data-nabd-theme="light"] .broker-quote-values>span{
+ background:#F3F8FA;border:1px solid #D5E2E7;color:#375363;
+}
+:root[data-nabd-theme="light"] .broker-quote-values>span:first-child{background:#E7F8F0;color:#075C41;border-color:#A8E2C7}
+:root[data-nabd-theme="light"] .broker-quote-values>span:nth-child(2){background:#FFF0F0;color:#9C2532;border-color:#F2BEC5}
+:root[data-nabd-theme="light"] .broker-quote-values>span:nth-child(3){background:#ECF4FC;color:#1C4970;border-color:#C7DCEC}
+:root[data-nabd-theme="light"] .broker-quote-values strong{font-variant-numeric:tabular-nums;font-weight:700}
+:root[data-nabd-theme="light"] :is(.news-card,.headline-source,.headline-preview){
+ color:#183747;border-color:#D7E4E8;
+}
+:root[data-nabd-theme="light"] :is(.news-card,.headline-source){background:#fff}
+:root[data-nabd-theme="light"] :is(.news-card h3,.news-numbers strong,.headline-link){color:#193947}
+:root[data-nabd-theme="light"] :is(.news-card .subtle,.news-source,.headline-source small,.event-meta){color:#47616F}
+:root[data-nabd-theme="light"] :is(.broker-workspace,.broker-workspace-body,.risk-result,.command-progress,.diagnostics,.mt5-registration-row){
+ color:#173B47;
+}
+:root[data-nabd-theme="light"] .broker-workspace>summary{background:#EAF7F4;color:#0B665B;border-color:#B9DFD6}
+:root[data-nabd-theme="light"] :is(.command-row,.signal-row,.position,.check-row){color:#1E3B47}
+:root[data-nabd-theme="light"] :is(.dialog,.dialog input,.dialog select){color:#193744}
+:root[data-nabd-theme="dark"] .broker-quote-values>span{background:#182A34;color:#DCECF3;border-color:#43616D}
+:root[data-nabd-theme="dark"] .broker-quote-values>span:first-child strong{color:#9CF4CD}
+:root[data-nabd-theme="dark"] .broker-quote-values>span:nth-child(2) strong{color:#FFB8BE}
+:root[data-nabd-theme="dark"] .broker-quote-values>span:nth-child(3) strong{color:#D7E8FF}
+:root[data-nabd-theme="dark"] :is(.news-card,.headline-source,.broker-workspace){background:#19262E;color:#E5F1F4;border-color:#3A5059}
+:root[data-nabd-theme="dark"] :is(.news-card h3,.news-numbers strong,.headline-link){color:#F2F8FB}
+:root[data-nabd-theme="dark"] :is(.news-card .subtle,.news-source,.headline-source small){color:#B9CCD5}
+@media(max-width:760px){
+ :root[data-nabd-theme] .toast-stack{inset-inline:14px;bottom:calc(14px + env(safe-area-inset-bottom));width:auto;max-width:none}
+ :root[data-nabd-theme] .toast-stack .toast{font-size:13px;padding:11px 12px}
+}
+@media(prefers-reduced-motion:reduce){:root[data-nabd-theme] .toast-stack .toast{animation:none!important;transition:none!important}}
