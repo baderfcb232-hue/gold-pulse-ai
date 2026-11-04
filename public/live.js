@@ -1,4 +1,5 @@
 import {drawBrokerCandles} from './broker-chart.js';
+import {initMiniSparkline} from './mini-spark.js';
 export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   const $ = id => document.getElementById(id);
   const node = (tag, cls, text) => {const n = document.createElement(tag); if (cls) n.className = cls;
@@ -18,6 +19,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   let chartSourceKey = '', referenceChart = false, brokerChartData = null, brokerChartKey = '', brokerChartLoading = false;
   let lastBrokerFetch = 0, quotePolling = false, lastQuoteStamp = '', cachedBrokerQuote = null;
   const seenSignals = new Set();
+  const mini = initMiniSparkline({$,formatPrice:fmt});
   const market = () => data?.markets?.[symbol];
   const fresh = m => Boolean(m?.quote && m.connection === 'LIVE' && now() - m.quote.time <= m.quoteTtl && Date.now() - lastServerSeen < 12000);
   const activePlan = () => {const m = market(); return fresh(m) && m.currentSignal?.expires_at > now() ? m.currentSignal : null;};
@@ -69,6 +71,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
           !Number.isFinite(q.quote?.time) || !Number.isFinite(q.quote?.price) ||
           q.quote.time > response.serverTime + 5 || q.quote.time < m.quote.time) return;
       cachedBrokerQuote = {...q, symbol, point: q.point || m.point};
+      mini.update({symbol,price:q.quote.price,time:q.quote.time,source:'MT5 · '+(m.broker_symbol||symbol),sourceId:q.source_id});
       const stamp = symbol + ':' + q.quote.time + ':' + q.quote.bid + ':' + q.quote.ask;
       if (stamp !== lastQuoteStamp) {
         lastQuoteStamp = stamp;
@@ -92,6 +95,8 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     put('live-update-age', m?.quote ? `عمر السعر ${Math.max(0, Math.floor(now() - m.quote.time))} ثانية` : 'بانتظار أول سعر');
     put('live-asset-title', (m?.name || (symbol === 'XAUUSD' ? 'الذهب' : 'بيتكوين')) + ' / دولار');
     put('live-price', fmt(m?.quote?.price));
+    if(Number.isFinite(m?.quote?.price)&&Number.isFinite(m?.quote?.time))mini.update({symbol,price:m.quote.price,time:m.quote.time,source:m.source,sourceId:m.source_id});
+    else mini.show(symbol);
     put('live-change', m?.change_from_last_close == null ? 'USD' : `${m.change_from_last_close >= 0 ? '+' : ''}${num(m.change_from_last_close, 3)}% عن آخر إغلاق`);
     put('live-source', m?.source || 'جلب المصدر'); put('live-quote-time', m?.quote ? time(m.quote.time) + ' · غزة' : '—');
     const quoteBroker = m?.candle_kind === 'BROKER_OHLC' && Number.isFinite(m?.quote?.bid) && Number.isFinite(m?.quote?.ask);
