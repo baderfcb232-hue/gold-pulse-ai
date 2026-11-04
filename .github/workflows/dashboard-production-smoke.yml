@@ -26,7 +26,7 @@ jobs:
           checks={
             '/': [b'DEMO PREVIEW', b'href="/dashboard"'],
             '/dashboard': [b'id="market-symbols"', b'/dashboard-terminal.css?v=phase3-1', b'dashboard-theme-choice', b'/dashboard-themes.css?v=premium-1'],
-            '/dashboard-themes.css': [b'--bg:#f8fafc',b'data-nabd-theme="light"'],
+            '/dashboard-themes.css': [b'--bg:#f8fafc',b'data-nabd-theme="light"',b'Mobile phase: keep dashboard navigation'],
             '/theme-init.js': [b'nabd:dashboard:theme',b'localStorage'],
             '/dashboard-terminal.css': [b'--bg:#0b1015',b'prefers-reduced-motion'],
             '/healthz': [b'"ok":true'],
