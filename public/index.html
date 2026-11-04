@@ -2,12 +2,13 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#100c1b"><meta name="description" content="نبض — متابعة الذهب وبيتكوين، فرص مضاربة مرجعية، أخبار مباشرة وربط MT5.">
+  <meta name="theme-color" content="#f8fafc"><meta name="description" content="نبض — متابعة الذهب وبيتكوين، فرص مضاربة مرجعية، أخبار مباشرة وربط MT5.">
   <title>NABD | نبض الذهب</title>
   <link rel="icon" href="/icon.svg?v=gold" type="image/svg+xml"><link rel="manifest" href="/manifest.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=stable-close-1"><link rel="stylesheet" href="/dashboard-terminal.css?v=phase3-1"><script src="/app.js?v=remove-telegram-card-1" type="module"></script>
+  <script src="/theme-init.js?v=light-default-1"></script>
+  <link rel="stylesheet" href="/styles.css?v=stable-close-1"><link rel="stylesheet" href="/dashboard-terminal.css?v=phase3-1"><link rel="stylesheet" href="/dashboard-themes.css?v=premium-1"><script src="/app.js?v=remove-telegram-card-1" type="module"></script>
 </head>
 <body>
   <a href="#main" class="skip">انتقل للمحتوى</a>
@@ -22,7 +23,7 @@
       <button class="nav-button" data-view="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 .5l3-3a5 5 0 0 0-7-7l-2 2M14 11a5 5 0 0 0-7-.5l-3 3a5 5 0 0 0 7 7l2-2"/></svg><span>الربط</span></button>
     </nav>
     <a class="button primary" href="/account">حسابي / الدخول</a>
-    <button class="button ghost login-trigger" id="login-open">دخول المشغّل</button>
+    <div class="theme-picker"><label for="dashboard-theme-choice">المظهر</label><select id="dashboard-theme-choice" aria-label="اختيار مظهر لوحة التداول"><option value="light">فاتح</option><option value="dark">داكن</option><option value="system">النظام</option></select></div><button class="button ghost login-trigger" id="login-open">دخول المشغّل</button>
   </header>
   <main id="main" class="main">
     <div class="page-heading"><div><span class="eyebrow" id="live-market-name">XAUUSD · متابعة السوق</span><h1 id="view-title">نظرة السوق</h1><p class="view-description" id="view-description">أسعار وسياق السوق وأخبار بتوقيت غزة، ومتابعة جاهزية التوصيات.</p></div>

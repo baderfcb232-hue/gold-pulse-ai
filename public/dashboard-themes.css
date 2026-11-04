@@ -1,0 +1,53 @@
+/* Premium NABD theme — visual only, MT5 actions and analytics untouched. */
+:root[data-nabd-theme="light"]{
+ color-scheme:light;
+ --bg:#f8fafc;--card:#ffffff;--elevated:#eef4f7;--border:#e2e8f0;
+ --ink:#0f172a;--muted:#64748b;--violet:#0f766e;--gold:#b7812e;
+ --green:#087d5b;--red:#cb3340;--amber:#99671e;--brand-secondary:#14b8a6;
+}
+:root[data-nabd-theme="light"] body{background:linear-gradient(180deg,#eef8f7 0,#f8fafc 295px,#f8fafc 100%);color:#0f172a}
+:root[data-nabd-theme="light"] .header{background:#fff;border-color:#e2e8f0;box-shadow:0 5px 25px #0f172a08}
+:root[data-nabd-theme="light"] .nav-button{color:#475569}
+:root[data-nabd-theme="light"] .nav-button:hover{background:#e5f3f0;color:#0f766e}
+:root[data-nabd-theme="light"] .nav-button.selected{background:#def5ee;color:#0a6960;border-color:#b2e7d8}
+:root[data-nabd-theme="light"] .button{background:#fff;color:#16413f;border-color:#cbd5e1}
+:root[data-nabd-theme="light"] .button:hover{background:#eef9f6;border-color:#a6d7ce}
+:root[data-nabd-theme="light"] .button.primary{background:#0f766e;color:#fff;border-color:#0f766e}
+:root[data-nabd-theme="light"] .button.primary:hover{background:#115e59}
+:root[data-nabd-theme="light"] .button.ghost{background:#fff;color:#0f766e}
+:root[data-nabd-theme="light"] .button.danger{background:#fff2f2;color:#a22d38;border-color:#f3c8cd}
+:root[data-nabd-theme="light"] .card{background:#fff;border:1px solid #e2e8f0;box-shadow:0 8px 30px #0f172a09;border-radius:17px}
+:root[data-nabd-theme="light"] .decision-card,:root[data-nabd-theme="light"] .signal-card{border-top-color:#14a695}
+:root[data-nabd-theme="light"] .connection-box{background:#fff;border-color:#d9e7e9}
+:root[data-nabd-theme="light"] .alert-banner{background:#eff8f7;border-color:#cbdedb}
+:root[data-nabd-theme="light"] .alert-banner p,:root[data-nabd-theme="light"] .reason{color:#556c74}
+:root[data-nabd-theme="light"] .pill.neutral{background:#eef2f6;color:#475569}
+:root[data-nabd-theme="light"] .pill.good{background:#ddf7e9;color:#0b7352}
+:root[data-nabd-theme="light"] .pill.warn{background:#fff3d9;color:#8d5e0e}
+:root[data-nabd-theme="light"] .pill.bad{background:#fff0f0;color:#bb303b}
+:root[data-nabd-theme="light"] .pill.outline{border-color:#d2dde3;color:#617482}
+:root[data-nabd-theme="light"] .score-track{background:#e4eaee}
+:root[data-nabd-theme="light"] .score-track span{background:#14a695}
+:root[data-nabd-theme="light"] .frame{background:#f5f9fa;border:1px solid #e0e8ec}
+:root[data-nabd-theme="light"] .frame strong{color:#0f172a}
+:root[data-nabd-theme="light"] .value-cell{background:#f7fafb;border:1px solid #e2e8f0}
+:root[data-nabd-theme="light"] .signal-caption{border-color:#e2e8f0;color:#64748b}
+:root[data-nabd-theme="light"] .chart-wrap{background:#f8fbfd;border:1px solid #dce7ec}
+:root[data-nabd-theme="light"] .mt5-candle-chart{background:#f6fafc;border-color:#cedfe6}
+:root[data-nabd-theme="light"] .chart-empty{background:repeating-linear-gradient(0deg,#f6fafc 0,#f6fafc 62px,#e8f0f4 63px,#f6fafc 64px)}
+:root[data-nabd-theme="light"] .chart-empty strong{color:#536575}
+:root[data-nabd-theme="light"] .chart-empty p{color:#64748b}
+:root[data-nabd-theme="light"] .segmented{background:#edf3f5;border:1px solid #d6e2e5}
+:root[data-nabd-theme="light"] .segmented button{color:#506372}
+:root[data-nabd-theme="light"] .segmented .active{background:#fff;color:#0f766e;box-shadow:0 1px 6px #0f172a0d}
+:root[data-nabd-theme="light"] .text-button,:root[data-nabd-theme="light"] summary{color:#0f766e}
+:root[data-nabd-theme="light"] .footer{border-color:#e2e8f0;color:#64748b}
+:root[data-nabd-theme="light"] input,:root[data-nabd-theme="light"] select,:root[data-nabd-theme="light"] textarea{color-scheme:light;background:#fff;color:#0f172a;border-color:#cbd5e1}
+:root[data-nabd-theme="light"] .checks-details{border-color:#e2e8f0}
+:root[data-nabd-theme="light"] .news-list,:root[data-nabd-theme="light"] .signals-list{color:#233e48}
+.theme-picker{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:12px;padding:5px 8px;background:var(--card);color:var(--ink);white-space:nowrap}
+.theme-picker label{font-size:12px;font-weight:600}
+.theme-picker select{font-size:12px;min-height:32px;background:var(--card);color:var(--ink);border:1px solid var(--border);border-radius:8px;padding:4px 8px}
+:root[data-nabd-theme="dark"]{color-scheme:dark}
+@media(max-width:680px){.theme-picker{padding:4px 6px}.theme-picker label{font-size:10px}.theme-picker select{max-width:92px;font-size:11px}.header{flex-wrap:wrap}}
+@media(prefers-reduced-motion:reduce){.theme-picker *{transition:none!important}}
