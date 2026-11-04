@@ -1,0 +1,23 @@
+/* NABD Phase 3 dark trading dashboard theme; visual-only stylesheet. */
+
+:root{color-scheme:dark;--bg:#0b1015;--card:#141c23;--elevated:#1d2830;--border:#293840;--ink:#edf0ed;--muted:#a1aeb4;--violet:#d3b47a;--gold:#ddbb80;--green:#73d7b3;--red:#fb9496;--amber:#f2c981}
+body{background:radial-gradient(ellipse 65% 22% at 80% -10%,#1c332e66,transparent 75%),var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+.header{background:#11191f;border-bottom:1px solid #304048;padding-block:16px}
+.nav{gap:5px}.nav-button{border:1px solid transparent;border-radius:11px;font-weight:600;color:#b8c2c6;transition:background .16s,color .16s}
+.nav-button:hover{background:#23313a;color:#f0ede5}.nav-button.selected{background:#2a332f;color:#efcf92;border-color:#59604a}
+.button{border-radius:11px;min-height:43px;background:#202b33;border-color:#35444c;box-shadow:none}.button:hover{border-color:#687c79;background:#28363d}
+.button.primary{background:linear-gradient(110deg,#e4ca95,#d5b175);border-color:#d5b175;color:#17201d}.button.ghost{background:#141e24}.button.danger{background:#392628;border-color:#704549;color:#ffaaa8}
+.main{max-width:1520px;padding-top:28px;padding-bottom:46px}.page-heading{padding-block:4px 11px}
+.page-heading h1{font-size:clamp(24px,2.4vw,34px);font-weight:700}
+.connection-box{background:#141e24;border:1px solid #2c3940;padding:8px 13px;border-radius:12px;min-width:155px}
+.card{background:linear-gradient(165deg,#182128,#131b22 75%);border:1px solid #2b3940;border-radius:17px;box-shadow:0 9px 25px #00000015}
+.card-heading h2{font-weight:700}.decision-card,.signal-card{border-top:2px solid #bfa26c}.reason{color:#bbc7c8;line-height:1.9}
+.pill{border-radius:9px;font-weight:600}.pill.neutral{background:#28333b;color:#b9c6cd}.pill.good{background:#163d33;color:#87e3c2}.pill.warn{background:#3a3422;color:#f6d995}.pill.bad{background:#46292b;color:#ffb0b0}
+.alert-banner{background:#1d292d;border-color:#425249;border-radius:15px}.score-track{background:#2f3c41}.score-track span{background:#c4a575}
+.frame{background:#111c23;border-color:#2d3940;border-radius:12px}.chart-wrap{border:1px solid #304048;border-radius:12px;background:#0e151a}.mt5-candle-chart{background:#0d171d;border-color:#354750;border-radius:12px}
+.segmented{background:#10171c;border:1px solid #303d44;border-radius:10px}.segmented button{color:#b4bfc0;border-radius:8px}.segmented .active{background:#374039;color:#eed5a4}
+.value-cell{background:#111b21;border-color:#2a3b42;border-radius:11px}.text-button{color:#e3c489;font-weight:600}
+.bot-controls .button[aria-disabled="true"]{opacity:1}.footer{border-top-color:#2c383e;color:#9aabb1}
+@media(max-width:980px){.header{gap:13px;padding:15px 18px}.main{padding-inline:18px}.nav-button{padding-inline:10px}}
+@media(max-width:680px){.header{padding-inline:12px;gap:8px}.main{padding:17px 12px 30px}.card{padding:16px;border-radius:14px}.connection-box{min-width:0}.nav{scrollbar-width:none}.page-heading h1{font-size:25px}.pill{white-space:normal;line-height:1.4}.mt5-candle-chart{height:380px;min-height:340px}}
+@media(prefers-reduced-motion:reduce){.nav-button,.button{transition:none!important}}
