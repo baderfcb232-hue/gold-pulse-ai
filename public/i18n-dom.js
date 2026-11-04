@@ -8,6 +8,26 @@ import {localeOf,translations} from './i18n-core.js';
 
 const corePairs=Object.fromEntries(Object.keys(translations.ar).map(k=>[translations.ar[k],translations.en[k]]));
 const en=Object.freeze({...corePairs,...dashboardStaticEnglish,...accountStaticEnglish,...attributeStaticEnglish,...runtimeStatusEnglish});
+const dynamicPatterns=[
+  [/^عمر السعر ([\d,.]+) ثانية$/,m=>`Quote age: ${m[1]} seconds`],
+  [/^عمر آخر تيك حقيقي ([\d,.]+) ثانية$/,m=>`Last real tick age: ${m[1]} seconds`],
+  [/^([\d,.]+) نقطة$/,m=>`${m[1]} points`],
+  [/^([\d,.]+) دقيقة$/,m=>`${m[1]} minutes`],
+  [/^([\d,.]+) إشارة · (.+)$/,m=>`${m[1]} signals · ${translateUiText(m[2],'en')}`],
+  [/^([\d,.]+) شمعة مغلقة$/,m=>`${m[1]} closed candles`],
+  [/^إشارة (شراء|بيع) جديدة — (.+)$/,m=>`New ${translateUiText(m[1],'en')} signal — ${m[2]}`],
+  [/^فرصة مضاربة (شراء|بيع) · (.+) · (.+)$/,m=>`Scalping ${translateUiText(m[1],'en')} opportunity · ${translateUiText(m[2],'en')} · ${m[3]}`],
+  [/^تم تحديث شموع (.+) من (.+) بنجاح\.$/,m=>`Candles updated successfully: ${m[1]} · ${m[2]}`],
+  [/^(.+) · (الذهب|البيتكوين)$/,m=>`${m[1]} · ${translateUiText(m[2],'en')}`],
+  [/^(.+) · غزة$/,m=>`${m[1]} · Gaza`],
+  [/^(.+) · مرجعي$/,m=>`${m[1]} · Reference`],
+  [/^صدرت: (.+) · تنتهي: (.+) · (.+)$/,m=>`Issued: ${m[1]} · Expires: ${m[2]} · ${m[3]}`],
+  [/^بعد (\d+)س (\d+)د$/,m=>`In ${m[1]}h ${m[2]}m`],
+  [/^([\d,.]+) من (\d+) مراحل جاهزة · مصدر التوصية: (.+)$/,m=>`${m[1]} of ${m[2]} stages ready · Signal source: ${translateUiText(m[3],'en')}`],
+  [/^رقم الحساب: ([\d]+) · السيرفر: (.+)$/,m=>`Account number: ${m[1]} · Server: ${m[2]}`],
+  [/^صفحة (\d+)$/,m=>`Page ${m[1]}`],
+  [/^آخر تحديث (.+)$/,m=>`Last updated: ${m[1]}`]
+];
 const originals=new WeakMap(),attrs=new WeakMap();
 const skipTags=new Set(['SCRIPT','STYLE','NOSCRIPT','CODE','PRE','SVG','CANVAS','TEXTAREA']);
 export function currentLocale(){
@@ -20,8 +40,12 @@ export function translateUiText(value,locale=currentLocale()){
   const raw=String(value),trim=raw.trim();
   if(!trim)return raw;
   const matching=en[trim];
-  if(!matching)return raw; // Do not suppress unknown server/trading safety explanations.
-  return raw.replace(trim,matching);
+  if(matching)return raw.replace(trim,matching);
+  for(const [pattern,format]of dynamicPatterns){
+    const found=trim.match(pattern);
+    if(found)return raw.replace(trim,format(found));
+  }
+  return raw; // Do not suppress unknown server/trading safety explanations.
 }
 export function translateStaticUi(root,locale=currentLocale()){
   if(!root||typeof document==='undefined'||typeof document.createTreeWalker!=='function')return;
