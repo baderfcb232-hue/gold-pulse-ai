@@ -731,7 +731,9 @@ bool PlaceSignal(const SignalData &signal)
      {
       total_volume=NormalizeDouble(MathFloor(total_volume*volatility_factor/step+1.0e-9)*step,VolumeDigits(step));
       if(total_volume<minimum-1.0e-8)
-        {g_website_attempt_code=124;LogEvent("ORDER_BLOCKED","Volatility-adjusted lot below broker minimum");return(false);}
+        {g_website_attempt_code=124;LogEvent("ORDER_BLOCKED",StringFormat(
+           "Volatility-adjusted lot %.4f below broker minimum %.4f (factor %.3f)",
+           total_volume,minimum,volatility_factor));return(false);}
      }
    int remaining=(DemoWebsiteNoDailyLimitsEnabled() || InpMaxTradesPerDay==0) ? 1 : InpMaxTradesPerDay-CountTodayEntries();
    int legs=SPPlanLegCount(DemoWebsiteNoDailyLimitsEnabled() ? 1 : (InpUseSmallProfit ? InpMaxBasketPositions : 1),
@@ -777,14 +779,24 @@ bool PlaceSignal(const SignalData &signal)
       if(manual_website)allowed_risk=AccountInfoDouble(ACCOUNT_EQUITY);
       if(DemoWebsiteNoDailyLimitsEnabled() && !ConcurrentWebsiteEntryAllowed())
         {g_website_attempt_code=123;break;}
-      if(distance<=MinimumStopDistance() ||
-         !OrderCalcProfit(order_type,g_symbol,volume,price,signal.stop_loss,profit) ||
-         MathAbs(profit)>allowed_risk+1.0e-8 ||
-         (DemoWebsiteNoDailyLimitsEnabled() && !ConcurrentWebsiteEntryAllowed(MathMax(0.0,-profit))) ||
-         !MarginIsAcceptable(order_type,price,volume))
+      // Preserve the same protective checks and order: only distinguish the exact
+      // reason an entry was blocked. Never raise risk limits or force broker minimums.
+      int safety_code=0;
+      string safety_reason="";
+      if(distance<=MinimumStopDistance())
+        {safety_code=125;safety_reason="Stop distance below broker minimum";}
+      else if(!OrderCalcProfit(order_type,g_symbol,volume,price,signal.stop_loss,profit))
+        {safety_code=126;safety_reason="Broker stop-loss profit calculation failed";}
+      else if(MathAbs(profit)>allowed_risk+1.0e-8)
+        {safety_code=127;safety_reason="Stop-loss exposure exceeds permitted risk";}
+      else if(DemoWebsiteNoDailyLimitsEnabled() && !ConcurrentWebsiteEntryAllowed(MathMax(0.0,-profit)))
+        {safety_code=128;safety_reason="Aggregate open-position risk cap or hedging protection";}
+      else if(!MarginIsAcceptable(order_type,price,volume))
+        {safety_code=129;safety_reason="Insufficient free margin or maximum margin-use cap";}
+      if(safety_code>0)
         {
-         LogEvent("ORDER_BLOCKED","fresh price, stop risk, or combined margin check failed");
-         g_website_attempt_code=120;
+         LogEvent("ORDER_BLOCKED",StringFormat("reason_code=%d,%s",safety_code,safety_reason));
+         g_website_attempt_code=safety_code;
          break;
         }
       datetime started=ServerNow();
@@ -1940,7 +1952,19 @@ void NABDProcessWebsiteApproval()
    GlobalVariableSet(NABDKey("WDT"),0.0);
    GlobalVariableSet(NABDKey("WRC"),0.0);GlobalVariableSet(NABDKey("WRT"),0.0);
    if(!TradingExecutionEnabled()){NABDWebsiteBlocked(id,"trading execution switch is off",101);return;}
-   if(!ExecutionPermissionsAvailable()){NABDWebsiteBlocked(id,"terminal/account trade permissions unavailable",102);return;}
+   if(!ExecutionPermissionsAvailable())
+     {
+      // Diagnose MT5/VPS Algo Trading and account permission flags locally.
+      // This never switches permissions on or bypasses the execution gate.
+      LogEvent("WEBSITE_PERMISSIONS",StringFormat(
+        "connected=%d,terminal_algo=%d,ea_algo=%d,account_trade=%d,account_expert=%d",
+        (int)TerminalInfoInteger(TERMINAL_CONNECTED),
+        (int)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED),
+        (int)MQLInfoInteger(MQL_TRADE_ALLOWED),
+        (int)AccountInfoInteger(ACCOUNT_TRADE_ALLOWED),
+        (int)AccountInfoInteger(ACCOUNT_TRADE_EXPERT)));
+      NABDWebsiteBlocked(id,"terminal/account trade permissions unavailable",102);return;
+     }
    if(!InpNABDAllowRemoteControl || NABDRemotePaused())
      {NABDWebsiteBlocked(id,"website remote control disabled or paused",103);return;}
    if(IsEmergencyStopActive()){NABDWebsiteBlocked(id,"emergency stop active",104);return;}
