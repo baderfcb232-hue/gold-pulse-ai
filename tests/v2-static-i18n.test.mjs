@@ -12,7 +12,9 @@ import {runtimeStatusEnglish} from '../public/runtime-status-en.js';
 import {liveStatusEnglish} from '../public/live-status-en.js';
 import {appExtraEnglish} from '../public/app-extra-en.js';
 import {translations} from '../public/i18n-core.js';
-import {translateUiText,translateStaticUi,observeLocaleUi,staticTranslationCoverage} from '../public/i18n-dom.js';
+import {translateUiText,translateStaticUi,observeLocaleUi,externalHeadlineForLocale,staticTranslationCoverage} from '../public/i18n-dom.js';
+import {serverStatusEnglish} from '../public/server-status-en.js';
+import {safetyStatusEnglish} from '../public/safety-status-en.js';
 const read=p=>readFileSync(new URL('../public/'+p,import.meta.url),'utf8');
 const htmlCopy=p=>[...new Set(read(p)
   .replace(/<script[\s\S]*?<\/script>/g,'').replace(/<style[\s\S]*?<\/style>/g,'')
@@ -40,6 +42,9 @@ test('exact English translations cover every static dashboard and account phrase
   assert.ok(Object.keys(appExtraEnglish).length>=160);
   for(const translated of Object.values({...appExtraEnglish,...liveStatusEnglish}))assert.doesNotMatch(translated,/[\u0600-\u06FF]/);
   assert.ok(Object.keys(runtimeStatusEnglish).length>=240);
+  assert.ok(Object.keys(serverStatusEnglish).length>=80);
+  assert.ok(Object.keys(safetyStatusEnglish).length>=95);
+  for(const text of Object.values({...serverStatusEnglish,...safetyStatusEnglish}))assert.doesNotMatch(text,/[\u0600-\u06FF]/);
   for(const value of Object.values(runtimeStatusEnglish))assert.doesNotMatch(value,/[\u0600-\u06FF]/);
   for(const path of ['index.html','accounts.html']){
     const attrs=[...read(path).matchAll(/(?:aria-label|placeholder|title|aria-description)="([^"]+)"/g)].map(x=>x[1]).filter(x=>/[\u0600-\u06FF]/.test(x));
@@ -59,6 +64,14 @@ test('localized display text never overwrites unknown trading, broker or custome
   assert.equal(translateUiText('فرصة مضاربة بيع · الذهب · 4000','en'),'Scalping Sell opportunity · Gold · 4000');
   assert.equal(translateUiText('وصلت للجسر — لم يصل تأكيد MT5','en'),'Received by bridge — MT5 has not confirmed execution');
   assert.equal(translateUiText('وقف الخسارة','ar'),'وقف الخسارة');
+  assert.equal(translateUiText('السبريد 120 نقطة يتجاوز الحد 80.','en'),'Spread 120 points exceeds the permitted limit of 80.');
+  assert.equal(translateUiText('انتظار توافق الاتجاه: M15 محايد، H1 بيع. لن تصدر توصية قبل توافقهما واستيفاء شروط الدخول الأخرى.','en'),'Waiting for trend alignment: M15 Neutral, H1 Sell. No signal will be issued until alignment and other entry conditions are satisfied.');
+  assert.equal(translateUiText('تم إيقاف دخول صفقات جديدة.','en'),'New trade entries have been paused.');
+  assert.equal(translateUiText('وقف الخسارة · الهدف الأول','en'),'Stop loss · First target');
+  assert.match(externalHeadlineForLocale('المركزي الأوروبي يبقي سعر الفائدة','en'),/original source/);
+  assert.doesNotMatch(externalHeadlineForLocale('المركزي الأوروبي يبقي سعر الفائدة','en'),/[\u0600-\u06FF]/);
+  assert.equal(externalHeadlineForLocale('Bitcoin prices steady','en'),'Bitcoin prices steady');
+  assert.equal(externalHeadlineForLocale('المركزي الأوروبي يبقي سعر الفائدة','ar'),'المركزي الأوروبي يبقي سعر الفائدة');
   assert.equal(translateUiText(null,'en'),null);
   assert.equal(translateUiText('بعد 2س 3د','en'),'In 2h 3m');
   assert.equal(translateUiText('XAUUSD · متابعة افتراضية','en'),'XAUUSD · Simulated tracking');
@@ -128,7 +141,7 @@ test('dashboard and account translation scripts are browser modules with shared 
  assert.match(account,/id="portal-language-choice"/);
  assert.match(read('dashboard-locale.js'),/translateStaticUi\(document.body,lang\)/);
  assert.match(read('account-language.js'),/translateStaticUi\(document.body,lang\)/);
- for(const script of ['i18n-dom.js','dashboard-static-en.js','account-static-en.js','attribute-static-en.js','runtime-status-en.js','live-status-en.js','app-extra-en.js','account-language.js','dashboard-locale.js']){
+ for(const script of ['i18n-dom.js','dashboard-static-en.js','account-static-en.js','attribute-static-en.js','runtime-status-en.js','live-status-en.js','app-extra-en.js','safety-status-en.js','server-status-en.js','account-language.js','dashboard-locale.js']){
    const path=new URL('../public/'+script,import.meta.url).pathname;
    const result=spawnSync(process.execPath,['--check',path],{encoding:'utf8'});
    assert.equal(result.status,0,script+': '+result.stderr);
@@ -142,7 +155,7 @@ test('i18n assets are public but account and trade APIs remain protected',async 
  await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
  t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
  const base='http://127.0.0.1:'+app.server.address().port;
- for(const path of ['/i18n-core.js','/i18n-dom.js','/dashboard-static-en.js','/account-static-en.js','/attribute-static-en.js','/runtime-status-en.js','/live-status-en.js','/app-extra-en.js','/account-language.js']){
+ for(const path of ['/i18n-core.js','/i18n-dom.js','/dashboard-static-en.js','/account-static-en.js','/attribute-static-en.js','/runtime-status-en.js','/live-status-en.js','/app-extra-en.js','/safety-status-en.js','/server-status-en.js','/account-language.js']){
    const r=await fetch(base+path);assert.equal(r.status,200,path);
  }
  assert.equal((await fetch(base+'/dashboard')).status,200);
