@@ -51,3 +51,32 @@
 :root[data-nabd-theme="dark"]{color-scheme:dark}
 @media(max-width:680px){.theme-picker{padding:4px 6px}.theme-picker label{font-size:10px}.theme-picker select{max-width:92px;font-size:11px}.header{flex-wrap:wrap}}
 @media(prefers-reduced-motion:reduce){.theme-picker *{transition:none!important}}
+
+/* Mobile phase: keep dashboard navigation, touch targets and trading controls visible. */
+@media(max-width:920px){
+ .main .top-grid,.main .chart-grid,.main .bottom-grid,.main .settings-grid{grid-template-columns:minmax(0,1fr)}
+ .main .card,.main .panel,.main .chart-card,.main .market-toolbar{min-width:0;max-width:100%}
+ .main .filter-row{flex-wrap:wrap;gap:10px}
+}
+@media(max-width:760px){
+ .header{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px}
+ .header .brand{min-width:0}
+ .header .nav{order:99;flex:1 1 100%;width:100%;min-width:0;display:flex;justify-content:flex-start;gap:5px;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:7px 0 9px}
+ .header .nav::-webkit-scrollbar{display:none}
+ .header .nav-button{flex:0 0 auto;min-height:44px;scroll-snap-align:start;padding:9px 12px}
+ .header>.button,.header>.theme-picker{min-height:44px}
+ .header .theme-picker{margin-inline-start:auto}
+ .main{width:100%;max-width:100%;overflow-wrap:anywhere}
+ .main :is(.card,.metrics-grid,.quotes,.chart-wrap,.mt5-candle-chart){min-width:0}
+ .main .card-heading{flex-wrap:wrap;align-items:flex-start}
+ .main .chart-wrap{min-height:290px}
+ .main .button,.main select{min-height:44px}
+ .main .bot-controls .button{white-space:normal;text-align:center}
+}
+@media(max-width:390px){
+ .header .brand-logo{width:122px;max-width:122px;height:auto}
+ .header>.button{padding:7px 10px;font-size:11px}
+ .header .theme-picker{flex:0 0 auto}
+ .header .theme-picker label{display:none}
+ .main{padding-inline:11px}
+}
