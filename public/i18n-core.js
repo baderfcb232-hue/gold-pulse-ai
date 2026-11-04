@@ -56,7 +56,7 @@ export const translations=Object.freeze({
     'common.today':'Today','common.yesterday':'Yesterday','common.todayYesterday':'Today and yesterday',
     'common.allHistory':'Full history','common.duration':'Duration','common.source':'Source',
     'theme.title':'Appearance','theme.light':'Light','theme.dark':'Dark','theme.system':'System',
-    'lang.title':'Language','lang.ar':'العربية','lang.en':'English',
+    'lang.title':'Language','lang.ar':'Arabic','lang.en':'English',
     'market.gold':'Gold','market.bitcoin':'Bitcoin','market.price':'Price',
     'market.ask':'Buy Ask','market.bid':'Sell Bid','market.spread':'Spread',
     'market.lastUpdated':'Last updated','market.tickSource':'Price source',
