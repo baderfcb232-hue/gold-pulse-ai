@@ -2,7 +2,7 @@ import {drawBrokerCandles} from './broker-chart.js';
 import {initMiniSparkline} from './mini-spark.js';
 import {createMarketLoaders} from './market-loaders.js';
 import {inSignalDateRange} from './signal-date-filter.js';
-import {translateUiText,externalHeadlineForLocale,currentLocale,setLocalizedText} from './i18n-dom.js';
+import {translateUiText,externalHeadlineForLocale,currentLocale,setLocalizedText} from './i18n-dom.js?v=v2-i18n-3';
 export function initLiveWorkspace({stream, api, time, num, now, notify, priceFeedback, positionSize, getSizingContext}) {
   const $ = id => document.getElementById(id);
   const node = (tag, cls, text) => {const n = document.createElement(tag); if (cls) n.className = cls;
@@ -386,6 +386,13 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, priceFee
     tf = b.dataset.tf; brokerChartKey=''; lastBrokerFetch=0;
     $('live-chart-tfs').querySelectorAll('button').forEach(x => {x.classList.toggle('active', x === b); x.setAttribute('aria-pressed', String(x === b));}); loadChart();
   };
+  // Refresh cached signal timestamps and source headlines immediately on language changes.
+  // No price history or broker data is fetched or modified by this event.
+  document.addEventListener('nabd:language-change',()=>{
+    renderHistory();
+    newsStamp = '';
+    renderNews();
+  });
   $('scalp-history-filter').onchange = renderHistory;
   $('scalp-history-date').onchange = renderHistory; $('headline-filter').onchange = () => {newsStamp = ''; renderNews();};
   stream.addEventListener('market', event => {try {applyMarket(JSON.parse(event.data));} catch {}});
