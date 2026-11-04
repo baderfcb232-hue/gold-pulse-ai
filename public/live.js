@@ -341,7 +341,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, priceFee
   async function loadHistory() {
     if (historyFetched) return; historyFetched = true;
     try {const d = await api('/api/market/signals'); historyRows = d.signals || []; renderHistory();}
-    catch {if(!historyRows.length) $('scalp-history-list').replaceChildren(empty('تعذر تحميل سجل التوصيات حاليًا؛ أعد المحاولة عند عودة الاتصال.'));}
+    catch {if(!historyRows.length) $('scalp-history-list').replaceChildren(empty('تعذر جلب سجل التوصيات الآن.'));}
     finally {loaders.ready('history');historyFetched = false;}
   }
   function renderHistory() {
