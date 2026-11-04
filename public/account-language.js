@@ -1,6 +1,6 @@
 /* Shared account language controls. Presentation only, no authentication requests. */
 import {layoutFor,t} from './i18n-core.js';
-import {translateStaticUi,translateUiText} from './i18n-dom.js';
+import {translateStaticUi,translateUiText,observeLocaleUi} from './i18n-dom.js';
 const key='nabd:dashboard:language',marketing='nabd-marketing-language';
 const option=document.getElementById('portal-language-choice');
 const originalTitle=document.title;
@@ -25,3 +25,4 @@ option?.addEventListener('change',()=>{
   apply();
 });
 apply();
+observeLocaleUi(document.body);
