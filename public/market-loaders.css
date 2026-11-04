@@ -1,0 +1,48 @@
+/* NABD V2 — bounded skeleton loading only on first MT5/market fetch. */
+:root{
+  --nabd-skeleton-base:#e8eff1;--nabd-skeleton-highlight:#f7fafb;
+}
+:root[data-nabd-theme="dark"]{
+  --nabd-skeleton-base:#2a3c43;--nabd-skeleton-highlight:#3a4d54;
+}
+[data-nabd-loading="true"]{
+ position:relative;isolation:isolate;min-height:130px;overflow:hidden;
+}
+[data-nabd-loading="true"]::before{
+ content:"";position:absolute;inset:0;z-index:11;
+ background:
+  linear-gradient(var(--nabd-skeleton-base),var(--nabd-skeleton-base)) 20px 22px/calc(50% - 25px) 19px no-repeat,
+  linear-gradient(var(--nabd-skeleton-base),var(--nabd-skeleton-base)) calc(100% - 20px) 22px/24% 16px no-repeat,
+  linear-gradient(var(--nabd-skeleton-base),var(--nabd-skeleton-base)) 20px 65px/72% 28px no-repeat,
+  linear-gradient(var(--nabd-skeleton-base),var(--nabd-skeleton-base)) 20px 110px/56% 13px no-repeat,
+  var(--card,#fff);
+}
+[data-nabd-loading="true"]::after{
+ content:"";position:absolute;inset:0;z-index:12;pointer-events:none;
+ background:linear-gradient(108deg,transparent 35%,var(--nabd-skeleton-highlight) 48%,transparent 61%);
+ transform:translateX(-105%);
+ animation:nabd-skeleton-shimmer 1.55s linear infinite;
+}
+@keyframes nabd-skeleton-shimmer{
+ from{transform:translateX(-105%)}
+ to{transform:translateX(105%)}
+}
+#live-chart-card[data-nabd-loading="true"]{min-height:350px}
+#live-chart-card[data-nabd-loading="true"]::before{
+ background:
+  repeating-linear-gradient(to bottom,transparent 0 53px,var(--nabd-skeleton-base) 54px,transparent 55px),
+  linear-gradient(var(--nabd-skeleton-base),var(--nabd-skeleton-base)) 20px 20px/45% 17px no-repeat,
+  var(--card,#fff);
+}
+#live-news-preview[data-nabd-loading="true"]{min-height:160px}
+#live-news-preview[data-nabd-loading="true"]::before{
+ background:
+  linear-gradient(var(--nabd-skeleton-base),var(--nabd-skeleton-base)) 12px 20px/86% 15px no-repeat,
+  linear-gradient(var(--nabd-skeleton-base),var(--nabd-skeleton-base)) 12px 56px/73% 13px no-repeat,
+  linear-gradient(var(--nabd-skeleton-base),var(--nabd-skeleton-base)) 12px 94px/92% 15px no-repeat,
+  linear-gradient(var(--nabd-skeleton-base),var(--nabd-skeleton-base)) 12px 132px/60% 13px no-repeat,
+  var(--card,#fff);
+}
+@media(prefers-reduced-motion:reduce){
+ [data-nabd-loading="true"]::after{animation:none!important;display:none}
+}
