@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="224" height="66" viewBox="0 0 224 66" role="img" aria-labelledby="nabd-logo-title">
+  <title id="nabd-logo-title">نبض NABD — تداول وتحليل الأسواق</title>
+  <g transform="translate(0 2)">
+    <path d="M5 34h14l8-16 10 29 8-16h14" fill="none" stroke="#0F766E" stroke-width="4.9" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M27 18l10 29 8-16" fill="none" stroke="#D4A24C" stroke-width="4.7" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="54" cy="34" r="3" fill="#D4A24C"/>
+  </g>
+  <text x="215" y="34" fill="#0F766E" font-family="IBM Plex Sans Arabic,Tajawal,Arial,sans-serif" font-size="31" font-weight="700" text-anchor="end" direction="rtl">نبض</text>
+  <text x="91" y="55" fill="#B17D30" font-family="Inter,Arial,sans-serif" font-size="13" font-weight="700" letter-spacing="5">NABD</text>
+</svg>

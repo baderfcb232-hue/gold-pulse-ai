@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="NABD pulse mark">
+  <title>NABD pulse mark</title>
+  <path d="M5 34h14l8-16 10 29 8-16h14" fill="none" stroke="#0F766E" stroke-width="5.1" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M27 18l10 29 8-16" fill="none" stroke="#D4A24C" stroke-width="4.9" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="54" cy="34" r="3" fill="#D4A24C"/>
+</svg>

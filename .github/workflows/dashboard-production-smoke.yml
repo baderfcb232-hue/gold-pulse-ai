@@ -19,6 +19,11 @@ on:
       - 'public/signal-date-filter.js'
       - 'public/live.js'
       - 'public/theme-init.js'
+      - 'public/nabd-locale-init.js'
+      - 'public/nabd-ltr-brand.css'
+      - 'public/nabd-logo.svg'
+      - 'public/nabd-logo-en.svg'
+      - 'public/icon.svg'
       - 'public/index.html'
       - 'server.mjs'
       - '.github/workflows/dashboard-production-smoke.yml'
@@ -38,12 +43,16 @@ jobs:
           base='https://gold-pulse-ai.onrender.com'
           checks={
             '/': [b'DEMO PREVIEW', b'href="/dashboard"'],
-            '/dashboard': [b'id="market-symbols"', b'/dashboard-terminal.css?v=phase3-1', b'dashboard-theme-choice', b'/dashboard-themes.css?v=premium-1',b'dashboard-fixes.css?v=ux-20261104',b'dashboard-contrast-v2.css?v=20261104',b'market-loaders.css?v=v2-1',b'live-feedback.css?v=v2-1',b'nabd-toast-history-list',b'mini-market-card',b'signal-date-filter',b'trade-sizing-lot'],
+            '/dashboard': [b'id="market-symbols"', b'/dashboard-terminal.css?v=phase3-1', b'dashboard-theme-choice', b'/dashboard-themes.css?v=premium-1',b'dashboard-fixes.css?v=ux-20261104',b'dashboard-contrast-v2.css?v=20261104',b'market-loaders.css?v=v2-1',b'live-feedback.css?v=v2-1',b'nabd-ltr-brand.css?v=v2-1',b'nabd-logo-en.svg?v=v2-1',b'nabd-toast-history-list',b'mini-market-card',b'signal-date-filter',b'trade-sizing-lot'],
             '/dashboard-fixes.css': [b'.toast.error',b'.broker-quote-values>span:first-child',b'.mini-market-card'],
             '/dashboard-contrast-v2.css': [b'--nabd-notice-error-bg',b'.toast-stack',b'.broker-quote-values>span:first-child'],
             '/market-loaders.css': [b'nabd-skeleton-shimmer',b'prefers-reduced-motion'],
             '/market-loaders.js': [b'createMarketLoaders',b'timeoutMs=8000'],
             '/live-feedback.css': [b'nabd-toast-arrive',b'prefers-reduced-motion'],
+            '/nabd-ltr-brand.css': [b'html[dir="ltr"] .nav{left:22px;right:auto}',b'html[dir="ltr"] .main{margin-left:200px'],
+            '/nabd-locale-init.js': [b'nabd:dashboard:language',b'document.documentElement.dir'],
+            '/nabd-logo-en.svg': [b'NABD',b'#0F766E'],
+            '/icon.svg': [b'<svg',b'#D4A24C'],
             '/price-feedback.js': [b'priceMovement',b'createPriceFeedback'],
             '/toast-ui.js': [b'createToastCenter',b'eventKey'],
             '/mini-spark.js': [b'sparklineGeometry',b'initMiniSparkline'],

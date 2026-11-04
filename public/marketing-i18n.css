@@ -41,3 +41,11 @@ html[dir="ltr"] .mobile-menu nav{right:auto;left:0;direction:ltr}
  .mobile-menu nav{width:min(82vw,290px)}
 }
 @media(prefers-reduced-motion:reduce){.mobile-menu *{transition:none!important}}
+
+/* Premium NABD mark, transparent instead of a solid dark logo tile. */
+.site-header .brand-mark{background:transparent;color:#0f766e;border:none;box-shadow:none;border-radius:0}
+.site-header .brand-mark img{display:block;width:39px;height:39px;object-fit:contain}
+.site-header .brand-word{color:#153e42}
+.site-header .brand-word b{color:#b68130}
+html[dir="ltr"] .site-header .brand-word{letter-spacing:-.2px}
+@media(max-width:620px){.site-header .brand-mark img{width:35px;height:35px}}

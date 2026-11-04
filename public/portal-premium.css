@@ -85,3 +85,7 @@
  .portal-body .portal-card .form-links{gap:10px}
  .portal-body .portal-heading{align-items:flex-start}
 }
+
+/* Use transparent NABD vector mark on the member portal. */
+.portal-body .portal-brand-mark{background:transparent;box-shadow:none;color:#0f766e;border-radius:0}
+.portal-body .portal-brand-mark img{display:block;width:100%;height:100%;object-fit:contain}
