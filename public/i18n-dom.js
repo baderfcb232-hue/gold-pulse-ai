@@ -73,6 +73,14 @@ const dynamicPatterns=[
   [/^بيانات الشموع الحديثة (.+)$/,m=>'Recent candle data '+m[1]],
   [/^(.+) · ([\d,.]+) شمعة مغلقة$/,m=>translateUiText(m[1],'en')+' · '+m[2]+' closed candles'],
   [/^رسالة الخطأ: (.+)$/,m=>'Error message: '+translateUiText(m[1],'en')]
+  [/^السبريد ([\d,.]+) نقطة يتجاوز الحد ([\d,.]+)\.$/,m=>'Spread '+m[1]+' points exceeds the permitted limit of '+m[2]+'.'],
+  [/^الدخول متوقف حول خبر مرتفع الأهمية: (.+)$/,m=>'Entry blocked around a high-impact economic release: '+translateUiText(m[1],'en')],
+  [/^انتظار توافق الاتجاه: M15 (.+)، H1 (.+)\. لن تصدر توصية قبل توافقهما واستيفاء شروط الدخول الأخرى\.$/,m=>'Waiting for trend alignment: M15 '+translateUiText(m[1],'en')+', H1 '+translateUiText(m[2],'en')+'. No signal will be issued until alignment and other entry conditions are satisfied.'],
+  [/^([\d,.]+)R · قبل التكاليف$/,m=>m[1]+'R · before fees'],
+  [/^([\d,.]+)% عن آخر إغلاق$/,m=>m[1]+'% since previous close'],
+  [/^شارت MT5 (.+)$/,m=>'MT5 chart '+m[1]],
+  [/^(.+) · توصية #(.+) · أمر MT5 #(.+) · (.+)$/,m=>m[1]+' · Signal #'+m[2]+' · MT5 order #'+m[3]+' · '+translateUiText(m[4],'en')],
+  [/^(.+) · توصية #(.+) · (.+) · (.+) · لم يصدر أمر MT5$/,m=>m[1]+' · Signal #'+m[2]+' · '+m[3]+' · '+translateUiText(m[4],'en')+' · No MT5 command submitted']
   [/^آخر تحديث (.+)$/,m=>`Last updated: ${m[1]}`]
 ];
 const originals=new WeakMap(),attrs=new WeakMap();
