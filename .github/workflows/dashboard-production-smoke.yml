@@ -5,6 +5,11 @@ on:
     paths:
       - 'public/dashboard-terminal.css'
       - 'public/dashboard-themes.css'
+      - 'public/dashboard-fixes.css'
+      - 'public/mini-spark.js'
+      - 'public/dashboard-locale.js'
+      - 'public/signal-date-filter.js'
+      - 'public/live.js'
       - 'public/theme-init.js'
       - 'public/index.html'
       - 'server.mjs'
@@ -25,7 +30,11 @@ jobs:
           base='https://gold-pulse-ai.onrender.com'
           checks={
             '/': [b'DEMO PREVIEW', b'href="/dashboard"'],
-            '/dashboard': [b'id="market-symbols"', b'/dashboard-terminal.css?v=phase3-1', b'dashboard-theme-choice', b'/dashboard-themes.css?v=premium-1'],
+            '/dashboard': [b'id="market-symbols"', b'/dashboard-terminal.css?v=phase3-1', b'dashboard-theme-choice', b'/dashboard-themes.css?v=premium-1',b'dashboard-fixes.css?v=ux-20261104',b'mini-market-card',b'signal-date-filter',b'trade-sizing-lot'],
+            '/dashboard-fixes.css': [b'.toast.error',b'.broker-quote-values>span:first-child',b'.mini-market-card'],
+            '/mini-spark.js': [b'sparklineGeometry',b'initMiniSparkline'],
+            '/dashboard-locale.js': [b'dashboard-language-choice',b'nabd:dashboard:language'],
+            '/signal-date-filter.js': [b'inSignalDateRange',b'Asia/Gaza'],
             '/dashboard-themes.css': [b'--bg:#f8fafc',b'data-nabd-theme="light"',b'Mobile phase: keep dashboard navigation'],
             '/theme-init.js': [b'nabd:dashboard:theme',b'localStorage'],
             '/dashboard-terminal.css': [b'--bg:#0b1015',b'prefers-reduced-motion'],

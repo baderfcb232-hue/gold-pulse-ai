@@ -1,0 +1,72 @@
+/* NABD dashboard UX corrections. No effect on strategy, prices, MT5 execution or API requests. */
+:root[data-nabd-theme="light"] .toast{background:#fff;color:#17313b;border:1px solid #b9d9d5;box-shadow:0 14px 45px #15323a2c;line-height:1.85}
+:root[data-nabd-theme="light"] .toast.error{background:#fff2f3;color:#7c2432;border-color:#e7b5bf}
+:root[data-nabd-theme="light"] .toast button{color:#31565a;min-height:32px;min-width:32px;font-weight:700}
+:root[data-nabd-theme="light"] .toast.error button{color:#852c39}
+:root[data-nabd-theme="light"] .broker-quote-values>span{background:#f1f7fa;color:#486475;border:1px solid #d4e2e7}
+:root[data-nabd-theme="light"] .broker-quote-values strong{color:#16313d!important;font-weight:700;font-size:16px}
+:root[data-nabd-theme="light"] .broker-quote-values>span:first-child{background:#eaf8f1;border-color:#c5e9d7;color:#0b684d}
+:root[data-nabd-theme="light"] .broker-quote-values>span:first-child strong{color:#095d44!important}
+:root[data-nabd-theme="light"] .broker-quote-values>span:nth-child(2){background:#fff1f1;border-color:#f5ced0;color:#a32f3c}
+:root[data-nabd-theme="light"] .broker-quote-values>span:nth-child(2) strong{color:#9d2533!important}
+:root[data-nabd-theme="light"] .broker-quote-values>span:nth-child(3){background:#ecf2f8;border-color:#d1dce8;color:#264e70}
+:root[data-nabd-theme="light"] .broker-quote-values>span:nth-child(3) strong{color:#193f60!important}
+:root[data-nabd-theme="light"] .news-card,:root[data-nabd-theme="light"] .headline-source{background:#fff;color:#1a3944;border-color:#dce7ea;box-shadow:0 6px 19px #173c430a}
+:root[data-nabd-theme="light"] .headline-preview,:root[data-nabd-theme="light"] .news-card .news-source{border-color:#dbe7ec}
+:root[data-nabd-theme="light"] .headline-link{color:#173842}
+:root[data-nabd-theme="light"] .headline-link:hover{color:#08766c}
+:root[data-nabd-theme="light"] .news-card h3,:root[data-nabd-theme="light"] .news-numbers strong{color:#173842}
+:root[data-nabd-theme="light"] .broker-workspace{background:#fff;border-color:#d9e7e8}
+:root[data-nabd-theme="light"] .broker-workspace>summary{background:#eef8f6;color:#0e6b63;border-radius:13px}
+:root[data-nabd-theme="light"] .risk-result,:root[data-nabd-theme="light"] .command-progress{background:#f3f8fa;border-color:#dae5e9;color:#193e49}
+:root[data-nabd-theme="light"] .command-progress>p,:root[data-nabd-theme="light"] .risk-result .subtle{color:#536e77}
+:root[data-nabd-theme="light"] .signal-row,:root[data-nabd-theme="light"] .position{background:#fff;border-color:#dce7ec;color:#183a46}
+:root[data-nabd-theme="light"] .signal-row h3,:root[data-nabd-theme="light"] .signal-row .level-inline strong{color:#1e3e4c}
+:root[data-nabd-theme="light"] .dialog{background:#fff;color:#102f3b;border-color:#ccdee3}
+:root[data-nabd-theme="light"] .dialog .subtle{color:#536b78}
+:root[data-nabd-theme="light"] :is(.check,.diagnostics dd,.setup-troubleshooting,.portal-note){color:#294b57}
+:root[data-nabd-theme="light"] .signal-card{border:1px solid #9ecfc6;border-top:4px solid #0f9488;box-shadow:0 16px 42px #11746814}
+:root[data-nabd-theme="light"] .value-cell{color:#14333f}
+:root[data-nabd-theme="light"] .signal-values .value-cell strong{color:#0e3c4c}
+:root[data-nabd-theme="light"] .signal-values .value-cell.target{background:#eef8f2}
+:root[data-nabd-theme="light"] .chart-tooltip{background:#fff;color:#173640;border-color:#ccdce1;box-shadow:0 8px 22px #091e2229}
+:root[data-nabd-theme="dark"] .toast{background:#23323c;color:#f3f9fc;border-color:#6d8b96}
+:root[data-nabd-theme="dark"] .toast.error{background:#482830;color:#ffdee0;border-color:#ad6474}
+:root[data-nabd-theme="dark"] .broker-quote-values>span{background:#162a33;border-color:#38515d;color:#b7ccd3}
+:root[data-nabd-theme="dark"] .broker-quote-values strong{color:#f0f9fb}
+:root[data-nabd-theme="dark"] .broker-quote-values>span:first-child strong{color:#8ff2ca}
+:root[data-nabd-theme="dark"] .broker-quote-values>span:nth-child(2) strong{color:#ffb0b8}
+:root[data-nabd-theme="dark"] .broker-quote-values>span:nth-child(3) strong{color:#d4e5ff}
+
+/* A fixed premium accent card is intentional in both themes; prices are always real snapshots. */
+.mini-market-card{--tilt-x:0deg;--tilt-y:0deg;margin:15px 0 4px;border:1px solid #27616b;border-radius:17px;background:radial-gradient(circle at 80% 6%,#123d45,#0b1723 66%);color:#e2f9fb;padding:13px 15px;overflow:hidden;box-shadow:0 14px 28px #0f344426;transform:perspective(850px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y));transition:transform .24s ease,box-shadow .24s ease}
+.mini-market-card:hover{box-shadow:0 21px 44px #0e667439}
+.mini-market-head{display:flex;justify-content:space-between;gap:12px;align-items:center;font-size:12px;color:#9de5d7}
+.mini-market-head strong{font-size:16px;color:#fff;direction:ltr;font-variant-numeric:tabular-nums}
+.mini-market-chart{height:106px;display:block;position:relative;margin-top:10px}
+.mini-market-chart svg{width:100%;height:100%;overflow:visible;touch-action:pan-y}
+.mini-market-chart path{vector-effect:non-scaling-stroke;fill:none;stroke:#43dbcb;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 5px #43e2d27a)}
+.mini-market-chart .mini-guide{stroke:#a1f1eb;stroke-dasharray:3 4;stroke-width:1;opacity:.65;filter:none}
+.mini-market-chart circle{fill:#72fff0;stroke:#0c1d29;stroke-width:2}
+.mini-market-caption{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;font-size:11px;color:#a9d5d7;margin-top:3px}
+.mini-market-card .mini-market-empty{color:#bad6da;font-size:12px;position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+.nav-footer{display:grid;gap:9px;margin-top:26px;width:100%;padding:12px;border:1px solid var(--border);border-radius:14px;background:var(--card);box-shadow:0 8px 30px #0000000c}
+.nav-footer .theme-picker{padding:0;border:0;background:transparent;display:grid;gap:5px;min-width:0}
+.nav-footer .theme-picker select,.nav-footer .language-picker select{width:100%;min-height:40px;max-width:none;background:var(--card);color:var(--ink);border:1px solid var(--border);border-radius:9px}
+.nav-footer .theme-picker label,.nav-footer .language-picker label{font-size:11px;color:var(--muted);display:block}
+.nav-footer .language-picker{display:grid;gap:5px}
+.featured-signal .card-heading h2{font-size:19px}
+.signal-plan-extras{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:12px 0}
+.signal-plan-extras>div{padding:10px 12px;border:1px solid var(--border);border-radius:11px;background:var(--card)}
+.signal-plan-extras small{display:block;color:var(--muted);font-size:11px}.signal-plan-extras strong{font:700 15px ui-monospace,monospace;color:var(--ink)}
+.signal-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}.signal-actions>.button{flex:1;white-space:normal}
+.signal-budget-form{display:grid;grid-template-columns:1fr 1fr;gap:9px;border-top:1px solid var(--border);padding-top:15px;margin-top:15px}
+.signal-budget-form label{display:grid;gap:5px;font-size:12px;color:var(--muted)}.signal-budget-form input{min-width:0;width:100%}
+.signal-budget-result{grid-column:1/-1;font-size:12px;line-height:1.9;color:var(--muted)}
+.signal-budget-form button{grid-column:1/-1}
+:root[data-nabd-theme="light"] .signal-plan-extras>div{background:#f4fafb;border-color:#dce9ed}
+:root[data-nabd-theme="light"] .signal-budget-result{color:#3c5965}
+@media(min-width:1181px){.nav-footer{position:fixed;right:22px;bottom:20px;width:168px;z-index:5;margin:0}}
+@media(max-width:1180px){.nav-footer{display:flex;flex:0 0 auto;min-width:280px;width:auto;margin:0;align-items:center;padding:5px 10px}.nav-footer .theme-picker,.nav-footer .language-picker{display:grid;min-width:115px}}
+@media(max-width:650px){.mini-market-card{padding:11px}.signal-budget-form{grid-template-columns:1fr 1fr}.signal-actions{flex-direction:column}.nav-footer{min-width:260px}}
+@media(prefers-reduced-motion:reduce){.mini-market-card{transform:none!important;transition:none!important}.mini-market-chart path{filter:none}}
