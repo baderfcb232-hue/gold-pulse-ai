@@ -129,9 +129,23 @@ test('English translation remains correct across streaming updates and reverses 
   callback([{type:'characterData',target:text}]);
   await Promise.resolve();
   assert.equal(text.nodeValue,'Stale data');
+  // Real-time updates can replace an existing text node with English, a price or a broker code.
+  // Localization must not restore a cached stale Arabic label over those fresh values.
+  text.nodeValue='MT5 connected';
+  callback([{type:'characterData',target:text}]);
+  await Promise.resolve();
+  assert.equal(text.nodeValue,'MT5 connected');
+  text.nodeValue='4,032.81';
+  callback([{type:'characterData',target:text}]);
+  await Promise.resolve();
+  assert.equal(text.nodeValue,'4,032.81');
+  text.nodeValue='الذهب';
+  callback([{type:'characterData',target:text}]);
+  await Promise.resolve();
+  assert.equal(text.nodeValue,'Gold');
   stop();
   translateStaticUi(el,'ar');
-  assert.equal(text.nodeValue,'بيانات قديمة');
+  assert.equal(text.nodeValue,'الذهب');
 });
 
 test('dashboard and account translation scripts are browser modules with shared locale preference',()=>{
