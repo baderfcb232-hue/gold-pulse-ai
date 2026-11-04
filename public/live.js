@@ -1,5 +1,6 @@
 import {drawBrokerCandles} from './broker-chart.js';
 import {initMiniSparkline} from './mini-spark.js';
+import {createMarketLoaders} from './market-loaders.js';
 import {inSignalDateRange} from './signal-date-filter.js';
 export function initLiveWorkspace({stream, api, time, num, now, notify, positionSize, getSizingContext}) {
   const $ = id => document.getElementById(id);
@@ -21,12 +22,14 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, position
   let lastBrokerFetch = 0, quotePolling = false, lastQuoteStamp = '', cachedBrokerQuote = null;
   const seenSignals = new Set();
   const mini = initMiniSparkline({$,formatPrice:fmt});
+  const loaders = typeof document.querySelectorAll === 'function' ? createMarketLoaders() : {ready(){}};
   const market = () => data?.markets?.[symbol];
   const fresh = m => Boolean(m?.quote && m.connection === 'LIVE' && now() - m.quote.time <= m.quoteTtl && Date.now() - lastServerSeen < 12000);
   const activePlan = () => {const m = market(); return fresh(m) && m.currentSignal?.expires_at > now() ? m.currentSignal : null;};
   function applyMarket(next) {
     if (data && next.serverTime < data.serverTime) return;
     data = next; lastServerSeen = Date.now();
+    loaders.ready('market');
     if (!data.markets[symbol]) symbol = 'XAUUSD';
     $('market-symbols').querySelectorAll('button').forEach(b => {
       b.hidden = !data.markets[b.dataset.symbol];
@@ -269,6 +272,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, position
       if (requestSymbol !== symbol || requestTf !== tf) return;
       if (!payload || payload.candle_kind !== 'BROKER_OHLC' || payload.symbol !== symbol || payload.tf !== tf) throw Error('Invalid broker chart source');
       brokerChartData = payload; brokerChartKey = key;
+      loaders.ready('chart');
       $('broker-chart-empty').hidden = payload.candles?.length > 0;
       put('broker-chart-status', payload.connection === 'LIVE' ? 'شموع MT5 · متصل' : 'شموع MT5 · السعر متأخر');
       $('broker-chart-status').className = 'pill ' + (payload.connection === 'LIVE' ? 'good' : 'warn');
@@ -352,7 +356,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, position
   function applyNews(next) {
     if (!next || !Number.isFinite(next.serverTime) || !Array.isArray(next.items) || !Array.isArray(next.sources)) return;
     if (news && next.serverTime < news.serverTime) return;
-    news = next; lastNewsSeen = Date.now(); newsStamp = ''; renderNews();
+    news = next; lastNewsSeen = Date.now(); newsStamp = ''; loaders.ready('news'); renderNews();
   }
   async function fetchLive() {
     if (fetched) return; fetched = true;
