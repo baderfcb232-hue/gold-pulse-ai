@@ -2,9 +2,10 @@
    Static source text and safety notices have exact English translations. */
 import {dashboardStaticEnglish} from './dashboard-static-en.js';
 import {accountStaticEnglish} from './account-static-en.js';
+import {attributeStaticEnglish} from './attribute-static-en.js';
 import {localeOf} from './i18n-core.js';
 
-const en=Object.freeze({...dashboardStaticEnglish,...accountStaticEnglish});
+const en=Object.freeze({...dashboardStaticEnglish,...accountStaticEnglish,...attributeStaticEnglish});
 const originals=new WeakMap(),attrs=new WeakMap();
 const skipTags=new Set(['SCRIPT','STYLE','NOSCRIPT','CODE','PRE','SVG','CANVAS','TEXTAREA']);
 export function currentLocale(){
@@ -51,5 +52,6 @@ export function translateStaticUi(root,locale=currentLocale()){
 }
 export const staticTranslationCoverage=Object.freeze({
  dashboard:Object.keys(dashboardStaticEnglish).length,
- account:Object.keys(accountStaticEnglish).length
+ account:Object.keys(accountStaticEnglish).length,
+ attributes:Object.keys(attributeStaticEnglish).length
 });
