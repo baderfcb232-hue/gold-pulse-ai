@@ -1,6 +1,6 @@
 import {drawBrokerCandles} from './broker-chart.js';
 import {initMiniSparkline} from './mini-spark.js?v=touch-2';
-import {createMarketLoaders} from './market-loaders.js';
+import {createMarketLoaders} from './market-loaders.js?v=v2-loader-2';
 import {inSignalDateRange} from './signal-date-filter.js';
 import {translateUiText,externalHeadlineForLocale,currentLocale,setLocalizedText} from './i18n-dom.js?v=v2-i18n-4';
 export function initLiveWorkspace({stream, api, time, num, now, notify, priceFeedback, positionSize, getSizingContext}) {
@@ -298,6 +298,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, priceFee
       drawBroker();
     } catch {
       if (requestSymbol !== symbol || requestTf !== tf) return;
+      loaders.fail('chart');
       brokerChartKey = ''; brokerChartData = null; $('broker-chart-empty').hidden = false;
       put('broker-chart-status','بيانات MT5 غير متاحة');
       $('broker-chart-status').className = 'pill warn';
@@ -318,8 +319,8 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, priceFee
       support_host:'https://www.tradingview.com',width:'100%',height:'100%'};
     const previousFrame=$('live-chart'),frame=previousFrame.cloneNode(false);
     frame.title='TradingView للمرجع فقط · '+tvSymbol;
-    frame.onload=()=>{$('live-chart-empty').hidden=true;};
-    frame.onerror=()=>{$('live-chart-empty').hidden=false;};
+    frame.onload=()=>{loaders.ready('chart');$('live-chart-empty').hidden=true;};
+    frame.onerror=()=>{loaders.fail('chart');$('live-chart-empty').hidden=false;};
     frame.src='https://www.tradingview-widget.com/embed-widget/advanced-chart/?locale=ar#'+encodeURIComponent(JSON.stringify(config));
     previousFrame.replaceWith(frame);
     $('live-chart-full').href='https://www.tradingview.com/chart/?symbol='+encodeURIComponent(tvSymbol)+'&interval='+interval;
@@ -339,7 +340,9 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, priceFee
   }
   async function loadHistory() {
     if (historyFetched) return; historyFetched = true;
-    try {const d = await api('/api/market/signals'); historyRows = d.signals || []; renderHistory();} catch {} finally {historyFetched = false;}
+    try {const d = await api('/api/market/signals'); historyRows = d.signals || []; renderHistory();}
+    catch {if(!historyRows.length) $('scalp-history-list').replaceChildren(empty('تعذر تحميل سجل التوصيات حاليًا؛ أعد المحاولة عند عودة الاتصال.'));}
+    finally {loaders.ready('history');historyFetched = false;}
   }
   function renderHistory() {
     const selected = $('scalp-history-filter').value, range = $('scalp-history-date').value;
