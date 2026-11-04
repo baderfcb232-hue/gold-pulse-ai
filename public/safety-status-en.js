@@ -6,6 +6,7 @@ export const safetyStatusEnglish=Object.freeze({
   "انتهت صلاحية الأمر أو كانت بياناته غير صالحة.": "The command expired or contained invalid details.",
   "التحكم عن بُعد غير مفعّل في البوت الرئيسي والجسر معًا.": "Remote control is not enabled in both the main EA and the bridge.",
   "استلم MT5 الأمر سابقًا؛ لن يُكرّر التنفيذ.": "MT5 already received this command; it will not execute twice.",
+  "التنفيذ غير مفعّل داخل MT5.": "Execution is disabled inside MT5.",
   "التنفيذ متوقف أو صلاحيات التداول غير متاحة داخل MT5.": "Execution is disabled or MT5 trading permissions are unavailable.",
   "أكد MT5 إغلاق جميع صفقات البوت المرتبطة.": "MT5 confirmed closing all related bot positions.",
   "قد تبقى صفقات مفتوحة؛ تحقق من تبويب Trade في MT5.": "Some positions may remain open; check the MT5 Trade tab.",
