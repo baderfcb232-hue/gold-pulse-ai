@@ -937,7 +937,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         return send(req, res, 200, {ok: true});
       }
       const files = {'/':'landing.html','/index.html':'index.html','/dashboard':'index.html',
-        '/welcome':'landing.html','/landing.css':'landing.css','/dashboard-terminal.css':'dashboard-terminal.css','/app.js':'app.js','/http.js':'http.js','/live.js':'live.js','/broker-chart.js':'broker-chart.js','/state-connection.js':'state-connection.js','/control-readiness.js':'control-readiness.js','/command-feedback.js':'command-feedback.js','/styles.css':'styles.css','/manifest.webmanifest':'manifest.webmanifest','/icon.svg':'icon.svg','/brand-logo.png':'brand-logo.png',
+        '/welcome':'landing.html','/landing.css':'landing.css','/premium-fintech.css':'premium-fintech.css','/dashboard-terminal.css':'dashboard-terminal.css','/app.js':'app.js','/http.js':'http.js','/live.js':'live.js','/broker-chart.js':'broker-chart.js','/state-connection.js':'state-connection.js','/control-readiness.js':'control-readiness.js','/command-feedback.js':'command-feedback.js','/styles.css':'styles.css','/manifest.webmanifest':'manifest.webmanifest','/icon.svg':'icon.svg','/brand-logo.png':'brand-logo.png',
         '/auth':'accounts.html','/account':'accounts.html','/admin':'accounts.html','/privacy':'accounts.html','/accounts.js':'accounts.js','/accounts.css':'accounts.css'};
       if (req.method === 'GET' && files[path]) {
         const type = path.endsWith('.js') ? 'text/javascript; charset=utf-8' : path.endsWith('.css') ? 'text/css; charset=utf-8'
