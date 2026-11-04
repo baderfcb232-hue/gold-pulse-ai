@@ -18,5 +18,16 @@
         try{localStorage.setItem(key,target);}catch{}
       });
     }
+    for(const menu of document.querySelectorAll('.mobile-menu')) {
+      for(const link of menu.querySelectorAll('a')) {
+        link.addEventListener('click',()=>{menu.open=false;});
+      }
+      menu.addEventListener('keydown',event=>{
+        if(event.key==='Escape'&&menu.open){
+          menu.open=false;
+          menu.querySelector('summary')?.focus();
+        }
+      });
+    }
   });
 })();
