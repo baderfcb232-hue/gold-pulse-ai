@@ -7,6 +7,7 @@ import {spawnSync} from 'node:child_process';
 import {createApplication} from '../server.mjs';
 import {dashboardStaticEnglish} from '../public/dashboard-static-en.js';
 import {accountStaticEnglish} from '../public/account-static-en.js';
+import {attributeStaticEnglish} from '../public/attribute-static-en.js';
 import {translateUiText,staticTranslationCoverage} from '../public/i18n-dom.js';
 const read=p=>readFileSync(new URL('../public/'+p,import.meta.url),'utf8');
 const htmlCopy=p=>[...new Set(read(p)
@@ -17,12 +18,13 @@ const htmlCopy=p=>[...new Set(read(p)
 test('exact English translations cover every static dashboard and account phrase',()=>{
   for(const [page,translations,expected]of [
     ['index.html',dashboardStaticEnglish,238],
-    ['accounts.html',accountStaticEnglish,137]
+    ['accounts.html',accountStaticEnglish,139]
   ]){
     const source=htmlCopy(page);
     assert.equal(source.length,expected,'source count changed: '+page);
-    assert.deepEqual(source.filter(v=>!Object.hasOwn(translations,v)),[],'missing translations in '+page);
-    assert.equal(Object.keys(translations).length,expected);
+    const catalogue={...dashboardStaticEnglish,...accountStaticEnglish,...attributeStaticEnglish};
+    assert.deepEqual(source.filter(v=>!Object.hasOwn(catalogue,v)),[],'missing translations in '+page);
+    assert.equal(Object.keys(translations).length,page==='accounts.html'?137:238);
     for(const translated of Object.values(translations)){
       assert.ok(typeof translated==='string'&&translated.length>0);
       assert.doesNotMatch(translated,/[\u0600-\u06FF]/,'no Arabic in English static content');
@@ -30,6 +32,11 @@ test('exact English translations cover every static dashboard and account phrase
   }
   assert.equal(staticTranslationCoverage.dashboard,238);
   assert.equal(staticTranslationCoverage.account,137);
+  assert.equal(staticTranslationCoverage.attributes,22);
+  for(const path of ['index.html','accounts.html']){
+    const attrs=[...read(path).matchAll(/(?:aria-label|placeholder|title|aria-description)="([^"]+)"/g)].map(x=>x[1]).filter(x=>/[\u0600-\u06FF]/.test(x));
+    assert.deepEqual(attrs.filter(x=>!Object.hasOwn(attributeStaticEnglish,x)),[],path+' missing accessibility translations');
+  }
 });
 
 test('localized display text never overwrites unknown trading, broker or customer values',()=>{
@@ -49,7 +56,7 @@ test('dashboard and account translation scripts are browser modules with shared 
  assert.match(account,/id="portal-language-choice"/);
  assert.match(read('dashboard-locale.js'),/translateStaticUi\(document.body,lang\)/);
  assert.match(read('account-language.js'),/translateStaticUi\(document.body,lang\)/);
- for(const script of ['i18n-dom.js','dashboard-static-en.js','account-static-en.js','account-language.js','dashboard-locale.js']){
+ for(const script of ['i18n-dom.js','dashboard-static-en.js','account-static-en.js','attribute-static-en.js','account-language.js','dashboard-locale.js']){
    const path=new URL('../public/'+script,import.meta.url).pathname;
    const result=spawnSync(process.execPath,['--check',path],{encoding:'utf8'});
    assert.equal(result.status,0,script+': '+result.stderr);
@@ -63,7 +70,7 @@ test('i18n assets are public but account and trade APIs remain protected',async 
  await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
  t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
  const base='http://127.0.0.1:'+app.server.address().port;
- for(const path of ['/i18n-core.js','/i18n-dom.js','/dashboard-static-en.js','/account-static-en.js','/account-language.js']){
+ for(const path of ['/i18n-core.js','/i18n-dom.js','/dashboard-static-en.js','/account-static-en.js','/attribute-static-en.js','/account-language.js']){
    const r=await fetch(base+path);assert.equal(r.status,200,path);
  }
  assert.equal((await fetch(base+'/dashboard')).status,200);
