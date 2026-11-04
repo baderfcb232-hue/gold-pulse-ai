@@ -1,0 +1,15 @@
+/* Decorative market pulse; never depicts live or simulated prices. */
+.market-motion{display:flex;align-items:center;gap:12px;width:min(100%,490px);padding:11px 15px;margin-top:18px;
+ border:1px solid #cbe7e1;border-radius:16px;background:linear-gradient(120deg,#f0fbf8,#fff9ee);
+ box-shadow:0 8px 22px #0f766e0c;color:#1b514a;overflow:hidden}
+.market-motion svg{display:block;width:170px;min-width:120px;height:40px;flex:0 1 170px}
+.market-motion-track{fill:none;stroke:#c7ddd8;stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+.market-motion-pulse{fill:none;stroke:#0f766e;stroke-width:3.25;stroke-linejoin:round;stroke-linecap:round;
+ stroke-dasharray:84 400;animation:nabd-market-pulse-draw 4s linear infinite}
+.market-motion-dot{fill:#d4a24c;transform-origin:center;animation:nabd-market-pulse-dot 4s ease-in-out infinite}
+.market-motion-label{font-size:12px;line-height:1.65;color:#41645e;font-weight:600}
+@keyframes nabd-market-pulse-draw{from{stroke-dashoffset:450}to{stroke-dashoffset:0}}
+@keyframes nabd-market-pulse-dot{0%,100%{opacity:.55}50%{opacity:1}}
+@media(max-width:920px){.market-motion{margin-inline:auto}}
+@media(max-width:480px){.market-motion{gap:8px;padding:9px 11px}.market-motion svg{width:120px;min-width:100px;height:36px;flex-basis:120px}.market-motion-label{font-size:11px}}
+@media(prefers-reduced-motion:reduce){.market-motion-pulse,.market-motion-dot{animation:none!important;stroke-dasharray:none!important;stroke-dashoffset:0!important}}
