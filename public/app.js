@@ -1,5 +1,6 @@
 import {positionSize, ema, botHeartbeatFresh, BOT_CONTROL_TTL} from '/engine.mjs';
 import {initLiveWorkspace} from '/live.js';
+import {inSignalDateRange} from '/signal-date-filter.js';
 import {createStateConnection} from '/state-connection.js';
 import {requestJson} from '/http.js';
 import {controlBlockers, marketControlStatus, marketControlWarnings, closeButtonDisplay} from '/control-readiness.js?v=stable-close-1';
@@ -130,9 +131,9 @@ function renderActiveSignal(){
 }
 async function loadSignals(){try{const data=await api('/api/signals');signals=data.signals||[];renderSignals();renderResults();}catch(err){signals=[];renderResults();replace('signals-list',empty(err.status===401?'سجّل الدخول بحساب مؤكد ومخوّل لمشاهدة سجل التوصيات.':'تعذر جلب سجل التوصيات الآن.'),Object.assign(e('a','button primary','تسجيل الدخول'),{href:'/auth'}));}}
 function renderSignals(){
-  const filter=$('signal-filter').value,source=$('signal-source-filter').value;
-  const rows=signals.filter(s=>(filter==='ALL'||s.status===filter)&&(source==='ALL'||(s.source==='MT5_EA'?'MT5_EA':'DASHBOARD')===source));
-  put('signals-count',`${rows.length} إشارة · آخر 200 إشارة`);
+  const filter=$('signal-filter').value,source=$('signal-source-filter').value,range=$('signal-date-filter').value;
+  const rows=signals.filter(s=>inSignalDateRange(Number(s.issued_at),range,now())&&(filter==='ALL'||s.status===filter)&&(source==='ALL'||(s.source==='MT5_EA'?'MT5_EA':'DASHBOARD')===source));
+  put('signals-count',`${rows.length} إشارة · ${range==='ALL'?'كامل السجل المستلم':'اليوم وأمس أو الفترة المختارة'}`);
   replace('signals-list',...(rows.length?rows.map(s=>{
     const row=e('article','signal-row'),head=e('div');head.append(e('small','signal-source',s.source==='MT5_EA'?'بوت MT5':s.source?.startsWith('MT5')?'توصية نبض · '+s.source:'محرك الموقع · '+(s.source||'مرجعي')),e('h3',s.side==='BUY'?'buy':'sell',sides[s.side]+' · '+(s.broker_symbol||s.symbol)),e('small','subtle',time(s.issued_at,true)));
     const levels=e('div','level-inline');for(const [label,v]of [['الدخول',s.entry],['الستوب',s.sl],['هدف أول',s.tp1],['الهدف',s.tp2]])if(Number.isFinite(v)){const cell=e('div');cell.append(e('small','',label),e('strong','',price(v)));levels.append(cell);}
@@ -460,7 +461,53 @@ $('control-download-mt5').onclick=event=>{if(!authenticated){event.preventDefaul
 $('command-dialog').addEventListener('close',()=>{pendingCommand=null;});
 
 $('control-market').onchange=()=>{controlMarket=$('control-market').value;pendingCommand=null;$('command-dialog').close();commandTracker.clear();renderPrivate();renderExecution();};
-$('pause-bot').onclick=()=>confirmCommand('PAUSE');$('resume-bot').onclick=()=>confirmCommand('RESUME');$('close-all').onclick=()=>confirmCommand('CLOSE_ALL');$('signal-filter').onchange=renderSignals;$('signal-source-filter').onchange=renderSignals;$('results-source-filter').onchange=renderResults;$('news-filter').onchange=renderNews;
+const sizingForm=$('trade-sizing-form');
+$('trade-sizing-symbol').onchange=()=>{delete sizingForm.dataset.loaded;renderTradeSizing();};
+$('trade-sizing-mode').onchange=()=>{
+  const manual=sizingForm.elements.mode.value==='FIXED';
+  sizingForm.elements.lot.disabled=!manual;
+  if(manual)sizingForm.elements.lot.focus();
+};
+sizingForm.onsubmit=async event=>{
+  event.preventDefault();
+  if(!authenticated){
+    put('trade-sizing-feedback','يلزم تسجيل دخول المشغّل قبل حفظ إعداد اللوت.');
+    $('login-dialog').showModal();return;
+  }
+  const symbol=sizingForm.elements.symbol.value,mode=sizingForm.elements.mode.value;
+  const payload={symbol,mode};
+  if(mode==='FIXED'){
+    const input=sizingForm.elements.lot.value,lot=Number(input);
+    if(!input.trim()||!Number.isFinite(lot)||lot<=0){
+      put('trade-sizing-feedback','أدخل حجم لوت موجبًا. لا يمكن إرساله بدون التحقق من وسيط MT5.');
+      return;
+    }
+    payload.lot=lot;
+  }
+  const submit=sizingForm.querySelector('[type="submit"]');
+  if(submit.disabled)return;
+  submit.disabled=true;
+  put('trade-sizing-feedback','جارٍ حفظ اللوت والتحقق من حدود حساب MT5 التجريبي…');
+  try{
+    const result=await api('/api/trade-sizing',{method:'POST',body:JSON.stringify(payload)});
+    delete sizingForm.dataset.loaded;
+    await loadPrivate();
+    put('trade-sizing-feedback',result.mode==='FIXED'
+      ?'حُفظ اللوت '+num(result.lot,8)+' للخادم على '+symbol+'. لا يعني ذلك تنفيذ صفقة؛ MT5 يعيد فحص المخاطرة والهامش والوقف.'
+      :'حُفظ اللوت التلقائي للخادم على '+symbol+'. يتم حساب الحجم بحسب الوقف ومخاطرة الحساب.');
+  }catch(error){
+    const reasons={
+      INVALID_LOT:'حجم اللوت غير صالح.',BROKER_VOLUME_UNAVAILABLE:'لم تصل مواصفات اللوت من MT5.',
+      LOT_OUTSIDE_BROKER_LIMITS:'اللوت خارج الحد الأدنى أو الأقصى للوسيط.',
+      LOT_STEP_MISMATCH:'يجب أن يتوافق اللوت مع خطوات الحجم المعتمدة لدى الوسيط.',
+      'Matching Demo account not connected':'حساب MT5 التجريبي لهذا الأصل غير متصل الآن.',
+      'Stale MT5 feed':'آخر بيانات MT5 قديمة؛ لا يمكن حفظ اللوت قبل عودة الاتصال.',
+      'Persistent settings unavailable':'حفظ الإعدادات غير متاح بالخادم حاليًا.'
+    };
+    put('trade-sizing-feedback',reasons[error.message]||error.message||'تعذّر حفظ اللوت.');
+  }finally{submit.disabled=false;}
+};
+$('pause-bot').onclick=()=>confirmCommand('PAUSE');$('resume-bot').onclick=()=>confirmCommand('RESUME');$('close-all').onclick=()=>confirmCommand('CLOSE_ALL');$('signal-filter').onchange=renderSignals;$('signal-source-filter').onchange=renderSignals;$('signal-date-filter').onchange=renderSignals;$('results-source-filter').onchange=renderResults;$('news-filter').onchange=renderNews;
 $('download-mt5').onclick=event=>{if(!authenticated){event.preventDefault();$('login-dialog').showModal();}};
 $('copy-bridge-url').onclick=async()=>{try{await navigator.clipboard.writeText($('bridge-url').value);toast('تم نسخ رابط الجسر.');}catch{toast('انسخ الرابط من الحقل مباشرة.',true);$('bridge-url').select();}};
 $('chart-tfs').querySelectorAll('button').forEach(b=>b.onclick=()=>{chartTf=b.dataset.tf;$('chart-tfs').querySelectorAll('button').forEach(x=>x.classList.toggle('active',x===b));chartKey='';loadChart();});
@@ -477,4 +524,8 @@ setInterval(()=>{if(authenticated&&activeCommandBusy())loadPrivate();},2000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)fetchState();});
 await fetchState();loadSignals();loadPrivate();
 stream=new EventSource('/api/events');stream.addEventListener('state',event=>{try{stateConnection.receive(JSON.parse(event.data));}catch{stateConnection.disconnected();}});stream.onerror=()=>stateConnection.disconnected();
-initLiveWorkspace({stream,api,time,num,now,notify:toast});
+initLiveWorkspace({stream,api,time,num,now,notify:toast,positionSize,getSizingContext:symbol=>{
+  const account=symbol==='BTCUSD'?privateData?.btc?.account:privateData?.account;
+  const brokerSpec=symbol===state?.symbol?state?.spec:state?.controls?.[symbol]?.spec;
+  return {spec:brokerSpec,equity:account?.equity,freeMargin:account?.free_margin};
+}});
