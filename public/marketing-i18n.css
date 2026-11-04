@@ -19,3 +19,25 @@ html[dir="ltr"] .phone-bottom{text-align:left}
 @media(max-width:920px){html[dir="ltr"] .hero-copy{text-align:center}html[dir="ltr"] .hero-notes{justify-content:center}}
 @media(max-width:620px){.nav-language{font-size:11px;padding:4px 7px;min-height:36px}html[dir="ltr"] .hero h1{font-size:clamp(36px,8vw,52px)}}
 @media(prefers-reduced-motion:reduce){html[dir="ltr"] .phone-preview{animation:none!important}}
+
+/* Native, keyboard-accessible mobile navigation; full nav stays visible on desktop. */
+.mobile-menu{display:none;position:relative;z-index:35}
+.mobile-menu summary{display:flex;align-items:center;justify-content:center;min-height:44px;padding:8px 12px;border:1px solid #beded8;border-radius:11px;background:#fff;color:#0f766e;font-size:12px;font-weight:700;cursor:pointer;list-style:none}
+.mobile-menu summary::-webkit-details-marker{display:none}
+.mobile-menu summary:focus-visible{outline:3px solid #0f9488;outline-offset:3px}
+.mobile-menu[open] summary{background:#e6f7f2}
+.mobile-menu nav{display:grid;gap:3px;position:absolute;top:calc(100% + 10px);right:0;width:min(82vw,265px);padding:11px;border:1px solid #d4e6e4;border-radius:15px;background:#fff;box-shadow:0 18px 50px #0f172a20;direction:rtl}
+.mobile-menu nav a{display:flex;align-items:center;min-height:42px;padding:7px 11px;border-radius:10px;color:#23434b;font-size:13px;font-weight:600}
+.mobile-menu nav a:hover,.mobile-menu nav a:focus-visible{color:#0f766e;background:#effaf7}
+html[dir="ltr"] .mobile-menu nav{right:auto;left:0;direction:ltr}
+@media(max-width:920px){.mobile-menu{display:block}}
+@media(max-width:620px){
+ .nav-layout{flex-wrap:wrap;gap:7px}
+ .nav-actions{gap:7px}
+ .nav-actions .btn{min-height:44px;padding:7px 12px}
+ .nav-language{min-height:44px}
+ .hero-visual{max-width:100%}
+ .hero-visual .desktop-preview{min-width:0}
+ .mobile-menu nav{width:min(82vw,290px)}
+}
+@media(prefers-reduced-motion:reduce){.mobile-menu *{transition:none!important}}
