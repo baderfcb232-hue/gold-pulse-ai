@@ -46,4 +46,23 @@
 :root[data-nabd-theme="dark"] .portal-body{color-scheme:dark;background:linear-gradient(165deg,#0c1a1e,#111b23);color:#edf5f5}
 :root[data-nabd-theme="dark"] .portal-body .portal-header{background:#132229eb;border-color:#2b4346}
 :root[data-nabd-theme="dark"] .portal-body .portal-header nav{color:#c1ced0}
-:root[data-nabd-theme="dark"] .portal-brand-name,:root[data-nabd-theme="dark"] .portal-body .auth-intro h1,:root[data-nabd-theme="dark"] .portal-body .portal-heading
+:root[data-nabd-theme="dark"] .portal-brand-name,:root[data-nabd-theme="dark"] .portal-body .auth-intro h1,:root[data-nabd-theme="dark"] .portal-body .portal-heading h1{color:#e9f6f4}
+:root[data-nabd-theme="dark"] .portal-body .portal-card,:root[data-nabd-theme="dark"] .portal-body .summary-tile{background:#182830;border-color:#30464a;color:#e9f6f4}
+:root[data-nabd-theme="dark"] .portal-body .portal-card :is(h2,h3),:root[data-nabd-theme="dark"] .portal-body .portal-benefit strong{color:#e9f6f4}
+:root[data-nabd-theme="dark"] .portal-body .portal-card label,:root[data-nabd-theme="dark"] .portal-body .subtle{color:#b5c5cc}
+:root[data-nabd-theme="dark"] .portal-body .portal-card input:not([type=checkbox]),:root[data-nabd-theme="dark"] .portal-body .portal-card select{background:#101d23;color:#f2f7f9;border-color:#3e525a}
+:root[data-nabd-theme="dark"] .portal-body .portal-note,:root[data-nabd-theme="dark"] .portal-body .mt5-registration-row{background:#1c3337;border-color:#335456;color:#c0d9d7}
+:root[data-nabd-theme="dark"] .portal-body .portal-message{background:#17433b;border-color:#286b5c;color:#c4f2e6}
+:root[data-nabd-theme="dark"] .portal-body .portal-message.error{background:#48292e;border-color:#82434a;color:#ffc2c2}
+:root[data-nabd-theme="dark"] .portal-body .auth-intro>p,:root[data-nabd-theme="dark"] .portal-body .portal-benefit p,:root[data-nabd-theme="dark"] .portal-body .privacy-copy p{color:#b8c9cf}
+:root[data-nabd-theme="dark"] .portal-body .auth-tabs{border-color:#345057}
+:root[data-nabd-theme="dark"] .portal-body .auth-tabs button{color:#b5c5ca}
+:root[data-nabd-theme="dark"] .portal-body .auth-tabs button.active{color:#73e4ce;border-color:#73e4ce}
+:root[data-nabd-theme="dark"] .portal-body .button.ghost,:root[data-nabd-theme="dark"] .portal-body .theme-picker{background:#20353b;color:#d3f2ec;border-color:#496269}
+:root[data-nabd-theme="dark"] .portal-body .theme-picker select{background:#14282e;color:#eff;border-color:#496269}
+:root[data-nabd-theme="dark"] .portal-body .secret-code{background:#0f1e25;color:#ccefeb;border-color:#315b56}
+
+/* Accessible theme picker is self-contained; portal does not load dashboard CSS. */
+.portal-body .theme-picker{display:inline-flex;align-items:center;gap:7px;padding:5px 8px;border:1px solid #d8e8e7;border-radius:12px;background:#fff;white-space:nowrap}
+.portal-body .theme-picker label{font-size:12px;color:inherit;font-weight:600}
+.portal-body .theme-picker select{min-height:34px;padding:4px 8px;border:1px solid #d4e1e3;border-radius:8px;max-width:120px}
