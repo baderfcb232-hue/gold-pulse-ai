@@ -42,6 +42,9 @@ test('new /welcome route is isolated and existing dashboard and API still respon
   const legacy=await get('/index.html');
   assert.equal(legacy.status,200);
   assert.match(await legacy.text(),/id="market-symbols"/);
+  const account=await get('/account');
+  assert.equal(account.status,200);
+  assert.match(await account.text(),/href="\/dashboard">السوق/);
   const health=await get('/healthz');
   assert.equal(health.status,200);
   assert.equal((await health.json()).ok,true);
