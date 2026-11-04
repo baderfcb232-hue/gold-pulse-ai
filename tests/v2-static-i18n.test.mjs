@@ -8,6 +8,7 @@ import {createApplication} from '../server.mjs';
 import {dashboardStaticEnglish} from '../public/dashboard-static-en.js';
 import {accountStaticEnglish} from '../public/account-static-en.js';
 import {attributeStaticEnglish} from '../public/attribute-static-en.js';
+import {runtimeStatusEnglish} from '../public/runtime-status-en.js';
 import {translateUiText,staticTranslationCoverage} from '../public/i18n-dom.js';
 const read=p=>readFileSync(new URL('../public/'+p,import.meta.url),'utf8');
 const htmlCopy=p=>[...new Set(read(p)
@@ -33,6 +34,8 @@ test('exact English translations cover every static dashboard and account phrase
   assert.equal(staticTranslationCoverage.dashboard,238);
   assert.equal(staticTranslationCoverage.account,137);
   assert.equal(staticTranslationCoverage.attributes,22);
+  assert.ok(Object.keys(runtimeStatusEnglish).length>=240);
+  for(const value of Object.values(runtimeStatusEnglish))assert.doesNotMatch(value,/[\u0600-\u06FF]/);
   for(const path of ['index.html','accounts.html']){
     const attrs=[...read(path).matchAll(/(?:aria-label|placeholder|title|aria-description)="([^"]+)"/g)].map(x=>x[1]).filter(x=>/[\u0600-\u06FF]/.test(x));
     assert.deepEqual(attrs.filter(x=>!Object.hasOwn(attributeStaticEnglish,x)),[],path+' missing accessibility translations');
@@ -45,6 +48,11 @@ test('localized display text never overwrites unknown trading, broker or custome
   assert.equal(translateUiText('لا توجد بيانات تقويم','en'),'No calendar data');
   assert.equal(translateUiText('PRICE_OR_SPREAD_MOVE','en'),'PRICE_OR_SPREAD_MOVE');
   assert.equal(translateUiText('4050.27','en'),'4050.27');
+  assert.equal(translateUiText('عمر السعر 7 ثانية','en'),'Quote age: 7 seconds');
+  assert.equal(translateUiText('تم تحديث شموع XAUUSD من JustMarkets بنجاح.','en'),'Candles updated successfully: XAUUSD · JustMarkets');
+  assert.equal(translateUiText('إشارة شراء جديدة — 4,043.51','en'),'New Buy signal — 4,043.51');
+  assert.equal(translateUiText('فرصة مضاربة بيع · الذهب · 4000','en'),'Scalping Sell opportunity · Gold · 4000');
+  assert.equal(translateUiText('وصلت للجسر — لم يصل تأكيد MT5','en'),'Received by bridge — MT5 has not confirmed execution');
   assert.equal(translateUiText('وقف الخسارة','ar'),'وقف الخسارة');
   assert.equal(translateUiText(null,'en'),null);
 });
@@ -56,7 +64,7 @@ test('dashboard and account translation scripts are browser modules with shared 
  assert.match(account,/id="portal-language-choice"/);
  assert.match(read('dashboard-locale.js'),/translateStaticUi\(document.body,lang\)/);
  assert.match(read('account-language.js'),/translateStaticUi\(document.body,lang\)/);
- for(const script of ['i18n-dom.js','dashboard-static-en.js','account-static-en.js','attribute-static-en.js','account-language.js','dashboard-locale.js']){
+ for(const script of ['i18n-dom.js','dashboard-static-en.js','account-static-en.js','attribute-static-en.js','runtime-status-en.js','account-language.js','dashboard-locale.js']){
    const path=new URL('../public/'+script,import.meta.url).pathname;
    const result=spawnSync(process.execPath,['--check',path],{encoding:'utf8'});
    assert.equal(result.status,0,script+': '+result.stderr);
@@ -70,7 +78,7 @@ test('i18n assets are public but account and trade APIs remain protected',async 
  await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
  t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
  const base='http://127.0.0.1:'+app.server.address().port;
- for(const path of ['/i18n-core.js','/i18n-dom.js','/dashboard-static-en.js','/account-static-en.js','/attribute-static-en.js','/account-language.js']){
+ for(const path of ['/i18n-core.js','/i18n-dom.js','/dashboard-static-en.js','/account-static-en.js','/attribute-static-en.js','/runtime-status-en.js','/account-language.js']){
    const r=await fetch(base+path);assert.equal(r.status,200,path);
  }
  assert.equal((await fetch(base+'/dashboard')).status,200);
