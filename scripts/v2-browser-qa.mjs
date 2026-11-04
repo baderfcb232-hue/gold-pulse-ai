@@ -83,7 +83,7 @@ try{
    await page.goto(base+'/dashboard',{waitUntil:'domcontentloaded'});
    await page.waitForFunction(()=>Boolean(navigator.serviceWorker?.controller),null,{timeout:20000});
    await ctx.setOffline(true);
-   await page.goto(base+'/dashboard',{waitUntil:'domcontentloaded',timeout:15000});
+   await page.goto(base+'/dashboard?offline-qa=1',{waitUntil:'domcontentloaded',timeout:15000});
    const notice=await page.locator('body').innerText();
    assert.match(notice,/لا يوجد اتصال بالإنترنت/);
    assert.match(notice,/Live prices, signals and MT5 execution status are unavailable/);
