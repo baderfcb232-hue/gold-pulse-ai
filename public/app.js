@@ -254,7 +254,11 @@ function renderWebsiteEntries(box){
     for(const record of entries.slice(0,8)){
       const row=e('p','subtle'),p=record.plan;
       const status=record.broker_fill_confirmed?'تم تأكيد صفقة Demo من سجل الوسيط':record.status==='SUBMITTED'?'أرسل MT5 طلب التنفيذ؛ لا يوجد تأكيد صفقة بعد':record.status==='REJECTED'?'منع MT5 التنفيذ؛ راجع Experts':now()>record.expires?'لم يصل تأكيد التنفيذ خلال المهلة؛ لن نكرر الإرسال':'أُرسلت إلى الجسر؛ بانتظار رد MT5';
-      row.textContent=`${record.market} · توصية #${record.signal_code||'—'} · أمر MT5 #${record.id} · ${time(record.time,true)} · ${sides[p.side]} · دخول ${price(p.entry)} · وقف ${price(p.sl)} · هدف ${price(p.tp)} · ${status}${record.reason_code!=null?' · سبب EA '+record.reason_code:''}${record.mt5_retcode!=null?' · كود MT5 '+record.mt5_retcode:''}${record.broker_deal_ticket?' · تذكرة الصفقة '+record.broker_deal_ticket:''}`;box.append(row);
+      const english=currentLocale()==='en';
+      row.textContent=english
+        ? `${translateUiText(record.market,'en')} · Signal #${record.signal_code||'—'} · MT5 order #${record.id} · ${time(record.time,true)} · ${translateUiText(sides[p.side],'en')} · Entry ${price(p.entry)} · Stop ${price(p.sl)} · Target ${price(p.tp)} · ${translateUiText(status,'en')}${record.reason_code!=null?' · EA reason '+record.reason_code:''}${record.mt5_retcode!=null?' · MT5 code '+record.mt5_retcode:''}${record.broker_deal_ticket?' · Deal ticket '+record.broker_deal_ticket:''}`
+        : `${record.market} · توصية #${record.signal_code||'—'} · أمر MT5 #${record.id} · ${time(record.time,true)} · ${sides[p.side]} · دخول ${price(p.entry)} · وقف ${price(p.sl)} · هدف ${price(p.tp)} · ${status}${record.reason_code!=null?' · سبب EA '+record.reason_code:''}${record.mt5_retcode!=null?' · كود MT5 '+record.mt5_retcode:''}${record.broker_deal_ticket?' · تذكرة الصفقة '+record.broker_deal_ticket:''}`;
+      box.append(row);
     }
   }
   const decisions=[...(privateData?.websiteDecisions||[]).map(x=>({...x,market:'الذهب'})),
@@ -264,7 +268,9 @@ function renderWebsiteEntries(box){
   if(decisions.length){
     box.append(e('h3','','توصيات لم تُرسل للتنفيذ — سبب المنع'));
     for(const d of decisions.slice(0,8))
-      box.append(e('p','subtle',`${d.market} · توصية #${d.signal_code||'—'} · ${time(d.updated_at,true)} · ${websiteBlockReason(d.reason)} · لم يصدر أمر MT5`));
+      box.append(e('p','subtle',currentLocale()==='en'
+        ? `${translateUiText(d.market,'en')} · Signal #${d.signal_code||'—'} · ${time(d.updated_at,true)} · ${translateUiText(websiteBlockReason(d.reason),'en')} · No MT5 order submitted`
+        : `${d.market} · توصية #${d.signal_code||'—'} · ${time(d.updated_at,true)} · ${websiteBlockReason(d.reason)} · لم يصدر أمر MT5`));
   }
 }
 function activeCommandBusy(){return commandSending || commandTracker.busy() ||
