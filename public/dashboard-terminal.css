@@ -13,3 +13,5 @@ body{background:radial-gradient(ellipse 65% 22% at 80% -10%,#1c332e66,transparen
 .card{background:linear-gradient(165deg,#182128,#131b22 75%);border:1px solid #2b3940;border-radius:17px;box-shadow:0 9px 25px #00000015}
 .card-heading h2{font-weight:700}.decision-card,.signal-card{border-top:2px solid #bfa26c}.reason{color:#bbc7c8;line-height:1.9}
 .pill{border-radius:9px;font-weight:600}.pill.neutral{background:#28333b;color:#b9c6cd}.pill.good{background:#163d33;color:#87e3c2}.pill.warn{background:#3a3422;color:#f6d995}.pill.bad{background:#46292b;color:#ffb0b0}
+.alert-banner{background:#1d292d;border-color:#425249;border-radius:15px}.score-track{background:#2f3c41}.score-track span{background:#c4a575}
+.frame{background:#111c23;border-color:#2d3940;border-radius:12px}.chart-wrap{border:1px solid #304048;border-radius:12px;background:#0e151a}.mt5-candle-chart{background:#0d171d;border-color:#354750;border-radius:12px}
