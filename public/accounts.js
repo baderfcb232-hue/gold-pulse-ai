@@ -1,5 +1,5 @@
 import {requestJson} from '/http.js';
-import {translateUiText,currentLocale,setLocalizedText} from '/i18n-dom.js';
+import {translateUiText,currentLocale,setLocalizedText} from '/i18n-dom.js?v=v2-i18n-3';
 const $ = id => document.getElementById(id);
 const node = (tag, cls, text) => {const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) setLocalizedText(el,text); return el;};
 const page = ({'/auth': 'auth', '/account': 'account', '/admin': 'admin', '/privacy': 'privacy'})[location.pathname] || 'auth';
@@ -326,4 +326,10 @@ async function initialize() {
     $('admin-guard').hidden = true; $('admin-content').hidden = false; await Promise.all([overview(), users(), audit(), adminMt5Hosting()]);
   }
 }
+// Re-read display-only dates in the selected locale; no auth mutation or trade request.
+document.addEventListener('nabd:language-change',()=>{
+  if(!signedIn)return;
+  if(page==='account'&&!$('account-content').hidden)void Promise.allSettled([sessions(),memberMt5Accounts()]);
+  if(page==='admin'&&!$('admin-content').hidden)void Promise.allSettled([users(),audit(),overview()]);
+});
 initialize().catch(error => {message(error.status === 503 ? 'خدمة الحسابات بانتظار التهيئة أو غير متاحة مؤقتًا. الرئيسية والأسعار والأخبار متاحة.' : error.message, true); if (page === 'account') $('account-guard').hidden = false;});
