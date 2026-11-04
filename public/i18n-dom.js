@@ -3,9 +3,10 @@
 import {dashboardStaticEnglish} from './dashboard-static-en.js';
 import {accountStaticEnglish} from './account-static-en.js';
 import {attributeStaticEnglish} from './attribute-static-en.js';
-import {localeOf} from './i18n-core.js';
+import {localeOf,translations} from './i18n-core.js';
 
-const en=Object.freeze({...dashboardStaticEnglish,...accountStaticEnglish,...attributeStaticEnglish});
+const corePairs=Object.fromEntries(Object.keys(translations.ar).map(k=>[translations.ar[k],translations.en[k]]));
+const en=Object.freeze({...corePairs,...dashboardStaticEnglish,...accountStaticEnglish,...attributeStaticEnglish});
 const originals=new WeakMap(),attrs=new WeakMap();
 const skipTags=new Set(['SCRIPT','STYLE','NOSCRIPT','CODE','PRE','SVG','CANVAS','TEXTAREA']);
 export function currentLocale(){
