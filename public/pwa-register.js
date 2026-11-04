@@ -2,7 +2,7 @@
 (function(){
  if(typeof window==='undefined'||typeof navigator==='undefined'||!('serviceWorker' in navigator)||!window.isSecureContext)return;
  window.addEventListener('load',()=>{
-   navigator.serviceWorker.register('/sw.js',{scope:'/'}).catch(()=>{
+   navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).catch(()=>{
      // App remains online-first if the browser blocks service workers.
    });
  },{once:true});
