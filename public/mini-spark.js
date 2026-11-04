@@ -16,13 +16,13 @@ export function initMiniSparkline({$,formatPrice,onQuote}) {
   const svg=stage.querySelector('svg');
   const line=$('mini-market-line'),guide=$('mini-market-guide'),dot=$('mini-market-dot');
   const empty=$('mini-market-empty'),caption=$('mini-market-hover'),label=$('mini-market-source');
-  const bySymbol=new Map();let active=null,geometry=null;
+  const bySymbol=new Map();let active=null,geometry=null,selectedIndex=null;
   function render(symbol) {
     const entry=bySymbol.get(symbol);active=symbol;
     geometry=entry?sparklineGeometry(entry.samples):null;
     line.setAttribute('d',geometry?.path||'');
     empty.hidden=Boolean(geometry);
-    guide.hidden=true;dot.hidden=true;
+    guide.hidden=true;dot.hidden=true;selectedIndex=null;
     if(entry?.samples.length) {
       const last=entry.samples.at(-1);
       $('mini-market-last').textContent=formatPrice(last.price);
@@ -46,26 +46,46 @@ export function initMiniSparkline({$,formatPrice,onQuote}) {
     if(entry.samples.length>64)entry.samples.splice(0,entry.samples.length-64);
     render(symbol);
   }
-  stage?.addEventListener('pointermove',event=>{
-    if(!geometry||!active)return;
-    const rect=svg.getBoundingClientRect(),x=(event.clientX-rect.left)/rect.width*320;
-    const nearest=geometry.points.reduce((a,b)=>Math.abs(a.x-x)<=Math.abs(b.x-x)?a:b);
-    guide.setAttribute('d','M'+nearest.x.toFixed(1)+' 8 V94');
-    dot.setAttribute('cx',nearest.x);dot.setAttribute('cy',nearest.y);
+  function showPoint(index) {
+    if(!geometry?.points?.length)return;
+    selectedIndex=Math.max(0,Math.min(geometry.points.length-1,index));
+    const point=geometry.points[selectedIndex];
+    guide.setAttribute('d','M'+point.x.toFixed(1)+' 8 V94');
+    dot.setAttribute('cx',point.x);dot.setAttribute('cy',point.y);
     guide.hidden=false;dot.hidden=false;
-    const time=new Date(nearest.time*1000).toLocaleTimeString(document.documentElement?.lang==='en'?'en-GB':'ar-PS',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Gaza'});
-    caption.textContent=formatPrice(nearest.price)+' · '+time;
-    if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches){
-      const xrel=Math.max(-.5,Math.min(.5,(event.clientX-rect.left)/rect.width-.5));
-      const yrel=Math.max(-.5,Math.min(.5,(event.clientY-rect.top)/rect.height-.5));
+    const time=new Date(point.time*1000).toLocaleTimeString(document.documentElement?.lang==='en'?'en-GB':'ar-PS',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Gaza'});
+    caption.textContent=formatPrice(point.price)+' · '+time;
+  }
+  function inspectPointer(event) {
+    if(!geometry?.points?.length||!Number.isFinite(event.clientX))return;
+    const rect=svg.getBoundingClientRect();
+    if(!Number.isFinite(rect.width)||rect.width<=0)return;
+    const fraction=Math.max(0,Math.min(1,(event.clientX-rect.left)/rect.width));
+    const x=8+fraction*304;
+    const nearest=geometry.points.reduce((best,p,i)=>Math.abs(p.x-x)<Math.abs(geometry.points[best].x-x)?i:best,0);
+    showPoint(nearest);
+    if(event.pointerType==='mouse'&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+      const yrel=Math.max(-.5,Math.min(.5,(event.clientY-rect.top)/Math.max(1,rect.height)-.5));
       card.style.setProperty('--tilt-x',(-yrel*3).toFixed(2)+'deg');
-      card.style.setProperty('--tilt-y',(xrel*3).toFixed(2)+'deg');
+      card.style.setProperty('--tilt-y',((fraction-.5)*3).toFixed(2)+'deg');
     }
-  });
-  stage?.addEventListener('pointerleave',()=>{
-    guide.hidden=true;dot.hidden=true;
+  }
+  function resetPreview(){
+    guide.hidden=true;dot.hidden=true;selectedIndex=null;
     card.style.setProperty('--tilt-x','0deg');card.style.setProperty('--tilt-y','0deg');
     caption.textContent=geometry?'حرك الماوس لاستعراض السعر':'بانتظار الأسعار الحقيقية';
+  }
+  stage.addEventListener('pointermove',inspectPointer);
+  stage.addEventListener('pointerdown',inspectPointer);
+  stage.addEventListener('pointerleave',event=>{if(event.pointerType!=='touch')resetPreview();});
+  stage.addEventListener('pointercancel',resetPreview);
+  stage.addEventListener('keydown',event=>{
+    if(!geometry?.points?.length)return;
+    const size=geometry.points.length;
+    if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+    event.preventDefault();
+    const current=selectedIndex===null?size-1:selectedIndex;
+    showPoint(event.key==='Home'?0:event.key==='End'?size-1:current+(event.key==='ArrowLeft'?-1:1));
   });
   return {update,show:render};
 }
