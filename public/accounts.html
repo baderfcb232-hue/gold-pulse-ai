@@ -12,7 +12,7 @@
   <a href="#portal-main" class="skip">انتقل للمحتوى</a>
   <header class="portal-header">
     <a href="/" aria-label="نبض الذهب"><svg width="174" height="59" viewBox="0 0 214 72" role="img" aria-label="نبض · NABD"><defs><image id="portal-brand" href="/brand-logo.png" width="1536" height="1024"/></defs><svg x="144" y="2" width="68" height="68" viewBox="584 204 368 368"><use href="#portal-brand"/></svg><svg x="0" y="8" width="132" height="58" viewBox="538 592 460 240"><use href="#portal-brand"/></svg></svg></a>
-    <nav aria-label="الحساب"><a href="/">السوق</a><a href="/account">حسابي</a><a href="/admin" id="admin-link" hidden>الإدارة</a><a href="/privacy">الخصوصية</a></nav>
+    <nav aria-label="الحساب"><a href="/dashboard">السوق</a><a href="/account">حسابي</a><a href="/admin" id="admin-link" hidden>الإدارة</a><a href="/privacy">الخصوصية</a></nav>
     <button class="button ghost" id="member-logout" hidden>تسجيل الخروج</button>
   </header>
   <main id="portal-main" class="portal-main">
@@ -30,7 +30,7 @@
           <form id="member-mfa-login" data-auth-form="mfa-login" hidden><h2>خطوة أمان إضافية</h2><p class="subtle">أدخل رمز تطبيق المصادقة أو أحد رموز الاسترداد.</p><label>رمز التحقق<input name="code" autocomplete="one-time-code" maxlength="24" required dir="ltr"></label><button class="button primary wide" type="submit">تأكيد الدخول</button></form>
         </article></div>
     </section>
-    <section data-page="account" hidden><div class="portal-heading"><div><span class="portal-kicker">YOUR NABD</span><h1 id="member-name">حسابي</h1><p class="subtle" id="member-email"></p></div><a href="/" class="button primary">متابعة السوق والتوصيات ↗</a></div>
+    <section data-page="account" hidden><div class="portal-heading"><div><span class="portal-kicker">YOUR NABD</span><h1 id="member-name">حسابي</h1><p class="subtle" id="member-email"></p></div><a href="/dashboard" class="button primary">متابعة السوق والتوصيات ↗</a></div>
       <div id="account-guard" class="portal-card" hidden><h2>حسابك يبدأ من هنا</h2><p>سجّل الدخول ببريدك للوصول إلى ملفك وإعداداتك.</p><a href="/auth" class="button primary">تسجيل الدخول / حساب جديد</a></div>
       <div id="account-content" hidden><div class="portal-grid"><article class="portal-card"><span class="portal-kicker">PROFILE</span><h2>معلوماتك وتفضيلاتك</h2><form id="profile-form"><label>الاسم<input name="name" maxlength="80" minlength="2" required autocomplete="name"></label><label class="check-label"><input type="checkbox" name="notifications">تنبيهات التوصيات داخل الموقع</label><button class="button primary" type="submit">حفظ التغييرات</button></form><p class="subtle" id="member-access"></p></article>
         <article class="portal-card"><span class="portal-kicker">SECURITY</span><h2>كلمة المرور</h2><form id="password-form"><label>كلمة المرور الحالية<input type="password" name="currentPassword" autocomplete="current-password" required maxlength="128"></label><label>كلمة المرور الجديدة<input type="password" name="password" autocomplete="new-password" minlength="15" maxlength="128" required></label><p class="subtle">تغييرها ينهي جميع الجلسات ويحتاج دخولًا جديدًا.</p><button class="button ghost" type="submit">تغيير كلمة المرور</button></form></article>
