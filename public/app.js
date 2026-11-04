@@ -1,9 +1,9 @@
 import {positionSize, ema, botHeartbeatFresh, BOT_CONTROL_TTL} from '/engine.mjs';
-import {initLiveWorkspace} from '/live.js?v=v2-locale-3';
+import {initLiveWorkspace} from '/live.js?v=v2-locale-4';
 import {inSignalDateRange} from '/signal-date-filter.js';
 import {createStateConnection} from '/state-connection.js';
 import {requestJson} from '/http.js';
-import {translateUiText,currentLocale,setLocalizedText} from '/i18n-dom.js?v=v2-i18n-3';
+import {translateUiText,currentLocale,setLocalizedText} from '/i18n-dom.js?v=v2-i18n-4';
 import {createToastCenter} from '/toast-ui.js';
 import {createPriceFeedback} from '/price-feedback.js';
 import {controlBlockers, marketControlStatus, marketControlWarnings, closeButtonDisplay} from '/control-readiness.js?v=stable-close-1';
