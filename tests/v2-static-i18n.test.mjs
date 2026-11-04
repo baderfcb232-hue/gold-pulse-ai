@@ -59,6 +59,10 @@ test('localized display text never overwrites unknown trading, broker or custome
   assert.equal(translateUiText('PRICE_OR_SPREAD_MOVE','en'),'PRICE_OR_SPREAD_MOVE');
   assert.equal(translateUiText('4050.27','en'),'4050.27');
   assert.equal(translateUiText('عمر السعر 7 ثانية','en'),'Quote age: 7 seconds');
+  assert.equal(translateUiText('1 ثانية','en'),'1 second');
+  assert.equal(translateUiText('14 ثانية','en'),'14 seconds');
+  assert.equal(translateUiText('4,041.51','en'),'4,041.51');
+  assert.equal(translateUiText('المس الشارت أو استخدم الأسهم لاستعراض السعر','en'),'Tap the chart or use arrow keys to inspect prices');
   assert.equal(translateUiText('الفحص التالي بعد 3 دقيقة حسب المصدر','en'),'Next source check in 3 minutes');
   assert.equal(translateUiText('معامل الربح: 1.75 · الإشارات المنتهية دون حسم: 4 · النتائج الفعلية تظهر في سجل MT5 أدناه.','en'),'Profit factor: 1.75 · Expired signals without a result: 4 · Actual trades are shown in the MT5 history below.');
   assert.equal(translateUiText('معامل الربح: غير قابل للتقييم · الإشارات المنتهية دون حسم: 0 · النتائج الفعلية تظهر في سجل MT5 أدناه.','en'),'Profit factor: Not assessable · Expired signals without a result: 0 · Actual trades are shown in the MT5 history below.');
