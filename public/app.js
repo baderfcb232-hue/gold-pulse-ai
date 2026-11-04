@@ -1,9 +1,9 @@
 import {positionSize, ema, botHeartbeatFresh, BOT_CONTROL_TTL} from '/engine.mjs';
-import {initLiveWorkspace} from '/live.js';
+import {initLiveWorkspace} from '/live.js?v=v2-locale-3';
 import {inSignalDateRange} from '/signal-date-filter.js';
 import {createStateConnection} from '/state-connection.js';
 import {requestJson} from '/http.js';
-import {translateUiText,currentLocale,setLocalizedText} from '/i18n-dom.js';
+import {translateUiText,currentLocale,setLocalizedText} from '/i18n-dom.js?v=v2-i18n-3';
 import {createToastCenter} from '/toast-ui.js';
 import {createPriceFeedback} from '/price-feedback.js';
 import {controlBlockers, marketControlStatus, marketControlWarnings, closeButtonDisplay} from '/control-readiness.js?v=stable-close-1';
@@ -526,6 +526,13 @@ sizingForm.onsubmit=async event=>{
     put('trade-sizing-feedback',reasons[error.message]||error.message||'تعذّر حفظ اللوت.');
   }finally{submit.disabled=false;}
 };
+// Language changes reformat already-loaded display data; never send an MT5 command.
+document.addEventListener('nabd:language-change',()=>{
+  if(!state)return;
+  renderNews();
+  if(view==='signals')renderSignals();
+  if(view==='results')renderResults();
+});
 $('pause-bot').onclick=()=>confirmCommand('PAUSE');$('resume-bot').onclick=()=>confirmCommand('RESUME');$('close-all').onclick=()=>confirmCommand('CLOSE_ALL');$('signal-filter').onchange=renderSignals;$('signal-source-filter').onchange=renderSignals;$('signal-date-filter').onchange=renderSignals;$('results-source-filter').onchange=renderResults;$('news-filter').onchange=renderNews;
 $('download-mt5').onclick=event=>{if(!authenticated){event.preventDefault();$('login-dialog').showModal();}};
 $('copy-bridge-url').onclick=async()=>{try{await navigator.clipboard.writeText($('bridge-url').value);toast('تم نسخ رابط الجسر.');}catch{toast('انسخ الرابط من الحقل مباشرة.',true);$('bridge-url').select();}};
