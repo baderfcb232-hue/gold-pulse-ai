@@ -1,0 +1,46 @@
+name: NABD dashboard terminal production smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'public/dashboard-terminal.css'
+      - 'public/index.html'
+      - 'server.mjs'
+      - '.github/workflows/dashboard-production-smoke.yml'
+  workflow_dispatch:
+jobs:
+  verify-terminal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - name: Confirm live dashboard, styling, homepage and health
+        run: |
+          python3 - <<'PY'
+          import time
+          from urllib.request import urlopen
+          base='https://gold-pulse-ai.onrender.com'
+          checks={
+            '/': [b'DEMO PREVIEW', b'href="/dashboard"'],
+            '/dashboard': [b'id="market-symbols"', b'/dashboard-terminal.css?v=phase3-1'],
+            '/dashboard-terminal.css': [b'--bg:#0b1015',b'prefers-reduced-motion'],
+            '/healthz': [b'"ok":true'],
+          }
+          for i in range(20):
+              try:
+                  for path,markers in checks.items():
+                      with urlopen(base+path,timeout=12) as response:
+                          if response.status!=200:
+                              raise RuntimeError(f'{path}: HTTP {response.status}')
+                          content=response.read(200000)
+                      for marker in markers:
+                          if marker not in content:
+                              raise RuntimeError(f'{path} missing expected marker')
+                  print('NABD production dashboard CSS, homepage and health OK.')
+                  break
+              except Exception as error:
+                  if i==19: raise
+                  print('Deploy readiness retry',i+1,type(error).__name__)
+                  time.sleep(12)
+          PY
