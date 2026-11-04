@@ -1,1 +1,12 @@
 /* NABD Phase 3 dark trading dashboard theme; visual-only stylesheet. */
+
+:root{color-scheme:dark;--bg:#0b1015;--card:#141c23;--elevated:#1d2830;--border:#293840;--ink:#edf0ed;--muted:#a1aeb4;--violet:#d3b47a;--gold:#ddbb80;--green:#73d7b3;--red:#fb9496;--amber:#f2c981}
+body{background:radial-gradient(ellipse 65% 22% at 80% -10%,#1c332e66,transparent 75%),var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+.header{background:#11191f;border-bottom:1px solid #304048;padding-block:16px}
+.nav{gap:5px}.nav-button{border:1px solid transparent;border-radius:11px;font-weight:600;color:#b8c2c6;transition:background .16s,color .16s}
+.nav-button:hover{background:#23313a;color:#f0ede5}.nav-button.selected{background:#2a332f;color:#efcf92;border-color:#59604a}
+.button{border-radius:11px;min-height:43px;background:#202b33;border-color:#35444c;box-shadow:none}.button:hover{border-color:#687c79;background:#28363d}
+.button.primary{background:linear-gradient(110deg,#e4ca95,#d5b175);border-color:#d5b175;color:#17201d}.button.ghost{background:#141e24}.button.danger{background:#392628;border-color:#704549;color:#ffaaa8}
+.main{max-width:1520px;padding-top:28px;padding-bottom:46px}.page-heading{padding-block:4px 11px}
+.page-heading h1{font-size:clamp(24px,2.4vw,34px);font-weight:700}
+.connection-box{background:#141e24;border:1px solid #2c3940;padding:8px 13px;border-radius:12px;min-width:155px}
