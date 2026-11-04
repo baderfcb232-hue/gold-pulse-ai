@@ -187,8 +187,10 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, position
     heading.append(node('strong',p.side==='BUY'?'buy':'sell',side(p.side)),
       pill(stage,stage==='بلغ الهدف'?'good':stage==='ضرب الستوب'?'bad':confirmed?'good':'warn'));
     box.append(heading,node('p','subtle',confirmed?'مستويات توصية منشورة، وليست إثبات تنفيذ صفقة.':'مستويات مراقبة لم تُعتمد كإشارة تنفيذ.'));
-    const riskDistance=Math.abs(p.entry-p.sl),riskValid=Number.isFinite(riskDistance)&&riskDistance>0;
-    const rr=target=>riskValid&&Number.isFinite(target)?num(Math.abs(target-p.entry)/riskDistance,2)+'R':'—';
+    const riskDistance=Math.abs(p.entry-p.sl),riskValid=Number.isFinite(riskDistance)&&riskDistance>0&&
+      (p.side==='BUY'?p.sl<p.entry:p.side==='SELL'?p.sl>p.entry:false);
+    const rr=target=>riskValid&&Number.isFinite(target)&&(p.side==='BUY'?target>p.entry:target<p.entry)
+      ?num(Math.abs(target-p.entry)/riskDistance,2)+'R':'—';
     const values=node('div','signal-values');
     for(const [name,value]of [['الدخول',p.entry],['وقف الخسارة',p.sl],
       ['الهدف الأول · '+rr(p.tp1),p.tp1],['الهدف الثاني · '+rr(p.tp2),p.tp2]]){
