@@ -1,5 +1,5 @@
 import {requestJson} from '/http.js';
-import {translateUiText,currentLocale,setLocalizedText} from '/i18n-dom.js?v=v2-i18n-3';
+import {translateUiText,currentLocale,setLocalizedText} from '/i18n-dom.js?v=v2-i18n-4';
 const $ = id => document.getElementById(id);
 const node = (tag, cls, text) => {const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) setLocalizedText(el,text); return el;};
 const page = ({'/auth': 'auth', '/account': 'account', '/admin': 'admin', '/privacy': 'privacy'})[location.pathname] || 'auth';

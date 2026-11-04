@@ -32,7 +32,7 @@ export function initMiniSparkline({$,formatPrice,onQuote}) {
       $('mini-market-last').textContent='—';
       label.textContent='بانتظار بيانات السوق الفعلية';
     }
-    caption.textContent=geometry?'حرك الماوس لاستعراض السعر':'يلزم وصول تحديثين حقيقيين';
+    caption.textContent=geometry?'المس الشارت أو استخدم الأسهم لاستعراض السعر':'يلزم وصول تحديثين حقيقيين';
   }
   function update({symbol,price,time,source,sourceId}) {
     if(!['XAUUSD','BTCUSD'].includes(symbol)||!Number.isFinite(price)||price<=0||!Number.isFinite(time)||time<=0)return;
@@ -73,7 +73,7 @@ export function initMiniSparkline({$,formatPrice,onQuote}) {
   function resetPreview(){
     guide.hidden=true;dot.hidden=true;selectedIndex=null;
     card.style.setProperty('--tilt-x','0deg');card.style.setProperty('--tilt-y','0deg');
-    caption.textContent=geometry?'حرك الماوس لاستعراض السعر':'بانتظار الأسعار الحقيقية';
+    caption.textContent=geometry?'المس الشارت أو استخدم الأسهم لاستعراض السعر':'بانتظار الأسعار الحقيقية';
   }
   stage.addEventListener('pointermove',inspectPointer);
   stage.addEventListener('pointerdown',inspectPointer);

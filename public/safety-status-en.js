@@ -94,6 +94,7 @@ export const safetyStatusEnglish=Object.freeze({
   "آخر أسعار مسجلة · ": "Last recorded prices · ",
   "بانتظار بيانات السوق الفعلية": "Waiting for actual market prices",
   "حرك الماوس لاستعراض السعر": "Move the pointer to inspect the price",
+  "المس الشارت أو استخدم الأسهم لاستعراض السعر": "Tap the chart or use arrow keys to inspect prices",
   "يلزم وصول تحديثين حقيقيين": "At least two real price updates are required",
   "بانتظار الأسعار الحقيقية": "Waiting for real market prices",
   "إغلاق التنبيه": "Close notification",
