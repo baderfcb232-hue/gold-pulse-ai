@@ -71,7 +71,7 @@ jobs:
             '/i18n-dom.js': [b'translateStaticUi',b'observeLocaleUi',b'setLocalizedText'],
             '/dashboard-static-en.js': [b'dashboardStaticEnglish',b'Market overview'],
             '/app-extra-en.js': [b'appExtraEnglish',b'MT5'],
-            '/server-status-en.js': [b'serverStatusEnglish',b'Stale'],
+            '/server-status-en.js': [b'serverStatusEnglish',b'MT5'],
             '/signal-date-filter.js': [b'inSignalDateRange',b'Asia/Gaza'],
             '/dashboard-themes.css': [b'--bg:#f8fafc',b'data-nabd-theme="light"',b'Mobile phase: keep dashboard navigation'],
             '/theme-init.js': [b'nabd:dashboard:theme',b'localStorage'],
