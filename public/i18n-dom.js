@@ -55,7 +55,10 @@ export function translateStaticUi(root,locale=currentLocale()){
   let node;
   while((node=walk.nextNode())){
     if(skipTags.has(node.parentElement?.tagName)||node.parentElement?.closest?.('[data-nabd-no-translate]'))continue;
-    const original=originals.get(node)??node.nodeValue;
+    const current=node.nodeValue;
+    const prior=originals.get(node);
+    // Real-time feeds can reuse a text node; a fresh Arabic value supersedes the old original.
+    const original=current&&/[؀-ۿ]/.test(current)&&current!==prior?current:prior??current;
     if(!original||!/[؀-ۿ]/.test(original))continue;
     originals.set(node,original);
     const next=lang==='en'?translateUiText(original,lang):original;
@@ -68,7 +71,7 @@ export function translateStaticUi(root,locale=currentLocale()){
     for(const name of ['aria-label','placeholder','title','aria-description']){
       const value=el.getAttribute(name);
       const stored=attrs.get(el)||{};
-      const original=stored[name]??value;
+      const original=value&&/[؀-ۿ]/.test(value)&&value!==stored[name]?value:stored[name]??value;
       if(!original||!/[؀-ۿ]/.test(original))continue;
       if(!attrs.has(el))attrs.set(el,{});
       attrs.get(el)[name]=original;
@@ -76,6 +79,42 @@ export function translateStaticUi(root,locale=currentLocale()){
       if(value!==next)el.setAttribute(name,next);
     }
   }
+}
+/* Translate newly rendered real-time UI nodes without rescanning the entire dashboard every tick.
+   No API calls, order manipulation, or replacement of unknown safety/broker text. */
+export function observeLocaleUi(root=typeof document!=='undefined'?document.body:null){
+  if(!root||typeof MutationObserver==='undefined')return ()=>{};
+  const pending=new Set();
+  let scheduled=false,active=true;
+  const flush=()=>{
+    scheduled=false;
+    if(!active||currentLocale()!=='en'){pending.clear();return;}
+    const batch=[...pending];pending.clear();
+    for(const el of batch){
+      if(el?.isConnected!==false)translateStaticUi(el,currentLocale());
+    }
+  };
+  const watch=new MutationObserver(mutations=>{
+    if(currentLocale()!=='en')return;
+    for(const mutation of mutations){
+      if(mutation.type==='attributes'){
+        pending.add(mutation.target);
+      }else if(mutation.type==='characterData'){
+        pending.add(mutation.target.parentElement||root);
+      }else{
+        for(const node of mutation.addedNodes){
+          const element=node.nodeType===3?node.parentElement:node;
+          if(element)pending.add(element);
+        }
+      }
+    }
+    if(pending.size&&!scheduled){scheduled=true;queueMicrotask(flush);}
+  });
+  watch.observe(root,{
+    subtree:true,childList:true,characterData:true,attributes:true,
+    attributeFilter:['aria-label','placeholder','title','aria-description']
+  });
+  return ()=>{active=false;watch.disconnect();pending.clear();};
 }
 export const staticTranslationCoverage=Object.freeze({
  dashboard:Object.keys(dashboardStaticEnglish).length,
