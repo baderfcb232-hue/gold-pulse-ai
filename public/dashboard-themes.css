@@ -3,7 +3,7 @@
  color-scheme:light;
  --bg:#f8fafc;--card:#ffffff;--elevated:#eef4f7;--border:#e2e8f0;
  --ink:#0f172a;--muted:#64748b;--violet:#0f766e;--gold:#b7812e;
- --green:#087d5b;--red:#cb3340;--amber:#99671e;
+ --green:#087d5b;--red:#cb3340;--amber:#99671e;--brand-secondary:#14b8a6;
 }
 :root[data-nabd-theme="light"] body{background:linear-gradient(180deg,#eef8f7 0,#f8fafc 295px,#f8fafc 100%);color:#0f172a}
 :root[data-nabd-theme="light"] .header{background:#fff;border-color:#e2e8f0;box-shadow:0 5px 25px #0f172a08}
