@@ -9,7 +9,11 @@ export function sparklineGeometry(samples) {
   return {points,path:points.map((p,i)=>(i?'L':'M')+p.x.toFixed(2)+' '+p.y.toFixed(2)).join(' ')};
 }
 export function initMiniSparkline({$,formatPrice}) {
-  const card=$('mini-market-card'),stage=$('mini-market-chart'),svg=stage?.querySelector('svg');
+  const card=$('mini-market-card'),stage=$('mini-market-chart');
+  // Existing Node trading tests use a minimal DOM stub, not a browser SVG tree.
+  // No-op in that environment; the real dashboard enables the chart normally.
+  if(!stage||typeof stage.querySelector!=='function')return {update(){},show(){}};
+  const svg=stage.querySelector('svg');
   const line=$('mini-market-line'),guide=$('mini-market-guide'),dot=$('mini-market-dot');
   const empty=$('mini-market-empty'),caption=$('mini-market-hover'),label=$('mini-market-source');
   const bySymbol=new Map();let active=null,geometry=null;
