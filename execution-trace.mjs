@@ -10,6 +10,40 @@ export function recommendationCode(id) {
 // One source-bound MT5 deal ticket, returned by the placing EA and then observed
 // in the broker's own Trade/History feed, proves an actual entry. SUBMITTED alone
 // or a similarly priced deal without the exact ticket is never sufficient.
+// Human-readable explanations of safety rejections reported by the GOLD EA.
+// An EA denial is never converted into a trade submission or fill.
+export const eaRejectReasonDescriptions = Object.freeze({
+  101:'مفتاح التداول في EA مغلق',
+  102:'صلاحيات Algo Trading أو صلاحيات الحساب غير متاحة في MT5',
+  103:'التحكم من الموقع معطّل أو موقوف',
+  104:'إيقاف الطوارئ مفعّل',
+  105:'صفقة أو أمر معلّق، أو حد المراكز والمخاطرة',
+  106:'الدورة السابقة لم تنتهِ',
+  107:'خارج جلسة التداول المسموحة',
+  108:'فترة انتظار بين الصفقات',
+  109:'بلوغ حد الخسارة اليومية',
+  110:'حظر الدخول أثناء أخبار عالية التأثير',
+  111:'سعر الوسيط قديم أو غير متاح',
+  112:'التوصية انتهت أو تغيّرت الشمعة أو الأسعار أو مستويات الوقف',
+  113:'مؤشر ATR غير جاهز',
+  116:'حماية المراكز أو الصلاحيات تمنع الدخول',
+  117:'حجم الصفقة أقل من الحد الأدنى أو غير صالح',
+  118:'شمعة الدخول مستخدمة مسبقًا',
+  119:'السبريد أو السعر أو إيقاف الطوارئ يمنع الدخول',
+  120:'فشل فحص الوقف أو المخاطرة أو الهامش؛ نسخة EA الجديدة تفصل السبب',
+  121:'طلب التداول رفضه الوسيط',
+  122:'اللوت اليدوي غير مقبول عند الوسيط',
+  123:'بيانات ATR أو حد المراكز غير مناسب',
+  124:'تخفيض اللوت بسبب تذبذب الذهب جعله أقل من حد الوسيط',
+  125:'مسافة وقف الخسارة أقرب من الحد المسموح لدى الوسيط',
+  126:'تعذر احتساب خسارة وقف الصفقة',
+  127:'الخسارة المحتملة تتجاوز ميزانية المخاطرة',
+  128:'المخاطرة الإجمالية للمراكز المفتوحة تتجاوز الحد',
+  129:'الهامش المتاح أو الحد الأقصى لا يكفي'
+});
+export const describeEaRejection = code => Number.isInteger(code) && eaRejectReasonDescriptions[code]
+  ? 'رفض MT5: ' + eaRejectReasonDescriptions[code] : 'EA_REJECTED';
+
 export function verifiedBrokerDeal(record, snapshot) {
   if (record?.status!=='SUBMITTED' || !/^[1-9][0-9]{0,19}$/.test(record.deal_ticket||'') ||
       !snapshot?.execution?.demo || !/just.?markets/i.test(snapshot.broker||'') ||
@@ -49,7 +83,7 @@ export function linkExecutionTrace(signals, entries = [], decisions = [], snapsh
       check?.status === 'BLOCKED' ? 'BLOCKED' : 'NOT_DISPATCHED';
     return {...p, execution_trace: {signal_code: code, status,
       approval_id: entry && Number.isSafeInteger(Number(entry.id)) ? Number(entry.id) : null,
-      reason: entry?.status === 'REJECTED' ? 'EA_REJECTED' :
+      reason: entry?.status === 'REJECTED' ? describeEaRejection(entry.reason_code) :
         check?.status === 'BLOCKED' && !entry ? check.reason : null,
       reason_code: entry?.reason_code ?? null,
       mt5_retcode: entry?.mt5_retcode ?? null,
