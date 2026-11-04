@@ -17,6 +17,7 @@ const dynamicPatterns=[
   [/^عمر آخر تيك حقيقي ([\d,.]+) ثانية$/,m=>`Last real tick age: ${m[1]} seconds`],
   [/^([\d,.]+) نقطة$/,m=>`${m[1]} points`],
   [/^([\d,.]+) دقيقة$/,m=>`${m[1]} minutes`],
+  [/^([\d,.]+) ثانية$/,m=>m[1]+' '+(m[1]==='1'?'second':'seconds')],
   [/^([\d,.]+) إشارة · (.+)$/,m=>`${m[1]} signals · ${translateUiText(m[2],'en')}`],
   [/^([\d,.]+) شمعة مغلقة$/,m=>`${m[1]} closed candles`],
   [/^إشارة (شراء|بيع) جديدة — (.+)$/,m=>`New ${translateUiText(m[1],'en')} signal — ${m[2]}`],
