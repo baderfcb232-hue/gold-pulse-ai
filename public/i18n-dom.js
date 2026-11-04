@@ -7,10 +7,11 @@ import {runtimeStatusEnglish} from './runtime-status-en.js';
 import {liveStatusEnglish} from './live-status-en.js';
 import {appExtraEnglish} from './app-extra-en.js';
 import {safetyStatusEnglish} from './safety-status-en.js';
+import {serverStatusEnglish} from './server-status-en.js';
 import {localeOf,translations} from './i18n-core.js';
 
 const corePairs=Object.fromEntries(Object.keys(translations.ar).map(k=>[translations.ar[k],translations.en[k]]));
-const en=Object.freeze({...corePairs,...dashboardStaticEnglish,...accountStaticEnglish,...attributeStaticEnglish,...runtimeStatusEnglish,...liveStatusEnglish,...appExtraEnglish,...safetyStatusEnglish});
+const en=Object.freeze({...corePairs,...dashboardStaticEnglish,...accountStaticEnglish,...attributeStaticEnglish,...runtimeStatusEnglish,...liveStatusEnglish,...appExtraEnglish,...safetyStatusEnglish,...serverStatusEnglish});
 const dynamicPatterns=[
   [/^عمر السعر ([\d,.]+) ثانية$/,m=>`Quote age: ${m[1]} seconds`],
   [/^عمر آخر تيك حقيقي ([\d,.]+) ثانية$/,m=>`Last real tick age: ${m[1]} seconds`],
