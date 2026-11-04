@@ -1,0 +1,127 @@
+/* NABD phase D: premium default light dashboard and opt-in navy dark mode.
+   Safe presentation-only overrides layered over existing dashboard styles. */
+:root:not([data-theme="dark"]){
+  color-scheme:light;
+  --bg:#F8FAFC;--card:#FFFFFF;--elevated:#EFF5F8;--border:#DCE6EB;
+  --ink:#0F172A;--muted:#607287;--violet:#0F766E;--gold:#B17C24;
+  --green:#047857;--red:#BE123C;--amber:#92400E;
+}
+:root:not([data-theme="dark"]) body{
+  background:linear-gradient(180deg,#EEF5F8 0,#F8FAFC 420px);
+  color:var(--ink);
+}
+:root:not([data-theme="dark"]) .header{
+  background:#FFFFFF;border-bottom:1px solid #E0E8ED;
+  box-shadow:0 2px 20px #0F172A08;
+}
+:root:not([data-theme="dark"]) .nav-button{color:#52677B}
+:root:not([data-theme="dark"]) .nav-button:hover{background:#EDF6F6;color:#0F766E;border-color:#D3E9E7}
+:root:not([data-theme="dark"]) .nav-button.selected{background:#E1F4F0;color:#0B635C;border-color:#BCE3DA}
+:root:not([data-theme="dark"]) .button{
+  background:#F6FAFB;border-color:#C9D9E0;color:#1F3846;
+}
+:root:not([data-theme="dark"]) .button:hover{background:#E9F4F4;border-color:#8ABBB6}
+:root:not([data-theme="dark"]) .button.primary{
+  background:#0F766E;border-color:#0F766E;color:#FFFFFF;
+  box-shadow:0 8px 18px #0F766E20;
+}
+:root:not([data-theme="dark"]) .button.primary:hover{background:#115E59}
+:root:not([data-theme="dark"]) .button.danger{color:#B4233B;background:#FFF2F3;border-color:#F6C9D0}
+:root:not([data-theme="dark"]) .connection-box{
+  background:#FFFFFF;border-color:#D7E4E8;box-shadow:0 5px 18px #0F172A06;
+}
+:root:not([data-theme="dark"]) .card,
+:root:not([data-theme="dark"]) .metric{
+  background:#FFFFFF;border:1px solid #E2E8F0;
+  box-shadow:0 10px 30px #0F172A08;border-radius:18px;
+}
+:root:not([data-theme="dark"]) .card-heading h2{color:#0F172A}
+:root:not([data-theme="dark"]) .decision-card{border-top:3px solid #0F766E}
+:root:not([data-theme="dark"]) .signal-card{border-top:3px solid #D4A24C}
+:root:not([data-theme="dark"]) .reason,
+:root:not([data-theme="dark"]) .control-explanation{color:#4B6172}
+:root:not([data-theme="dark"]) .decision-line>strong{color:#0F766E}
+:root:not([data-theme="dark"]) .pill.neutral{background:#EDF3F7;color:#3F5565}
+:root:not([data-theme="dark"]) .pill.good{background:#E1F6ED;color:#046C48}
+:root:not([data-theme="dark"]) .pill.warn{background:#FFF3D5;color:#8A5200}
+:root:not([data-theme="dark"]) .pill.bad{background:#FFE8EB;color:#A61B39}
+:root:not([data-theme="dark"]) .pill.outline{background:#F8FAFC;border-color:#D7E4EA;color:#546B79}
+:root:not([data-theme="dark"]) .alert-banner{background:#F1F8F7;border-color:#C9E7E0}
+:root:not([data-theme="dark"]) .banner-mark{border-color:#0F766E;color:#0F766E}
+:root:not([data-theme="dark"]) .alert-banner p{color:#536B79}
+:root:not([data-theme="dark"]) .score-track{background:#E5EEF0}
+:root:not([data-theme="dark"]) .score-track span{background:#14B8A6}
+:root:not([data-theme="dark"]) .frame{background:#F7FAFC;border-color:#DFE9EE}
+:root:not([data-theme="dark"]) .frame strong{color:#1B3543}
+:root:not([data-theme="dark"]) .segmented{background:#EAF1F4;border-color:#D7E2E9}
+:root:not([data-theme="dark"]) .segmented button{color:#506B7A}
+:root:not([data-theme="dark"]) .segmented .active{background:#FFFFFF;color:#0F766E;box-shadow:0 3px 12px #0F172A10}
+:root:not([data-theme="dark"]) .value-cell{background:#F7FAFC;border-color:#DFE8EB}
+:root:not([data-theme="dark"]) .signal-values .target{background:#FFF9EE;border-color:#F0DFC0}
+:root:not([data-theme="dark"]) .text-button,
+:root:not([data-theme="dark"]) summary{color:#0F766E}
+:root:not([data-theme="dark"]) .news-card,
+:root:not([data-theme="dark"]) .hub-item,
+:root:not([data-theme="dark"]) .setup-check,
+:root:not([data-theme="dark"]) .headline-source,
+:root:not([data-theme="dark"]) .broker-workspace,
+:root:not([data-theme="dark"]) .connection-hub{
+  background:#F8FAFC;border-color:#E0E9EF;
+}
+:root:not([data-theme="dark"]) .risk-result,
+:root:not([data-theme="dark"]) .command-progress,
+:root:not([data-theme="dark"]) .broker-quote-values>span{background:#F3F8FA;border-color:#DDE8ED}
+:root:not([data-theme="dark"]) .dialog{background:#FFFFFF;border-color:#D9E3E8;color:#0F172A}
+:root:not([data-theme="dark"]) .toast{background:#FFFFFF;border-color:#A5D8CF;color:#0F172A}
+:root:not([data-theme="dark"]) select,
+:root:not([data-theme="dark"]) input,
+:root:not([data-theme="dark"]) textarea{background:#FFFFFF;color:#0F172A;border-color:#C9D8E0;color-scheme:light}
+:root:not([data-theme="dark"]) th{background:#F0F5F8;color:#4E6371}
+:root:not([data-theme="dark"]) .chart-wrap{background:#F8FAFC;border-color:#D8E3E9}
+:root:not([data-theme="dark"]) .mt5-candle-chart,
+:root:not([data-theme="dark"]) .tradingview-chart{background:#101C26;border-color:#CDDCE3}
+:root:not([data-theme="dark"]) .chart-empty{
+  background:repeating-linear-gradient(to bottom,#F8FBFC 0,#F8FBFC 67px,#E4EDF0 68px);
+}
+:root:not([data-theme="dark"]) .chart-empty strong{color:#607482}
+:root:not([data-theme="dark"]) .chart-empty p{color:#718493}
+:root:not([data-theme="dark"]) .footer{border-top-color:#E0E8ED;color:#64748B}
+html[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0B1220;--card:#111827;--elevated:#1F2937;--border:#2B3C4E;
+  --ink:#F8FAFC;--muted:#94A3B8;--violet:#14B8A6;--gold:#D4A24C;
+  --green:#10B981;--red:#FB7185;--amber:#F6C66E;
+}
+html[data-theme="dark"] body{background:#0B1220}
+html[data-theme="dark"] .header{background:#111D2C;border-bottom-color:#293849}
+html[data-theme="dark"] .nav-button.selected{background:#123D3E;color:#76E7D6;border-color:#235D5B}
+html[data-theme="dark"] .card{background:#111C2B;border-color:#29394A}
+html[data-theme="dark"] .button.primary{background:#14B8A6;color:#092A29;border-color:#14B8A6}
+html[data-theme="dark"] .segmented .active{background:#174A4B;color:#7BE6D5}
+html[data-theme="dark"] .connection-box{background:#162433;border-color:#2B4050}
+html[data-theme="dark"] .theme-choice select{background:#172739;color:#EAF6F5;border-color:#355362}
+.page-heading-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.theme-choice{
+  display:flex;align-items:center;gap:8px;
+  color:var(--muted);font-size:12px;font-weight:600;
+  border:1px solid var(--border);background:var(--card);
+  padding:7px 10px;border-radius:12px;
+}
+.theme-choice select{
+  min-height:34px;padding:4px 10px;min-width:98px;border-radius:9px;
+  color:var(--ink);background:var(--card);border:1px solid var(--border);
+  font:inherit;cursor:pointer;
+}
+.theme-choice:focus-within{outline:2px solid var(--violet);outline-offset:3px}
+@media(max-width:770px){
+  .page-heading{flex-wrap:wrap}
+  .page-heading-actions{width:100%;justify-content:space-between}
+  .theme-choice{flex:1;justify-content:space-between;max-width:260px}
+}
+@media(max-width:470px){
+  .page-heading-actions{gap:9px}
+  .connection-box{min-width:0;flex:1}
+  .theme-choice{max-width:none;min-width:160px}
+  .theme-choice span{font-size:11px}
+}
+@media(prefers-reduced-motion:reduce){.button,.nav-button,.card{transition:none!important}}

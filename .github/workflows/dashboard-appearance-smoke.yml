@@ -1,0 +1,45 @@
+name: NABD dashboard appearance production smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'public/dashboard-premium.css'
+      - 'public/ui-theme.js'
+      - 'public/index.html'
+      - 'server.mjs'
+      - '.github/workflows/dashboard-appearance-smoke.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - name: GET-only verification of theme and unchanged routes
+        run: |
+          python3 - <<'PY'
+          import time
+          from urllib.request import urlopen
+          base='https://gold-pulse-ai.onrender.com'
+          checks={
+            '/dashboard':[b'dashboard-premium.css?v=20261104-1',b'id="theme-select"',b'id="market-symbols"'],
+            '/dashboard-premium.css':[b'--bg:#F8FAFC',b'--bg:#0B1220'],
+            '/ui-theme.js':[b'nabd-theme-preference',b'prefers-color-scheme'],
+            '/':[b'premium-fintech.css',b'DEMO PREVIEW'],
+            '/healthz':[b'"ok":true'],
+          }
+          for trial in range(20):
+            try:
+              for p,markers in checks.items():
+                with urlopen(base+p,timeout=12) as response:
+                  if response.status!=200:raise RuntimeError(p)
+                  body=response.read(200000)
+                for marker in markers:
+                  if marker not in body:raise RuntimeError(p+' marker missing')
+              print('Light/dark/auto dashboard theme and existing homepage and health OK')
+              break
+            except Exception:
+              if trial==19:raise
+              time.sleep(12)
+          PY
