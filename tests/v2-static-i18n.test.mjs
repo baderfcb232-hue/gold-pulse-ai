@@ -12,7 +12,7 @@ import {runtimeStatusEnglish} from '../public/runtime-status-en.js';
 import {liveStatusEnglish} from '../public/live-status-en.js';
 import {appExtraEnglish} from '../public/app-extra-en.js';
 import {translations} from '../public/i18n-core.js';
-import {translateUiText,staticTranslationCoverage} from '../public/i18n-dom.js';
+import {translateUiText,translateStaticUi,observeLocaleUi,staticTranslationCoverage} from '../public/i18n-dom.js';
 const read=p=>readFileSync(new URL('../public/'+p,import.meta.url),'utf8');
 const htmlCopy=p=>[...new Set(read(p)
   .replace(/<script[\s\S]*?<\/script>/g,'').replace(/<style[\s\S]*?<\/style>/g,'')
@@ -77,6 +77,48 @@ test('all short hard-coded dynamic Arabic UI literals have an exact, reviewed En
     const notTranslated=[...new Set(strings)].filter(value=>value!=='؟'&&!Object.hasOwn(catalogue,value));
     assert.deepEqual(notTranslated,[],path+' has untranslated static UI text');
   }
+});
+
+test('English translation remains correct across streaming updates and reverses to the original Arabic',async t=>{
+  const original={document:globalThis.document,NodeFilter:globalThis.NodeFilter,MutationObserver:globalThis.MutationObserver};
+  t.after(()=>{
+    for(const [key,value] of Object.entries(original)){
+      if(value===undefined)delete globalThis[key];else globalThis[key]=value;
+    }
+  });
+  const attrs=new Map([['aria-label','أقسام الموقع']]);
+  const el={nodeType:1,tagName:'DIV',isConnected:true,
+    getAttribute:k=>attrs.get(k)??null,setAttribute:(k,v)=>attrs.set(k,v),
+    querySelectorAll:()=>[],closest:()=>false};
+  const text={nodeType:3,nodeValue:'الذهب',parentElement:el,isConnected:true};
+  let callback;
+  class Watcher{
+    constructor(fn){callback=fn;}
+    observe(target,config){assert.equal(target,el);assert.ok(config.subtree);}
+    disconnect(){}
+  }
+  globalThis.document={documentElement:{lang:'en'},createTreeWalker:()=>{let used=false;return {nextNode:()=>used?null:(used=true,text)}}};
+  globalThis.NodeFilter={SHOW_TEXT:4};
+  globalThis.MutationObserver=Watcher;
+  translateStaticUi(el,'en');
+  assert.equal(text.nodeValue,'Gold');
+  assert.equal(attrs.get('aria-label'),'Site sections');
+  translateStaticUi(el,'ar');
+  assert.equal(text.nodeValue,'الذهب');
+  assert.equal(attrs.get('aria-label'),'أقسام الموقع');
+  translateStaticUi(el,'en');
+  const stop=observeLocaleUi(el);
+  text.nodeValue='وقف الخسارة';
+  callback([{type:'characterData',target:text}]);
+  await Promise.resolve();
+  assert.equal(text.nodeValue,'Stop loss');
+  text.nodeValue='بيانات قديمة';
+  callback([{type:'characterData',target:text}]);
+  await Promise.resolve();
+  assert.equal(text.nodeValue,'Stale data');
+  stop();
+  translateStaticUi(el,'ar');
+  assert.equal(text.nodeValue,'بيانات قديمة');
 });
 
 test('dashboard and account translation scripts are browser modules with shared locale preference',()=>{
