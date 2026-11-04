@@ -53,7 +53,7 @@ export function initMiniSparkline({$,formatPrice,onQuote}) {
     guide.setAttribute('d','M'+nearest.x.toFixed(1)+' 8 V94');
     dot.setAttribute('cx',nearest.x);dot.setAttribute('cy',nearest.y);
     guide.hidden=false;dot.hidden=false;
-    const time=new Date(nearest.time*1000).toLocaleTimeString('ar-PS',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Gaza'});
+    const time=new Date(nearest.time*1000).toLocaleTimeString(document.documentElement?.lang==='en'?'en-GB':'ar-PS',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Gaza'});
     caption.textContent=formatPrice(nearest.price)+' · '+time;
     if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches){
       const xrel=Math.max(-.5,Math.min(.5,(event.clientX-rect.left)/rect.width-.5));
