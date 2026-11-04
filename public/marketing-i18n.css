@@ -1,0 +1,21 @@
+/* Marketing language selector and English LTR adaptations. */
+.nav-language{
+ display:inline-flex;align-items:center;justify-content:center;
+ min-height:37px;padding:6px 11px;border-radius:10px;
+ border:1px solid #cbdce2;background:#fff;color:#0f766e;
+ font:600 12px 'IBM Plex Sans Arabic',system-ui,sans-serif;
+}
+.nav-language:hover{background:#e7f7f2;border-color:#0f766e}
+html[dir="ltr"] .hero h1{letter-spacing:-1.6px;line-height:1.21}
+html[dir="ltr"] .hero-copy{text-align:left}
+html[dir="ltr"] .hero-notes{justify-content:flex-start}
+html[dir="ltr"] .hero-lead{line-height:1.95}
+html[dir="ltr"] .section-intro>p,
+html[dir="ltr"] .feature-card p,
+html[dir="ltr"] .workflow-steps p{line-height:1.8}
+html[dir="ltr"] .phone-preview{left:auto;right:-9px;transform:rotate(5deg)}
+html[dir="ltr"] .phone-preview .phone-label{direction:ltr}
+html[dir="ltr"] .phone-bottom{text-align:left}
+@media(max-width:920px){html[dir="ltr"] .hero-copy{text-align:center}html[dir="ltr"] .hero-notes{justify-content:center}}
+@media(max-width:620px){.nav-language{font-size:11px;padding:4px 7px;min-height:36px}html[dir="ltr"] .hero h1{font-size:clamp(36px,8vw,52px)}}
+@media(prefers-reduced-motion:reduce){html[dir="ltr"] .phone-preview{animation:none!important}}
