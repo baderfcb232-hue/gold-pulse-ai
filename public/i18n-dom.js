@@ -124,9 +124,13 @@ export function externalHeadlineForLocale(headline,locale=currentLocale()){
 export function setLocalizedText(element,value,locale=currentLocale()){
   if(!element)return element;
   const raw=value===null||value===undefined?'—':String(value);
-  element.textContent=localeOf(locale)==='en'?translateUiText(raw,locale):raw;
+  const shown=localeOf(locale)==='en'?translateUiText(raw,locale):raw;
+  element.textContent=shown;
   const textNode=element.firstChild;
-  if(textNode?.nodeType===3&&/[\u0600-\u06FF]/.test(raw))originals.set(textNode,raw);
+  if(textNode?.nodeType===3&&/[\u0600-\u06FF]/.test(raw)){
+    originals.set(textNode,raw);
+    lastRendered.set(textNode,shown);
+  }
   return element;
 }
 export function translateStaticUi(root,locale=currentLocale()){
