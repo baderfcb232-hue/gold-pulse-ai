@@ -45,7 +45,7 @@ test('exact English translations cover every static dashboard and account phrase
 test('localized display text never overwrites unknown trading, broker or customer values',()=>{
   assert.equal(translateUiText(' وقف الخسارة ','en'),' Stop loss ');
   assert.equal(translateUiText('نسبة المخاطرة %','en'),'Risk percentage %');
-  assert.equal(translateUiText('لا توجد بيانات تقويم','en'),'No calendar data');
+  assert.equal(translateUiText('لا توجد بيانات تقويم','en'),'No economic calendar data');
   assert.equal(translateUiText('PRICE_OR_SPREAD_MOVE','en'),'PRICE_OR_SPREAD_MOVE');
   assert.equal(translateUiText('4050.27','en'),'4050.27');
   assert.equal(translateUiText('عمر السعر 7 ثانية','en'),'Quote age: 7 seconds');
