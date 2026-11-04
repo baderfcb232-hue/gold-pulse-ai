@@ -63,7 +63,7 @@ test('language change re-renders cached signal and calendar dates without placin
   assert.match(live,/document\.addEventListener\('nabd:language-change',[\s\S]*?renderHistory\(\)[\s\S]*?renderNews\(\)/);
   assert.match(app,/document\.addEventListener\('nabd:language-change',[\s\S]*?renderNews\(\)/);
   assert.match(account,/document\.addEventListener\('nabd:language-change',[\s\S]*?sessions\(\)/);
-  assert.match(read('index.html'),/app\.js\?v=v2-locale-4/);
+  assert.match(read('index.html'),/app\.js\?v=v2-loader-2/);
   assert.match(read('accounts.html'),/accounts\.js\?v=v2-locale-4/);
   for(const page of ['landing.html','landing-en.html'])
     assert.match(read(page),/language-pref\.js\?v=2/);
