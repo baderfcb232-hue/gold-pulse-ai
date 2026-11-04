@@ -17,7 +17,7 @@ test('English homepage is genuinely LTR, translated and accurately describes ris
   assert.match(english,/href="\/dashboard"/);
   assert.match(english,/href="\/account"/);
   assert.match(english,/href="\/" data-lang-target="ar"/);
-  assert.doesNotMatch(english,/[\u0600-\u06FF]{3,}/g,'Only the Arabic-language link may contain Arabic');
+  assert.doesNotMatch(english.replace('العربية',''),/[\u0600-\u06FF]/,'Only the Arabic-language link may contain Arabic');
   assert.match(arabic,/href="\/en" data-lang-target="en"/);
   assert.match(arabic,/lang="ar" dir="rtl"/);
   assert.doesNotMatch(english,/guaranteed profit|90% win rate/i);
