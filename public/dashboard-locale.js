@@ -1,9 +1,10 @@
 /* NABD unified visual language selection. This module never changes prices or trading requests. */
 import {t,layoutFor} from '/i18n-core.js';
-import {translateStaticUi} from '/i18n-dom.js';
+import {translateStaticUi,translateUiText} from '/i18n-dom.js';
 (function(){
  'use strict';
  const key='nabd:dashboard:language',marketing='nabd-marketing-language';
+ const originalPageTitle=document.title;
  const pairs=[
   ['[data-view="overview"] span','الرئيسية','Overview'],
   ['[data-view="signals"] span','التوصيات','Signals'],
@@ -50,7 +51,8 @@ import {translateStaticUi} from '/i18n-dom.js';
   const h=document.getElementById('view-title'),label=viewLabels[selected];
   if(h&&label&&h.textContent!==(lang==='en'?label[1]:label[0]))h.textContent=lang==='en'?label[1]:label[0];
   translateStaticUi(document.body,lang);
-  document.dispatchEvent(new CustomEvent('nabd:language-change',{detail:{lang}}));
+  document.title=lang==='en'?translateUiText(originalPageTitle,lang):originalPageTitle;
+  if(typeof CustomEvent==='function')document.dispatchEvent(new CustomEvent('nabd:language-change',{detail:{lang}}));
  }
  function init(){
   const choice=document.getElementById('dashboard-language-choice');
