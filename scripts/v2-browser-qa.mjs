@@ -85,7 +85,7 @@ try{
    await page.goto(base+'/dashboard',{waitUntil:'domcontentloaded'});
    await page.waitForFunction(()=>Boolean(navigator.serviceWorker?.controller),null,{timeout:20000});
    const scriptUrl=await page.evaluate(()=>navigator.serviceWorker.controller?.scriptURL);
-   assert.match(scriptUrl,/\\/sw\\.js$/);
+   assert.ok(scriptUrl.endsWith('/sw.js'),'browser PWA controller must be the NABD service worker');
    checks++;results.push({title:'service worker controller',ok:true});
  }catch(e){failures.push('service worker controller: '+String(e));}
  finally{await ctx.close();}
