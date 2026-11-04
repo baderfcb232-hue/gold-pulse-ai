@@ -83,7 +83,7 @@ const dynamicPatterns=[
   [/^(.+) · توصية #(.+) · (.+) · (.+) · لم يصدر أمر MT5$/,m=>m[1]+' · Signal #'+m[2]+' · '+m[3]+' · '+translateUiText(m[4],'en')+' · No MT5 command submitted'],
   [/^آخر تحديث (.+)$/,m=>`Last updated: ${m[1]}`]
 ];
-const originals=new WeakMap(),attrs=new WeakMap();
+const originals=new WeakMap(),attrs=new WeakMap(),lastRendered=new WeakMap(),lastAttributes=new WeakMap();
 const skipTags=new Set(['SCRIPT','STYLE','NOSCRIPT','CODE','PRE','SVG','CANVAS','TEXTAREA']);
 export function currentLocale(){
   if(typeof document!=='undefined'&&document.documentElement?.lang==='en')return 'en';
@@ -138,12 +138,18 @@ export function translateStaticUi(root,locale=currentLocale()){
     if(skipTags.has(node.parentElement?.tagName)||node.parentElement?.closest?.('[data-nabd-no-translate]'))continue;
     const current=node.nodeValue;
     const prior=originals.get(node);
-    // Real-time feeds can reuse a text node; a fresh Arabic value supersedes the old original.
-    const original=current&&/[؀-ۿ]/.test(current)&&current!==prior?current:prior??current;
-    if(!original||!/[؀-ۿ]/.test(original))continue;
+    const previousOutput=lastRendered.get(node);
+    // New values from live feeds must win, even when they are English, numbers or source codes.
+    // Only reuse the old Arabic when this node still contains exactly our previous translation.
+    const original=/[؀-ۿ]/.test(current)?current:(prior!==undefined&&current===previousOutput?prior:null);
+    if(!original||!/[؀-ۿ]/.test(original)){
+      if(prior!==undefined&&current!==previousOutput){originals.delete(node);lastRendered.delete(node);}
+      continue;
+    }
     originals.set(node,original);
     const next=lang==='en'?translateUiText(original,lang):original;
     if(node.nodeValue!==next)node.nodeValue=next;
+    lastRendered.set(node,next);
   }
   // Translate exact author-controlled attributes. Do not alter hrefs, values or data-*.
   const elements=[root,...(typeof root.querySelectorAll==='function'?root.querySelectorAll('*'):[])];
@@ -151,13 +157,21 @@ export function translateStaticUi(root,locale=currentLocale()){
     if(!el?.getAttribute||skipTags.has(el.tagName)||el.closest?.('[data-nabd-no-translate]'))continue;
     for(const name of ['aria-label','placeholder','title','aria-description']){
       const value=el.getAttribute(name);
-      const stored=attrs.get(el)||{};
-      const original=value&&/[؀-ۿ]/.test(value)&&value!==stored[name]?value:stored[name]??value;
-      if(!original||!/[؀-ۿ]/.test(original))continue;
+      const stored=attrs.get(el)||{},rendered=lastAttributes.get(el)||{};
+      const original=value&&/[؀-ۿ]/.test(value)?value:
+        (stored[name]!==undefined&&value===rendered[name]?stored[name]:null);
+      if(!original||!/[؀-ۿ]/.test(original)){
+        if(stored[name]!==undefined&&value!==rendered[name]){
+          delete stored[name];delete rendered[name];
+        }
+        continue;
+      }
       if(!attrs.has(el))attrs.set(el,{});
+      if(!lastAttributes.has(el))lastAttributes.set(el,{});
       attrs.get(el)[name]=original;
       const next=lang==='en'?translateUiText(original,lang):original;
       if(value!==next)el.setAttribute(name,next);
+      lastAttributes.get(el)[name]=next;
     }
   }
 }
