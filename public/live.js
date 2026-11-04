@@ -1,6 +1,7 @@
 import {drawBrokerCandles} from './broker-chart.js';
 import {initMiniSparkline} from './mini-spark.js';
-export function initLiveWorkspace({stream, api, time, num, now, notify}) {
+import {inSignalDateRange} from './signal-date-filter.js';
+export function initLiveWorkspace({stream, api, time, num, now, notify, positionSize, getSizingContext}) {
   const $ = id => document.getElementById(id);
   const node = (tag, cls, text) => {const n = document.createElement(tag); if (cls) n.className = cls;
     if (text != null) n.textContent = String(text); return n;};
@@ -159,23 +160,88 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
   }
   function renderPlan(m, p, confirmed) {
     if (data?.membersOnly) {
-      put('scalp-plan-status', 'للمشتركين');
-      const box = node('div', 'empty-signal'), link = node('a', 'button primary', 'تسجيل الدخول'); link.href = '/auth';
-      box.append(node('h3', '', 'التوصيات لحسابات نبض'), node('p', '', 'سجّل الدخول ببريد مؤكد لمشاهدة الخطط وسجل المتابعة.'), link);
-      $('scalp-plan').replaceChildren(box); return;
+      put('scalp-plan-status','للمشتركين');
+      const box=node('div','empty-signal'),link=node('a','button primary','تسجيل الدخول');
+      link.href='/auth';
+      box.append(node('h3','','التوصيات لحسابات نبض'),node('p','','سجّل الدخول ببريد مؤكد لمشاهدة الخطط وسجل المتابعة.'),link);
+      $('scalp-plan').replaceChildren(box);return;
     }
-    put('scalp-plan-status', confirmed ? 'خطة متابعة' : p ? 'بانتظار التأكيد' : 'مراقبة');
-    if (!p) {const box = node('div', 'empty-signal'); box.append(node('span', 'empty-symbol', '⌖'), node('h3', '', m?.analysis?.status === 'WARMING' ? m.candle_kind === 'BROKER_OHLC' ? 'بانتظار تحميل شموع البروكر' : 'يجري بناء سجل ' + m.name : 'نبحث عن فرصة'),
-      node('p', '', m?.suspendedSignal ? 'متابعة الخطة معلّقة حتى يعود سعر حديث؛ مستوياتها محفوظة في سجل الفرص.' : 'تظهر مستويات الدخول والوقف والأهداف عندما يتوافق الاتجاه وتكتمل البيانات.')); $('scalp-plan').replaceChildren(box); return;}
-    const box = node('div'), heading = node('div', 'signal-heading'); heading.append(node('strong', p.side === 'BUY' ? 'buy' : 'sell', side(p.side)), pill(confirmed ? 'شروط السعر تحققت' : 'مستويات مشروطة', confirmed ? 'good' : 'warn'));
-    box.append(heading, node('p', 'subtle', confirmed ? 'خطة محفوظة عند إصدار الإشارة؛ لا تتغير مع تحرك السعر.' : 'راقب إغلاق دقيقة وتوافق RSI وقرب السعر؛ مستويات المراقبة تتغير مع تكوّن الشموع.'));
-    const values = node('div', 'signal-values');
-    const reward = value => num(Math.abs(value - p.entry) / p.risk_distance, 2);
-    for (const [label, value] of [[confirmed ? 'دخول ثابت' : 'مستوى المراقبة', p.entry], ['وقف الخسارة', p.sl], [`الهدف الأول · ${reward(p.tp1)}R`, p.tp1], [`الهدف الثاني · ${reward(p.tp2)}R`, p.tp2]]) {
-      const cell = node('div', 'value-cell'); cell.append(node('small', '', label), node('strong', 'number', fmt(value))); values.append(cell);}
-    if(m.execution_mode==='DEMO_WEBSITE')box.append(node('p','control-explanation','ترتبط هذه التوصية بالتنفيذ التلقائي على Demo. يفحص MT5 السعر والمخاطرة قبل الدخول؛ التأكيد في قسم الصفقات.'));
-    box.append(values, node('p', 'source-caption', `${p.source || m.source} · ${p.broker_symbol || m.symbol} · ${p.sampled ? 'شموع من عينات المصدر' : 'شموع المصدر'}`),
-      node('p', 'subtle', confirmed ? `صدرت ${time(p.issued_at)} · متبقي ${Math.max(0, Math.ceil(p.expires_at - now()))} ثانية` : 'مراقبة فقط؛ لا تُعامل كإشارة دخول مؤكدة.'));
+    const expired=Boolean(p?.expires_at&&p.expires_at<=now());
+    const stage=p?.status==='TP2'?'بلغ الهدف':p?.status==='SL'?'ضرب الستوب':p?.status==='EXPIRED'||expired?'انتهت الصلاحية':confirmed?'نشطة':'معلّقة';
+    put('scalp-plan-status',p?stage:'مراقبة');
+    if(!p){
+      const box=node('div','empty-signal');
+      box.append(node('span','empty-symbol','⌖'),node('h3','','بانتظار توصية مطابقة للشروط'),
+        node('p','','تظهر مستويات الدخول والستوب والأهداف عند وصول توصية صالحة من المصدر؛ لن نعرض أسعارًا افتراضية.'));
+      $('scalp-plan').replaceChildren(box);return;
+    }
+    const key=[p.id||p.issued_at,p.entry,p.sl,p.tp1,p.tp2,p.status,confirmed].join(':');
+    const previous=$('scalp-plan').firstElementChild;
+    if(previous?.dataset.planKey===key){
+      const remaining=previous.querySelector('[data-signal-expires]');
+      if(remaining)remaining.textContent=expired?'انتهت':Math.max(0,Math.ceil(p.expires_at-now()))+' ثانية';
+      return; // Keep balance/lot input focus intact during quote refreshes.
+    }
+    const box=node('div','featured-plan');box.dataset.planKey=key;
+    const heading=node('div','signal-heading');
+    heading.append(node('strong',p.side==='BUY'?'buy':'sell',side(p.side)),
+      pill(stage,stage==='بلغ الهدف'?'good':stage==='ضرب الستوب'?'bad':confirmed?'good':'warn'));
+    box.append(heading,node('p','subtle',confirmed?'مستويات توصية منشورة، وليست إثبات تنفيذ صفقة.':'مستويات مراقبة لم تُعتمد كإشارة تنفيذ.'));
+    const riskDistance=Math.abs(p.entry-p.sl),riskValid=Number.isFinite(riskDistance)&&riskDistance>0;
+    const rr=target=>riskValid&&Number.isFinite(target)?num(Math.abs(target-p.entry)/riskDistance,2)+'R':'—';
+    const values=node('div','signal-values');
+    for(const [name,value]of [['الدخول',p.entry],['وقف الخسارة',p.sl],
+      ['الهدف الأول · '+rr(p.tp1),p.tp1],['الهدف الثاني · '+rr(p.tp2),p.tp2]]){
+      const cell=node('div','value-cell');
+      cell.append(node('small','',name),node('strong','number',fmt(value)));
+      values.append(cell);
+    }
+    box.append(values);
+    const extras=node('div','signal-plan-extras');
+    for(const [name,value]of [['RR للهدف الأول',rr(p.tp1)],['RR للهدف الثاني',rr(p.tp2)],
+      ['مدة صلاحية الإشارة',(p.expires_at&&p.issued_at)?Math.round((p.expires_at-p.issued_at)/60)+' دقيقة':'—'],
+      ['حالة الخطة',stage]]){
+      const c=node('div');c.append(node('small','',name),node('strong','',value));extras.append(c);
+    }
+    box.append(extras);
+    const issued=node('p','subtle',`صدرت: ${time(p.issued_at,true)} · تنتهي: ${time(p.expires_at,true)} · `);
+    const remain=node('strong');remain.dataset.signalExpires='true';
+    remain.textContent=expired?'انتهت':Math.max(0,Math.ceil(p.expires_at-now()))+' ثانية';
+    issued.append(remain);
+    box.append(issued,node('p','source-caption',`${p.source||m?.source||'المصدر'} · ${p.broker_symbol||m?.symbol||symbol} · ${m?.execution_mode==='DEMO_WEBSITE'?'قد يُرسل الطلب إلى MT5 Demo عند تحقق شروط الأمان.':'متابعة مرجعية؛ لا تفتح صفقة تلقائيًا.'}`));
+    const buttons=node('div','signal-actions'),copy=node('button','button ghost','نسخ الدخول والستوب والأهداف');
+    copy.type='button';
+    copy.onclick=async()=>{
+      const text=`${p.broker_symbol||symbol} ${p.side}\nEntry: ${fmt(p.entry)}\nSL: ${fmt(p.sl)}\nTP1: ${fmt(p.tp1)}\nTP2: ${fmt(p.tp2)}\nRR1: ${rr(p.tp1)}\nExpires: ${time(p.expires_at,true)}`;
+      try{await navigator.clipboard.writeText(text);notify('تم نسخ مستويات التوصية.');}
+      catch{notify('تعذر النسخ التلقائي؛ استخدم قيم البطاقة مباشرة.',true);}
+    };
+    buttons.append(copy);box.append(buttons);
+    if(confirmed&&!expired&&riskValid&&typeof positionSize==='function'){
+      const form=node('form','signal-budget-form'),capital=node('input'),percent=node('input'),submit=node('button','button ghost','احسب اللوت المقترح');
+      const context=typeof getSizingContext==='function'?getSizingContext(symbol):null;
+      capital.type='number';capital.name='equity';capital.min='0.01';capital.step='0.01';capital.required=true;capital.placeholder='مثال: 2000';
+      if(Number.isFinite(context?.equity)&&context.equity>0)capital.value=context.equity;
+      percent.type='number';percent.name='risk';percent.min='0.01';percent.max='5';percent.step='0.01';percent.value='0.5';percent.required=true;
+      const cLabel=node('label','','الرصيد / حقوق الحساب'),pLabel=node('label','','المخاطرة %'),result=node('p','signal-budget-result','الحساب تقديري، ولا يرسل أمرًا إلى MT5.');
+      result.setAttribute('aria-live','polite');
+      cLabel.append(capital);pLabel.append(percent);submit.type='submit';
+      form.append(cLabel,pLabel,submit,result);
+      form.onsubmit=event=>{
+        event.preventDefault();
+        try{
+          const equity=Number(capital.value),riskPercent=Number(percent.value);
+          if(!Number.isFinite(equity)||equity<=0||!Number.isFinite(riskPercent)||riskPercent<=0||riskPercent>5)throw Error('أدخل رصيدًا صحيحًا ونسبة مخاطرة بين 0.01 و5%.');
+          if(p.side==='BUY'&&!(p.sl<p.entry)||p.side==='SELL'&&!(p.sl>p.entry))throw Error('الستوب غير صالح لاتجاه الصفقة.');
+          const info=typeof getSizingContext==='function'?getSizingContext(symbol):null;
+          if(!info?.spec)throw Error('مواصفات عقد هذا الأصل لم تصل من MT5؛ لا يمكن اقتراح لوت دقيق.');
+          const estimate=positionSize({equity,riskPercent,entry:p.entry,sl:p.sl,spec:info.spec,freeMargin:Number.isFinite(info.freeMargin)?info.freeMargin:Infinity});
+          result.textContent=estimate.volume>0?`اللوت المقترح: ${num(estimate.volume,8)} · ميزانية المخاطرة: ${num(estimate.budget)} · خسارة الوقف المقدّرة: ${num(estimate.loss)} · ${estimate.reason}`
+            :`لا يوجد لوت آمن ضمن الميزانية: ${estimate.reason}`;
+        }catch(error){result.textContent=error.message||'تعذر حساب اللوت.';}
+      };
+      box.append(form);
+    }
     $('scalp-plan').replaceChildren(box);
   }
   function signalLines() {
@@ -253,7 +319,8 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     try {const d = await api('/api/market/signals'); historyRows = d.signals || []; renderHistory();} catch {} finally {historyFetched = false;}
   }
   function renderHistory() {
-    const selected = $('scalp-history-filter').value, list = historyRows.filter(p => selected === 'ALL' || p.symbol === selected);
+    const selected = $('scalp-history-filter').value, range = $('scalp-history-date').value;
+    const list = historyRows.filter(p => (selected === 'ALL' || p.symbol === selected) && inSignalDateRange(Number(p.issued_at),range,now()));
     $('scalp-history-list').replaceChildren(...(list.length ? list.map(p => {const row = node('article', 'signal-row'), title = node('div'); title.append(node('small', 'signal-source', p.source + ' · متابعة افتراضية'), node('h3', p.side === 'BUY' ? 'buy' : 'sell', `${side(p.side)} · ${p.broker_symbol || p.symbol}`), node('small', 'subtle', time(p.issued_at, true)));
       const levels = node('div', 'level-inline'); for (const [label, value] of [['دخول', p.entry], ['وقف', p.sl], ['هدف أول', p.tp1], ['هدف ثان', p.tp2]]) {const cell = node('div'); cell.append(node('small', '', label), node('strong', '', fmt(value))); levels.append(cell);}
       row.append(title, levels, pill(status[p.status] || p.status, p.status === 'SL' ? 'bad' : p.status === 'TP2' ? 'good' : 'neutral')); return row;}) : [empty('لا توجد إشارات مؤكدة في هذا السجل بعد. فرص المراقبة تظهر على الرئيسية.') ]));
@@ -296,7 +363,8 @@ export function initLiveWorkspace({stream, api, time, num, now, notify}) {
     tf = b.dataset.tf; brokerChartKey=''; lastBrokerFetch=0;
     $('live-chart-tfs').querySelectorAll('button').forEach(x => {x.classList.toggle('active', x === b); x.setAttribute('aria-pressed', String(x === b));}); loadChart();
   };
-  $('scalp-history-filter').onchange = renderHistory; $('headline-filter').onchange = () => {newsStamp = ''; renderNews();};
+  $('scalp-history-filter').onchange = renderHistory;
+  $('scalp-history-date').onchange = renderHistory; $('headline-filter').onchange = () => {newsStamp = ''; renderNews();};
   stream.addEventListener('market', event => {try {applyMarket(JSON.parse(event.data));} catch {}});
   stream.addEventListener('news', event => {try {applyNews(JSON.parse(event.data));} catch {}});
   document.addEventListener('visibilitychange', () => {if (!document.hidden) {fetchLive(); loadHistory(); refreshBrokerQuotes();}});
