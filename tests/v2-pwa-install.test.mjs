@@ -35,7 +35,7 @@ test('offline mode shows an honest notice and never caches market APIs or broker
  const sw=read('sw.js').toString(),offline=read('offline.html').toString(),register=read('pwa-register.js').toString();
  assert.match(sw,/req\.mode!=='navigate'/);
  assert.match(sw,/url\.pathname\.startsWith\('\/api\/'\)/);
- assert.match(sw,/event\.respondWith\(fetch\(req\)\.catch/);
+ assert.match(sw,/event\.respondWith\(fetch\(req,\{cache:'no-store'\}\)\.catch/);
  assert.doesNotMatch(sw,/cache\.put\(|\/api\/market|OrderSend|\/api\/orders/);
  assert.match(offline,/لا تُعرض أي أسعار أو صفقات محفوظة على أنها حية/);
  assert.match(offline,/No live prices or trading signals|Live prices, signals and MT5 execution status are unavailable/);
