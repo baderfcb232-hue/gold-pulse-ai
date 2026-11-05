@@ -46,6 +46,14 @@ test('offline mode shows an honest notice and never caches market APIs or broker
   assert.equal(spawnSync(process.execPath,['--check',p],{encoding:'utf8'}).status,0,filename+' syntax');
  }
 });
+test('production landing smoke expectations follow the actual no-store service worker',()=>{
+ const workflow=readFileSync(new URL('../.github/workflows/landing-production-smoke.yml',import.meta.url),'utf8');
+ const sw=read('sw.js').toString();
+ assert.ok(sw.includes("fetch(req,{cache:'no-store'})"));
+ assert.ok(workflow.includes("b\"fetch(req,{cache:'no-store'})\""),'Production smoke must match the current SW navigation policy');
+ assert.ok(workflow.includes("b\"url.pathname.startsWith('/api/')\""),'Production smoke must verify API bypass');
+ assert.ok(workflow.includes("b'nabd-offline-shell-v2'"),'Production smoke must check the active offline cache version');
+});
 test('service worker rejects stale HTML and returns only the explicit offline notice on network failure',async()=>{
  const source=read('sw.js').toString(),listeners={};
  const fallback={kind:'offline-notice'},requests=[];
