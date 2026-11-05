@@ -54,6 +54,8 @@ test('Fusion may trade with neutral M15 near EMA band when H1/H4 and M5 confirm'
  for(const bar of bars.slice(-90)){
    bar.open=level;bar.close=level;bar.high=level+10;bar.low=level-10;
  }
+ // End just below the slow EMA so M15 is genuinely neutral, not a weak BUY.
+ bars.at(-1).close=level-.2;
  const a=analyzeBtcFusion(s,NOW);
  assert.equal(a.readinessChecks[6].pass,true,a.reasons.join(' | '));
  assert.equal(a.readinessChecks[7].pass,true,a.reasons.join(' | '));
