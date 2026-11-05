@@ -1,5 +1,5 @@
 #property strict
-#property version   "4.01"
+#property version   "4.04"
 #property description "NABD GOLD integrated Demo executor, telemetry and native scalp V1."
 
 #include <Trade/Trade.mqh>
@@ -289,7 +289,7 @@ int OnInit()
   {
 
    if(AccountInfoInteger(ACCOUNT_TRADE_MODE)!=ACCOUNT_TRADE_MODE_DEMO)
-     {Print("NABD 4.01 is a DEMO-only package.");return INIT_FAILED;}
+     {Print("NABD GOLD 4.04 is a DEMO-only package.");return INIT_FAILED;}
    if(InpBiasTimeframe!=PERIOD_M15 || InpEntryTimeframe!=PERIOD_M5 ||
       InpFastEmaPeriod!=8 || InpSlowEmaPeriod!=21 || InpRsiPeriod!=14 || InpAtrPeriod!=14)
      {Print("Native scalp V1 requires M15/M5, EMA8/21, RSI14 and ATR14.");return INIT_PARAMETERS_INCORRECT;}
@@ -696,6 +696,22 @@ bool BuildSignal(SignalData &signal)
 //+------------------------------------------------------------------+
 //| Order placement                                                  |
 //+------------------------------------------------------------------+
+// Reduce automatic volume for the fresh execution price, never enlarge it.
+// Pure arithmetic: broker min/step and the original per-leg risk budget apply.
+double GOLDRiskCappedVolume(const double requested,const double exposure,const double budget,
+                          const double minimum,const double step)
+  {
+   if(!MathIsValidNumber(requested) || !MathIsValidNumber(exposure) ||
+      !MathIsValidNumber(budget) || !MathIsValidNumber(minimum) || !MathIsValidNumber(step) ||
+      requested<minimum || minimum<=0.0 || step<=0.0 || exposure<=0.0 || budget<=0.0)return 0.0;
+   if(exposure<=budget+1.0e-8)return requested;
+   double target=requested*(budget/exposure);
+   if(target<minimum-1.0e-10)return 0.0;
+   double capped=minimum+MathFloor((target-minimum)/step+1.0e-9)*step;
+   if(capped<minimum-1.0e-10 || capped>requested || exposure*(capped/requested)>budget+1.0e-8)return 0.0;
+   return capped;
+  }
+
 bool PlaceSignal(const SignalData &signal)
   {
    g_website_attempt_code=0;g_website_attempt_retcode=0;g_website_attempt_deal_ticket=0;
@@ -766,11 +782,13 @@ bool PlaceSignal(const SignalData &signal)
      {g_website_attempt_code=118;return(false);}
    for(int leg=0;leg<legs;leg++)
      {
-      MqlTick tick;
+      MqlTick tick={};
       if(!SymbolInfoTick(g_symbol,tick) || tick.ask<=0.0 || tick.bid<=0.0 ||
          tick.ask<tick.bid || ServerNow()-tick.time>10 || tick.time>ServerNow()+2 ||
          (tick.ask-tick.bid)/g_point>InpMaxSpreadPoints || IsEmergencyStopActive())
-        {g_website_attempt_code=119;break;}
+        {g_website_attempt_code=119;LogEvent("ORDER_BLOCKED",StringFormat(
+           "reason_code=119,Quote/spread/emergency check failed,bid=%.8f,ask=%.8f,tick_age=%d,spread_limit=%d",
+           tick.bid,tick.ask,(int)(ServerNow()-tick.time),InpMaxSpreadPoints));break;}
       double price=signal.direction>0 ? tick.ask : tick.bid;
       double distance=signal.direction>0 ? tick.bid-signal.stop_loss : signal.stop_loss-tick.ask;
       double profit=0.0;
@@ -787,15 +805,35 @@ bool PlaceSignal(const SignalData &signal)
         {safety_code=125;safety_reason="Stop distance below broker minimum";}
       else if(!OrderCalcProfit(order_type,g_symbol,volume,price,signal.stop_loss,profit))
         {safety_code=126;safety_reason="Broker stop-loss profit calculation failed";}
-      else if(MathAbs(profit)>allowed_risk+1.0e-8)
-        {safety_code=127;safety_reason="Stop-loss exposure exceeds permitted risk";}
-      else if(DemoWebsiteNoDailyLimitsEnabled() && !ConcurrentWebsiteEntryAllowed(MathMax(0.0,-profit)))
+      if(safety_code==0 && MathAbs(profit)>allowed_risk+1.0e-8)
+        {
+         double before=volume;
+         double resized=manual_website ? 0.0 : GOLDRiskCappedVolume(volume,MathAbs(profit),allowed_risk,minimum,step);
+         resized=NormalizeDouble(resized,VolumeDigits(step));
+         if(resized>=minimum && resized<volume)
+           {
+            volume=resized;
+            LogEvent("LOT_REDUCED",StringFormat("price=%.*f,SL=%.*f,lot_before=%.8f,lot_after=%.8f,risk_budget=%.2f",
+               g_digits,price,g_digits,signal.stop_loss,before,volume,allowed_risk));
+            if(!OrderCalcProfit(order_type,g_symbol,volume,price,signal.stop_loss,profit))
+              {safety_code=126;safety_reason="Broker stop-loss calculation failed after lot reduction";}
+           }
+         else
+           {safety_code=127;safety_reason="No permitted broker lot fits fresh-price stop risk";}
+         if(safety_code==0 && MathAbs(profit)>allowed_risk+1.0e-8)
+           {safety_code=127;safety_reason="Fresh-price stop risk exceeds budget after reduction";}
+        }
+      if(safety_code==0 && DemoWebsiteNoDailyLimitsEnabled() && !ConcurrentWebsiteEntryAllowed(MathMax(0.0,-profit)))
         {safety_code=128;safety_reason="Aggregate open-position risk cap or hedging protection";}
-      else if(!MarginIsAcceptable(order_type,price,volume))
+      else if(safety_code==0 && !MarginIsAcceptable(order_type,price,volume))
         {safety_code=129;safety_reason="Insufficient free margin or maximum margin-use cap";}
       if(safety_code>0)
         {
-         LogEvent("ORDER_BLOCKED",StringFormat("reason_code=%d,%s",safety_code,safety_reason));
+         LogEvent("ORDER_BLOCKED",StringFormat(
+            "reason_code=%d,%s,price=%.*f,SL=%.*f,distance=%.8f,min_stop=%.8f,lot=%.8f,SL_loss=%.2f,risk_budget=%.2f,equity=%.2f,free_margin=%.2f,used_margin=%.2f,margin_cap_pct=%.2f",
+            safety_code,safety_reason,g_digits,price,g_digits,signal.stop_loss,distance,MinimumStopDistance(),
+            volume,MathAbs(profit),allowed_risk,AccountInfoDouble(ACCOUNT_EQUITY),
+            AccountInfoDouble(ACCOUNT_MARGIN_FREE),AccountInfoDouble(ACCOUNT_MARGIN),InpMaxMarginUsePercent));
          g_website_attempt_code=safety_code;
          break;
         }
@@ -1144,7 +1182,7 @@ bool ConcurrentWebsiteEntryAllowed(const double additional_risk)
      {LogEvent("ORDER_BLOCKED","Scaling beyond three requires all positions profitable and protected");return false;}
    double equity=AccountInfoDouble(ACCOUNT_EQUITY);
    if(equity<=0.0 || risk+additional_risk>=equity*InpMaxOpenRiskPercent/100.0)
-     {LogEvent("ORDER_BLOCKED","Existing aggregate stop risk reached account cap");return false;}
+     {LogEvent("ORDER_BLOCKED",StringFormat("Aggregate stop risk cap: existing=%.2f,additional=%.2f,cap=%.2f,equity=%.2f",risk,additional_risk,equity*InpMaxOpenRiskPercent/100.0,equity));return false;}
    return true;
   }
 
@@ -1730,7 +1768,10 @@ bool MarginIsAcceptable(const ENUM_ORDER_TYPE order_type,const double entry,cons
   {
    double margin=0.0;
    if(!OrderCalcMargin(order_type,g_symbol,volume,entry,margin))
-      return(false);
+     {LogEvent("ORDER_BLOCKED",StringFormat("Margin calculation failed,error=%d,lot=%.8f,price=%.8f",GetLastError(),volume,entry));return(false);}
+   LogEvent("MARGIN_CHECK",StringFormat("required=%.2f,free=%.2f,used=%.2f,cap=%.2f",margin,
+      AccountInfoDouble(ACCOUNT_MARGIN_FREE),AccountInfoDouble(ACCOUNT_MARGIN),
+      AccountInfoDouble(ACCOUNT_EQUITY)*InpMaxMarginUsePercent/100.0));
    double free_margin=AccountInfoDouble(ACCOUNT_MARGIN_FREE);
    if(free_margin<=0.0)
       return(false);
@@ -1795,7 +1836,7 @@ void UpdateChartPanel()
                              g_cycle_net_valid ? DoubleToString(g_cycle_net,2) : "unavailable",
                              (int)MathMax(0,InpCycleCooldownSeconds-(ServerNow()-g_last_cycle_end)),
                              g_cycle_closing ? "YES" : "NO");
-   string text=StringFormat("NABD GOLD integrated Demo v4.01\nSymbol: %s | State: %s\nTrend %s | RSI %.2f | ATR %.*f\nSpread %.1f pts | Today trades %d/%s | Today net %.2f\nRisk %.2f%% per cycle | RR %.2f | News filter %s\nEmergency key: %s",
+   string text=StringFormat("NABD GOLD integrated Demo v4.04\nSymbol: %s | State: %s\nTrend %s | RSI %.2f | ATR %.*f\nSpread %.1f pts | Today trades %d/%s | Today net %.2f\nRisk %.2f%% per cycle | RR %.2f | News filter %s\nEmergency key: %s",
                             g_symbol,state,trend,rsi,g_digits,atr,spread,CountTodayEntries(),InpMaxTradesPerDay==0?"unlimited":IntegerToString(InpMaxTradesPerDay),
                             GetTodayNet(),InpRiskPercent,InpRewardRisk,InpUseNewsFilter ? "ON" : "OFF",g_emergency_key);
    Comment(text+cycle+"\nMode: "+(InpNABDWebsiteRecommendations?"NABD website recommendations":"Native local scalp")+"\nBridge: "+g_integrated_status);
