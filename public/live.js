@@ -23,7 +23,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, priceFee
   let lastBrokerFetch = 0, quotePolling = false, lastQuoteStamp = '', cachedBrokerQuote = null;
   const seenSignals = new Set();
   const mini = initMiniSparkline({$,formatPrice:fmt,onQuote:(id,value,detail)=>priceFeedback?.observe(id,value,detail)});
-  const loaders = typeof document.querySelectorAll === 'function' ? createMarketLoaders() : {ready(){}};
+  const loaders = typeof document.querySelectorAll === 'function' ? createMarketLoaders() : {ready(){},fail(){}};
   const market = () => data?.markets?.[symbol];
   const fresh = m => Boolean(m?.quote && m.connection === 'LIVE' && now() - m.quote.time <= m.quoteTtl && Date.now() - lastServerSeen < 12000);
   const activePlan = () => {const m = market(); return fresh(m) && m.currentSignal?.expires_at > now() ? m.currentSignal : null;};
