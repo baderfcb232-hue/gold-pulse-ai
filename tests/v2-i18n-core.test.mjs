@@ -39,7 +39,7 @@ import {createApplication} from '../server.mjs';
 test('shared translation module loads on dashboard and protects trading/API routes',async t=>{
   const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
   const locale=readFileSync(new URL('../public/dashboard-locale.js',import.meta.url),'utf8');
-  assert.match(html,/dashboard-locale\.js\?v=v2-i18n-5" type="module"/);
+  assert.match(html,/dashboard-locale\.js\?v=compact-20261105" type="module"/);
   assert.match(locale,/import \{t,layoutFor\} from '\/i18n-core\.js'/);
   assert.match(locale,/t\('lang\.ar',lang\)/);
   const dir=mkdtempSync(join(tmpdir(),'nabd-i18n-core-'));

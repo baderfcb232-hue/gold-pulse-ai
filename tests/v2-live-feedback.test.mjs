@@ -73,7 +73,7 @@ test('site serves toast and price animations without enabling any trading action
  const base='http://127.0.0.1:'+app.server.address().port;
  const dash=await fetch(base+'/dashboard');
  assert.equal(dash.status,200);
- assert.match(await dash.text(),/live-feedback\.css\?v=v2-1/);
+ assert.match(await dash.text(),/live-feedback\.css\?v=bottom-20261105/);
  for(const path of ['/toast-ui.js','/price-feedback.js','/live-feedback.css'])assert.equal((await fetch(base+path)).status,200);
  assert.equal((await fetch(base+'/api/account')).status,401);
  assert.equal((await (await fetch(base+'/healthz')).json()).ok,true);

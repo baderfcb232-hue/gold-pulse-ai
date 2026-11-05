@@ -40,3 +40,84 @@
 @media(prefers-reduced-motion:reduce){
  .mini-market-card{transition:none!important;transform:none!important}
 }
+
+
+/* NABD V2 compact preferences: the existing native selects remain as state
+   adapters for locale/theme modules, but never consume visible screen space.
+   The two focusable buttons provide the only visible interaction surface. */
+.header .nav-footer{
+ position:fixed;inset-inline-start:22px;inset-inline-end:auto;bottom:18px;
+ display:flex;flex-flow:row nowrap;align-items:center;justify-content:center;gap:5px;
+ width:max-content;max-width:calc(100vw - 24px);min-width:0;
+ margin:0;padding:5px;border:1px solid var(--border);border-radius:15px;
+ background:var(--card);box-shadow:0 8px 28px #001d2440;z-index:18;
+}
+.header .nav-footer :is(.theme-picker,.language-picker){
+ position:absolute!important;inline-size:1px!important;block-size:1px!important;
+ min-width:0!important;margin:0!important;padding:0!important;border:0!important;
+ overflow:hidden;clip-path:inset(50%);opacity:0;pointer-events:none;
+}
+.header .nav-footer .nabd-quick-button{
+ flex:0 0 44px;display:inline-flex;align-items:center;justify-content:center;
+ width:44px;height:44px;min-height:44px;min-width:44px;
+ padding:0;border:1px solid var(--border);border-radius:11px;
+ background:var(--card);color:var(--ink);font:700 15px/1 var(--font);
+ box-shadow:none;cursor:pointer;touch-action:manipulation;
+}
+.header .nav-footer .nabd-quick-button:hover{background:var(--elevated);border-color:#0f9488}
+.header .nav-footer .nabd-quick-button:focus-visible{outline:3px solid #0f9488;outline-offset:2px}
+.header .nav-footer .nabd-quick-icon{font-size:25px;line-height:1}
+.header .nav-footer .nabd-quick-language{font-family:system-ui,sans-serif;font-size:13px;letter-spacing:.5px;direction:ltr}
+:root[data-nabd-theme="light"] .header .nav-footer .nabd-quick-button{background:#fff;color:#0b5b55;border-color:#d1e1e5}
+:root[data-nabd-theme="dark"] .header .nav-footer .nabd-quick-button{background:#20303a;color:#e5f5ef;border-color:#405761}
+@media(min-width:761px) and (max-width:1180px){
+ .header .nav-footer{inset-inline-start:auto;inset-inline-end:16px}
+}
+@media(max-width:760px){
+ /* Keep six actual navigation destinations in ONE row, unlike the previous
+    full-width preference sheet that pushed content below Safari's toolbar. */
+ .header{display:grid;grid-template-columns:minmax(0,1fr) auto auto;
+  align-items:center;column-gap:7px;row-gap:0;min-width:0;padding:10px 12px;min-height:72px}
+ .header .brand{min-width:0;overflow:hidden}
+ .header .brand .brand-logo{width:104px;height:45px;max-width:100%;object-fit:contain}
+ .header>.button{margin:0!important;min-width:0;min-height:42px;
+  padding:7px 9px;font-size:11px;line-height:1.25;white-space:nowrap}
+ .header .nav{
+  position:fixed;inset-inline:0;top:auto;bottom:0;
+  display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-auto-flow:row;
+  align-items:stretch;justify-content:initial;flex:none;flex-wrap:nowrap;
+  width:100%;max-width:none;min-width:0;height:auto;
+  padding:7px 7px calc(7px + env(safe-area-inset-bottom));
+  margin:0;gap:2px;overflow:visible;z-index:12;
+  background:#111d25;border-top:1px solid #34464d;backdrop-filter:blur(12px);
+ }
+ .header .nav .nav-button{
+  display:flex;flex:initial;flex-direction:column;justify-content:center;align-items:center;
+  min-width:0;min-height:55px;margin:0;padding:6px 1px;
+  font-size:10px;line-height:1.4;text-align:center;
+  gap:3px;color:#c0d1d7;white-space:nowrap;
+ }
+ .header .nav .nav-button svg{width:20px;height:20px}
+ .header .nav .nav-button.selected{background:#def5ee;color:#075c54;border-color:#aedbcf}
+ :root[data-nabd-theme="light"] .header .nav{background:#15242d;border-top-color:#3b4d56}
+ :root[data-nabd-theme="dark"] .header .nav{background:#101a22;border-top-color:#33444c}
+ .header .nav-footer{
+  position:fixed;inset-inline-start:auto;inset-inline-end:12px;
+  bottom:calc(77px + env(safe-area-inset-bottom));
+  order:initial;display:flex;grid-template-columns:none;flex:0 0 auto;
+  align-items:center;justify-content:center;width:max-content;max-width:calc(100vw - 24px);
+  min-width:0;height:auto;gap:5px;margin:0;padding:4px;
+  border-radius:14px;box-shadow:0 8px 24px #0a1b2440;z-index:19;
+ }
+ html[dir="ltr"] .header .nav-footer,html[dir="rtl"] .header .nav-footer{position:fixed;inset-inline-start:auto;inset-inline-end:12px;bottom:calc(77px + env(safe-area-inset-bottom))}
+ .main{padding-bottom:calc(140px + env(safe-area-inset-bottom))}
+}
+@media(max-width:360px){
+ .header{padding-inline:8px;column-gap:4px}
+ .header .brand .brand-logo{width:84px;height:40px}
+ .header>.button{font-size:10px;padding:7px 6px}
+ .header .nav .nav-button{font-size:9px}
+}
+@media(prefers-reduced-motion:reduce){
+ .header .nav-footer .nabd-quick-button{transition:none!important}
+}

@@ -37,6 +37,33 @@ import {translateStaticUi,translateUiText,observeLocaleUi} from '/i18n-dom.js?v=
  const viewLabels={overview:['نظرة السوق','Market overview'],signals:['التوصيات','Trading signals'],positions:['الصفقات','Trades'],news:['الأخبار الاقتصادية','Economic news'],results:['النتائج','Results'],settings:['الإعدادات والربط','Settings and connectivity']};
  let lang='ar';
  try{const saved=localStorage.getItem(key)||localStorage.getItem(marketing);lang=saved==='en'?'en':'ar'}catch{}
+
+ // Small actions are presentation adapters for the existing, tested selectors.
+ // A click goes through their normal change event; MT5 and API data are untouched.
+ function refreshQuickControls(){
+  const language=document.getElementById('nabd-language-quick');
+  const theme=document.getElementById('nabd-theme-quick');
+  const footer=document.querySelector('.nav-footer');
+  const dark=document.documentElement.getAttribute('data-nabd-theme')==='dark';
+  if(footer)footer.setAttribute('aria-label',lang==='en'?'Appearance and language':'إعدادات اللغة والمظهر');
+  if(language){
+   const short=language.querySelector('.nabd-quick-language');
+   if(short)short.textContent=lang==='en'?'AR':'EN';
+   const label=lang==='en'?'Switch language to Arabic':'تغيير اللغة إلى الإنجليزية';
+   language.setAttribute('aria-label',label);
+   language.title=lang==='en'?'Arabic':'English';
+  }
+  if(theme){
+   const icon=theme.querySelector('.nabd-quick-icon');
+   if(icon)icon.textContent=dark?'☼':'☾';
+   theme.setAttribute('aria-pressed',String(dark));
+   const label=dark?(lang==='en'?'Switch to light mode':'التبديل إلى المظهر الفاتح'):
+     (lang==='en'?'Switch to dark mode':'التبديل إلى المظهر الداكن');
+   theme.setAttribute('aria-label',label);
+   theme.title=label;
+  }
+ }
+
  function translate(){
   const layout=layoutFor(lang);
   document.documentElement.lang=layout.lang;document.documentElement.dir=layout.dir;
@@ -52,6 +79,7 @@ import {translateStaticUi,translateUiText,observeLocaleUi} from '/i18n-dom.js?v=
   if(h&&label&&h.textContent!==(lang==='en'?label[1]:label[0]))h.textContent=lang==='en'?label[1]:label[0];
   translateStaticUi(document.body,lang);
   document.title=lang==='en'?translateUiText(originalPageTitle,lang):originalPageTitle;
+  refreshQuickControls();
   if(typeof CustomEvent==='function')document.dispatchEvent(new CustomEvent('nabd:language-change',{detail:{lang}}));
  }
  function init(){
@@ -63,6 +91,26 @@ import {translateStaticUi,translateUiText,observeLocaleUi} from '/i18n-dom.js?v=
       try{localStorage.setItem(key,lang);localStorage.setItem(marketing,lang)}catch{}
       translate();
     });
+  }
+  const themeChoice=document.getElementById('dashboard-theme-choice');
+  const quickTheme=document.getElementById('nabd-theme-quick');
+  const quickLanguage=document.getElementById('nabd-language-quick');
+  quickLanguage?.addEventListener('click',()=>{
+   if(!choice)return;
+   choice.value=lang==='en'?'ar':'en';
+   choice.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  quickTheme?.addEventListener('click',()=>{
+   if(!themeChoice)return;
+   const current=document.documentElement.getAttribute('data-nabd-theme');
+   themeChoice.value=current==='dark'?'light':'dark';
+   themeChoice.dispatchEvent(new Event('change',{bubbles:true}));
+   refreshQuickControls();
+  });
+  themeChoice?.addEventListener('change',refreshQuickControls);
+  if(typeof matchMedia==='function'){
+   const os=matchMedia('(prefers-color-scheme: dark)');
+   if(os.addEventListener)os.addEventListener('change',refreshQuickControls);
   }
   document.querySelector('.nav')?.addEventListener('click',event=>{
     if(event.target.closest('[data-view]'))queueMicrotask(translate);
