@@ -401,7 +401,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     const mt5FeedFresh = Boolean(btcSnapshot && terminal &&
       age <= defaults.quoteTtl && receiptAge <= defaults.quoteTtl);
     const sourceMatches = market?.source_id?.startsWith('MT5:') === true;
-    const decision = btcSnapshot ? websiteExecutionReview(btcSnapshot) :
+    const decision = btcSnapshot ? websiteExecutionReview(quoted) :
       {ready:false, reason:'NO_BTC_MT5_SNAPSHOT'};
     const bridge = websiteBridgeState('BTCUSD');
     return {
@@ -850,7 +850,11 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         activity.lastPollAt = clock();
         await refreshWebsiteActivity(symbol, source);
         const tradeSizing=commandJournal?.getTradeSizing ? await commandJournal.getTradeSizing(entrySourceKey(chosen)) : {mode:'AUTO'};
-        const decision=websiteExecutionReview(chosen,tradeSizing),p=decision.plan;
+        // BTC analysis and execution must use the same latest source-fenced tick.
+        // The overlay retains the full snapshot EA heartbeat/account/positions;
+        // quote-only updates cannot refresh those execution permissions.
+        const executionSnapshot=symbol==='BTCUSD' ? latestBtcSnapshot() : chosen;
+        const decision=websiteExecutionReview(executionSnapshot,tradeSizing),p=decision.plan;
         const candidate=marketFeed.publicState().markets[symbol]?.currentSignal ||
           marketFeed.history(symbol).find(q => q?.status==='TRACKING' &&
             q.issued_at <= clock()+5 && clock()-q.issued_at <= 75 &&

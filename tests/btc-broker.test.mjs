@@ -301,3 +301,50 @@ test('one-second BTC ticks are broker fenced and cannot refresh stale full EA pe
   assert.equal(expired.quotes.BTCUSD.quote.bid,raw.bid);
   assert.equal(expired.quotes.BTCUSD.connection,'STALE');
 });
+
+test('BTC approval follows the one-second tick, rejects moved price, then recovers without replay',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'nabd-btc-live-approval-'));
+  let now=NOW;
+  const claimed=new Set();
+  const journal={
+    claimWebsite:async(source,plan,time)=>{
+      const key=source+plan.id;if(claimed.has(key))return null;
+      claimed.add(key);return {id:91,time,status:'DISPATCHED',plan};
+    },
+    websiteEntries:async()=>[],close:async()=>{}
+  };
+  const raw=btcRaw(),token='btc-latest-quote-test-token-xxxxxxxxxxxx';
+  const cost={spreadBps:.2,slippageBps:.01,commissionBps:.01,carryBpsPerDay:.01,acknowledged:true};
+  const app=createApplication({dataDir:dir,clock:()=>now,commandJournal:journal,ingestToken:token,
+    config:{publicationEnabled:true,demoRecommendationExecution:true,
+      brokerCostProfiles:[{accountRef:raw.account_ref,broker:raw.broker,symbol:raw.symbol,
+        magic:raw.execution.managed_magic,verifiedAt:NOW,evidence:'SYNTHETIC TEST',costs:cost}]}});
+  t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
+  await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));app.ingest(raw);
+  const base='http://127.0.0.1:'+app.server.address().port;
+  const headers={'Content-Type':'application/json',Authorization:'Bearer '+token};
+  const source={account_ref:raw.account_ref,broker:raw.broker,symbol:raw.symbol,magic:raw.execution.managed_magic};
+  const post=(path,data)=>fetch(base+path,{method:'POST',headers,body:JSON.stringify(data)});
+  const market=app.marketFeed.publicState().markets.BTCUSD;
+  const plan=market.currentSignal;assert.ok(plan);
+  const risk=Math.abs(plan.entry-plan.sl);
+  const sign=plan.side==='BUY'?1:-1;
+  now=NOW+1;
+  // Full snapshot would still permit this entry; the newer tick must block it.
+  assert.equal((await post('/api/mt5/btc-quote',{...source,quote_at:now,
+    bid:raw.bid+sign*risk*.2,ask:raw.ask+sign*risk*.2})).status,200);
+  assert.equal(await (await post('/api/bridge/website-recommendation',source)).text(),'');
+  assert.equal(claimed.size,0);
+  // Reverse the mismatch too: a stale full-snapshot price must not reject
+  // the newer safe tick when the immutable recommendation is still valid.
+  app.ingest({...raw,quote_at:now,bid:raw.bid+sign*risk*.2,ask:raw.ask+sign*risk*.2,
+    ea:{...raw.ea,heartbeat_at:now}});
+  now=NOW+2;
+  assert.equal((await post('/api/mt5/btc-quote',{...source,quote_at:now,bid:raw.bid,ask:raw.ask})).status,200);
+  assert.match(await (await post('/api/bridge/website-recommendation',source)).text(),/^NBWEB1\|/);
+  assert.equal(claimed.size,1);
+  assert.equal(await (await post('/api/bridge/website-recommendation',source)).text(),'');
+  now=NOW+13;
+  assert.equal((await post('/api/mt5/btc-quote',{...source,quote_at:now,bid:raw.bid,ask:raw.ask})).status,409);
+  assert.equal(await (await post('/api/bridge/website-recommendation',source)).text(),'');
+});
