@@ -60,7 +60,40 @@ try{
       const text=(await page.locator('#live-update-age').innerText()).trim();
       assert.doesNotMatch(text,/[\u0600-\u06FF]/,tag+' untranslated quote status');
      }
-     // Functional switching must work in touch browsers as well as desktop.
+     // Touch-target buttons replace the old full-width settings sheet.
+     const quickLanguage=page.locator('#nabd-language-quick'),quickTheme=page.locator('#nabd-theme-quick');
+     assert.equal(await quickLanguage.count(),1);
+     assert.equal(await quickTheme.count(),1);
+     const current=await page.locator('html').getAttribute('data-nabd-theme');
+     await quickTheme.tap();
+     await page.waitForFunction(previous=>document.documentElement.getAttribute('data-nabd-theme')!==previous,
+       current,{timeout:12000});
+     await quickTheme.tap();
+     await page.waitForFunction(previous=>document.documentElement.getAttribute('data-nabd-theme')===previous,
+       current,{timeout:12000});
+     await quickLanguage.tap();
+     await page.waitForFunction(expected=>document.documentElement.lang===expected,
+       lang==='ar'?'en':'ar',{timeout:12000});
+     await quickLanguage.tap();
+     await page.waitForFunction(expected=>document.documentElement.lang===expected,lang,{timeout:12000});
+     const layout=await page.evaluate(()=>{
+       const nav=document.querySelector('.header .nav'),prefs=document.querySelector('.header .nav-footer');
+       const n=nav.getBoundingClientRect(),p=prefs.getBoundingClientRect(),toasts=getComputedStyle(document.querySelector('#toasts'));
+       return {viewport:document.documentElement.clientWidth,
+         columns:getComputedStyle(nav).gridTemplateColumns.split(' ').length,
+         grid:getComputedStyle(nav).display,
+         prefsWidth:p.width,prefsBottom:p.bottom,navTop:n.top,
+         toastTop:toasts.top,toastBottom:parseFloat(toasts.bottom)};
+     });
+     assert.ok(layout.prefsWidth<150,tag+' compact controls '+JSON.stringify(layout));
+     assert.equal(layout.toastTop,'auto',tag+' notifications should be bottom anchored');
+     if(layout.viewport<=760){
+       assert.equal(layout.grid,'grid',tag+' six-section nav should remain a grid');
+       assert.equal(layout.columns,6,tag+' six nav columns');
+       assert.ok(layout.prefsBottom<=layout.navTop+3,tag+' quick buttons overlap nav');
+       assert.ok(layout.toastBottom>90,tag+' bottom toasts must clear nav');
+     }
+     // Keep native select adapters compatible with previously saved preferences.
      const picker=page.locator('#dashboard-language-choice');
      await picker.selectOption(lang==='ar'?'en':'ar');
      await page.waitForFunction(v=>document.documentElement.lang===v,lang==='ar'?'en':'ar',{timeout:12000});
