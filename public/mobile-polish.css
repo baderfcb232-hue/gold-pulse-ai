@@ -109,6 +109,7 @@
   min-width:0;height:auto;gap:5px;margin:0;padding:4px;
   border-radius:14px;box-shadow:0 8px 24px #0a1b2440;z-index:19;
  }
+ html[dir="ltr"] .header .nav-footer,html[dir="rtl"] .header .nav-footer{position:fixed;inset-inline-start:auto;inset-inline-end:12px;bottom:calc(77px + env(safe-area-inset-bottom))}
  .main{padding-bottom:calc(140px + env(safe-area-inset-bottom))}
 }
 @media(max-width:360px){
