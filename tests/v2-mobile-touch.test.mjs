@@ -10,7 +10,7 @@ test('mobile layouts keep controls reachable in both directions',()=>{
  const css=read('mobile-polish.css'),html=read('index.html');
  for(const token of ['@media(max-width:760px)','@media(max-width:420px)','grid-template-columns:minmax(0,1fr)','min-height:44px','.mini-market-chart:focus-visible','touch-action:pan-y'])
    assert.ok(css.includes(token),'missing '+token);
- assert.match(html,/mobile-polish\.css\?v=mobile-1/);
+ assert.match(html,/mobile-polish\.css\?v=compact-20261105/);
  assert.match(html,/id="mini-market-chart" tabindex="0" role="group" aria-describedby="mini-market-hover"/);
  assert.doesNotMatch(css,/OrderSend|\/api\/|fetch\(/);
  assert.equal((css.match(/\{/g)||[]).length,(css.match(/\}/g)||[]).length);
