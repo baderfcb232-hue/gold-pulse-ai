@@ -14,6 +14,7 @@ const corePairs=Object.fromEntries(Object.keys(translations.ar).map(k=>[translat
 const en=Object.freeze({...corePairs,...dashboardStaticEnglish,...accountStaticEnglish,...attributeStaticEnglish,...runtimeStatusEnglish,...liveStatusEnglish,...appExtraEnglish,...safetyStatusEnglish,...serverStatusEnglish});
 const dynamicPatterns=[
   [/^عمر السعر ([\d,.]+) ثانية$/,m=>`Quote age: ${m[1]} seconds`],
+  [/^(بث Coinbase المباشر؛|جلب Coinbase الاحتياطي كل ثانية؛) سعر BTC-USD على المنصة\. مستقل عن سعر تنفيذ بروكرك\.$/,m=>translateUiText(m[1],'en')+' BTC-USD platform quote. This quote is separate from your broker execution price.'],
   [/^عمر آخر تيك حقيقي ([\d,.]+) ثانية$/,m=>`Last real tick age: ${m[1]} seconds`],
   [/^([\d,.]+) نقطة$/,m=>`${m[1]} points`],
   [/^([\d,.]+) دقيقة$/,m=>`${m[1]} minutes`],

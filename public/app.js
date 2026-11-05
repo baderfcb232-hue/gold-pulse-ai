@@ -1,9 +1,9 @@
 import {positionSize, ema, botHeartbeatFresh, BOT_CONTROL_TTL} from '/engine.mjs';
-import {initLiveWorkspace} from '/live.js?v=v2-loader-2';
+import {initLiveWorkspace} from '/live.js?v=v2-locale-5';
 import {inSignalDateRange} from '/signal-date-filter.js';
 import {createStateConnection} from '/state-connection.js';
 import {requestJson} from '/http.js';
-import {translateUiText,currentLocale,setLocalizedText} from '/i18n-dom.js?v=v2-i18n-4';
+import {translateUiText,currentLocale,setLocalizedText} from '/i18n-dom.js?v=v2-i18n-5';
 import {createToastCenter} from '/toast-ui.js';
 import {createPriceFeedback} from '/price-feedback.js';
 import {createMarketLoaders} from '/market-loaders.js?v=v2-loader-2';
@@ -118,7 +118,7 @@ function renderOverview(){
   const stages = s.publicationReadiness || [], missing = stages.filter(x => !x.ready);
   const summary = e('summary', '', stages.length ? `متطلبات إرسال تليجرام · ${missing.length ? missing.length + ' بانتظار الإكمال' : 'مكتملة؛ ننتظر فرصة مستوفية للشروط'}` : 'متطلبات الإرسال بانتظار بيانات الخادم');
   readiness.replaceChildren(summary, ...stages.map(stage => {
-    const row = e('p', 'subtle'); row.textContent = `${stage.ready ? '✓' : '○'} ${stage.label}: ${stage.detail}`; return row;
+    const row = e('p', 'subtle'); row.textContent = `${stage.ready ? '✓' : '○'} ${translateUiText(stage.label)}: ${translateUiText(stage.detail)}`; return row;
   }));
   put('score',live&&s.confidence!=null?`${num(s.confidence,0)} / 100`:'—');$('score-fill').style.width=live&&s.confidence!=null?Math.min(100,Math.max(0,s.confidence))+'%':'0%';
   put('banner-title',live?(!mainReady?'انتظار البوت':risk==='BLOCKED'?'الدخول متوقف مؤقتًا':s.aiDecision==='WAIT'?'متابعة السوق':ea?'خطة صادرة من البوت':'تحققت شروط إشارة جديدة'):(labels[c]||'انتظار الربط'));

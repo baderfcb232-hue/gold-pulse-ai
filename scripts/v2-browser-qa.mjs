@@ -35,6 +35,66 @@ try{
      await page.waitForTimeout(160);
      assert.equal(await page.locator('html').getAttribute('dir'),lang==='en'?'ltr':'rtl',title+' direction');
      assert.equal(await page.locator('html').getAttribute('data-nabd-theme'),theme,title+' appearance');
+     // Verify actual computed alert colors, not just static CSS tokens.
+     if(width===390 && route==='/dashboard'){
+       const colors=await page.evaluate(()=>{
+         const box=document.createElement('div');
+         box.className='toast-stack';
+         box.style.position='static';
+         box.style.pointerEvents='none';
+         document.body.append(box);
+         const values={};
+         for(const kind of ['error','success','warning','info']){
+           const toast=document.createElement('div');
+           toast.className='toast';
+           toast.dataset.kind=kind;
+           toast.textContent='Test only';
+           box.append(toast);
+           const computed=getComputedStyle(toast);
+           values[kind]={foreground:computed.color,background:computed.backgroundColor};
+           toast.remove();
+         }
+         box.remove();
+         return values;
+       });
+       const brightness=col=>{
+         const parts=(col.match(/[\d.]+/g)||[]).slice(0,3).map(Number);
+         assert.equal(parts.length,3,'Missing computed RGB '+col);
+         const [red,green,blue]=parts.map(v=>{
+           const x=v/255;return x<=0.04045?x/12.92:((x+.055)/1.055)**2.4;
+         });
+         return red*.2126+green*.7152+blue*.0722;
+       };
+       for(const [kind,value] of Object.entries(colors)){
+         const a=brightness(value.foreground),b=brightness(value.background);
+         const contrast=(Math.max(a,b)+.05)/(Math.min(a,b)+.05);
+         assert.ok(contrast>=4.5,title+' '+kind+' notification contrast '+contrast.toFixed(2));
+       }
+       results.push({title:title+' alert WCAG AA',pass:true});
+       checks++;
+     }
+     // Report any visible Arabic left in the English shell; user-provided news,
+     // brand marks and the Arabic language-switch option are intentionally excluded.
+     if(width===390 && lang==='en' && theme==='light'){
+       const remaining=await page.evaluate(()=>{
+         const seen=new Set();
+         for(const el of document.querySelectorAll('body *')){
+           if(el.closest('script,style,[hidden],.brand,.brand-word,[lang="ar"],select option[value="ar"]'))continue;
+           if(!el.getClientRects().length||getComputedStyle(el).visibility==='hidden')continue;
+           for(const node of el.childNodes){
+             if(node.nodeType!==3)continue;
+             const value=(node.textContent||'').trim();
+             if(value && /[\u0600-\u06FF]/.test(value))seen.add(value.slice(0,190));
+           }
+         }
+         return [...seen].slice(0,35);
+       });
+       console.log('NABD English visible-copy audit:',JSON.stringify({page:route,remaining}));
+       assert.deepEqual(remaining,[],title+' unlocalized Arabic text in English UI');
+       results.push({title:title+' English copy audit',remaining});
+       checks++;
+     }
+
      const metrics=await page.evaluate(()=>{
        const root=document.documentElement,body=document.body;
        const viewport=root.clientWidth,scroll=Math.max(root.scrollWidth,body.scrollWidth);

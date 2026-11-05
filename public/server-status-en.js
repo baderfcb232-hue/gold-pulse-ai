@@ -49,6 +49,7 @@ export const serverStatusEnglish=Object.freeze({
   "بيانات حديثة": "Fresh data",
   "ننتظر سعرًا حديثًا وحالة البوت؛ السعر القديم وحده لا يثبت تعطل الجسر": "Waiting for a fresh quote and bot status; an old quote alone does not prove the bridge is down",
   "تكاليف حساب الوسيط": "Broker account trading costs",
+  "تكاليف هذا الحساب والرمز لم تُؤكّد بعد، أو تجاوزها السبريد الحالي.": "Trading costs for this account and symbol are not yet verified, or the current spread exceeds the limit.",
   "مضبوطة والسبريد ضمن الحد": "Configured; spread within the permitted range",
   "شموع M5 وM15 وH1 وH4": "M5, M15, H1 and H4 candles",
   "الشموع متوفرة؛ توافق الاتجاه يُفحص لكل فرصة": "Candles available; trend alignment is checked for each opportunity",

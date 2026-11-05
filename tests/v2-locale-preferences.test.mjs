@@ -55,7 +55,7 @@ test('every live UI entry imports the exact same i18n DOM module URL',()=>{
   for(const path of ['app.js','live.js','accounts.js','dashboard-locale.js','account-language.js']){
     const match=read(path).match(/from ['"](\.?\/i18n-dom\.js\?v=[^'"]+)['"]/);
     assert.ok(match,path+' must import the shared translation module');
-    assert.equal(match[1].replace(/^\.?\//,'/'),'/i18n-dom.js?v=v2-i18n-4',path+' must reuse the same module instance');
+    assert.equal(match[1].replace(/^\.?\//,'/'),'/i18n-dom.js?v=v2-i18n-5',path+' must reuse the same module instance');
   }
 });
 test('language change re-renders cached signal and calendar dates without placing orders',()=>{
@@ -63,8 +63,8 @@ test('language change re-renders cached signal and calendar dates without placin
   assert.match(live,/document\.addEventListener\('nabd:language-change',[\s\S]*?renderHistory\(\)[\s\S]*?renderNews\(\)/);
   assert.match(app,/document\.addEventListener\('nabd:language-change',[\s\S]*?renderNews\(\)/);
   assert.match(account,/document\.addEventListener\('nabd:language-change',[\s\S]*?sessions\(\)/);
-  assert.match(read('index.html'),/app\.js\?v=v2-loader-2/);
-  assert.match(read('accounts.html'),/accounts\.js\?v=v2-locale-4/);
+  assert.match(read('index.html'),/app\.js\?v=v2-locale-5/);
+  assert.match(read('accounts.html'),/accounts\.js\?v=v2-locale-5/);
   for(const page of ['landing.html','landing-en.html'])
     assert.match(read(page),/language-pref\.js\?v=2/);
 });

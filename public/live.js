@@ -2,7 +2,7 @@ import {drawBrokerCandles} from './broker-chart.js';
 import {initMiniSparkline} from './mini-spark.js?v=touch-2';
 import {createMarketLoaders} from './market-loaders.js?v=v2-loader-2';
 import {inSignalDateRange} from './signal-date-filter.js';
-import {translateUiText,externalHeadlineForLocale,currentLocale,setLocalizedText} from './i18n-dom.js?v=v2-i18n-4';
+import {translateUiText,externalHeadlineForLocale,currentLocale,setLocalizedText} from './i18n-dom.js?v=v2-i18n-5';
 export function initLiveWorkspace({stream, api, time, num, now, notify, priceFeedback, positionSize, getSizingContext}) {
   const $ = id => document.getElementById(id);
   const node = (tag, cls, text) => {const n = document.createElement(tag); if (cls) n.className = cls;
