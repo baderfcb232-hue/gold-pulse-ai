@@ -68,3 +68,17 @@ test('full bridge updates reach the local API after bootstrap even when the cale
     assert.equal(state.currentSignal, null);
   }
 });
+
+test('BTC sends an authenticated broker quote before slow history and calendar refresh', () => {
+  const source = readFileSync(new URL('../mt5/NABD_Bridge.mqh', import.meta.url), 'utf8');
+  const preflight = source.indexOf('if(btcOneSecond && g_nb_bootstrap_done) NBSendBtcFastQuote(tick,offset);');
+  const calendar = source.indexOf('NBUpdateCalendar(offset);', preflight);
+  const history = source.indexOf('NBCandles(PERIOD_M5,offset)', preflight);
+  const full = source.indexOf('NBRequest("POST","/api/mt5",payload,response)', preflight);
+  assert.ok(preflight > 0 && calendar > preflight && history > preflight && full > history);
+  const helper = source.slice(source.indexOf('bool NBSendBtcFastQuote('), source.indexOf('void NABDOnTimer()'));
+  assert.match(helper, /NBRequest\("POST","\/api\/mt5\/btc-quote",quick,reply\)/);
+  assert.match(helper, /tick\.time-offset/);
+  assert.doesNotMatch(helper, /received_at|heartbeat_at|TradingExecutionEnabled/);
+  assert.match(source, /if\(btcOneSecond && g_nb_bootstrap_done && lastBtcFullSend>0/);
+});
