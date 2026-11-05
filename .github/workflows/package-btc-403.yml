@@ -1,0 +1,31 @@
+name: Package NABD BTC Fusion V2 4.03 ZIP
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/package-btc-403.yml'
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create complete BTC demo ZIP bundle
+        run: |
+          set -euo pipefail
+          mkdir -p package
+          cp mt5/NABD_BTC_FUSION_V2_4_03_Demo.mq5 package/
+          cp mt5/NABD_BTC_FUSION_V2_4_03_Demo.set package/
+          cp mt5/BTC_FUSION_V2_4_03_INSTALL.md package/
+          test -s package/NABD_BTC_FUSION_V2_4_03_Demo.mq5
+          grep -q 'NBSendBtcFastQuote' package/NABD_BTC_FUSION_V2_4_03_Demo.mq5
+          grep -q 'InpDemoWebsiteNoDailyLimits=false' package/NABD_BTC_FUSION_V2_4_03_Demo.set
+          (cd package && zip -9 ../NABD_BTC_FUSION_V2_4_03_Demo_COMPLETE.zip ./*)
+          unzip -t NABD_BTC_FUSION_V2_4_03_Demo_COMPLETE.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NABD_BTC_FUSION_V2_4_03_Demo_COMPLETE
+          path: NABD_BTC_FUSION_V2_4_03_Demo_COMPLETE.zip
+          retention-days: 30
+          if-no-files-found: error
