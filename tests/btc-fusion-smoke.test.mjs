@@ -46,3 +46,30 @@ test('Fusion blocks stale quotes/bars, USD news, spread and non BTC',()=>{
   assert.equal(a.plan,null);
  }
 });
+
+test('Fusion may trade with neutral M15 near EMA band when H1/H4 and M5 confirm',()=>{
+ const s=snapshot(1);
+ const bars=s.candles.M15;
+ const level=bars.at(-1).close;
+ for(const bar of bars.slice(-90)){
+   bar.open=level;bar.close=level;bar.high=level+10;bar.low=level-10;
+ }
+ const a=analyzeBtcFusion(s,NOW);
+ assert.equal(a.readinessChecks[6].pass,true,a.reasons.join(' | '));
+ assert.equal(a.readinessChecks[7].pass,true,a.reasons.join(' | '));
+ assert.equal(a.checks.find(c=>c.name==='M15 EMA8/21 direction').pass,false);
+ assert.equal(a.decision,'BUY',a.reasons.join(' | '));
+});
+test('Fusion never forces alignment against a confirmed opposite H1',()=>{
+ const s=snapshot(1);
+ const h1=s.candles.H1;
+ // The direction is deliberately reversed while the M15/M5 remain bullish.
+ for(let i=0;i<h1.length;i++){
+   const close=71000-i*2;
+   h1[i].open=close+.5;h1[i].close=close;h1[i].high=close+10;h1[i].low=close-10;
+ }
+ const a=analyzeBtcFusion(s,NOW);
+ assert.equal(a.decision,'WAIT');
+ assert.equal(a.plan,null);
+ assert.equal(a.readinessChecks[7].pass,false);
+});
