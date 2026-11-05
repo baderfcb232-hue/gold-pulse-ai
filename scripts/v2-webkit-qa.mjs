@@ -25,7 +25,8 @@ try{
    const page=await context.newPage();
    const id=route.replace(/\//g,'')||'home';
    try{
-     const response=await page.goto(base+route,{waitUntil:'domcontentloaded',timeout:30000});
+     const target=route==='/'&&lang==='en'?'/en':route;
+     const response=await page.goto(base+target,{waitUntil:'domcontentloaded',timeout:30000});
      assert.equal(response?.status(),200);
      await page.waitForTimeout(260);
      if(route==='/dashboard'||route==='/account'){
@@ -42,7 +43,10 @@ try{
        assert.equal(controls,'/manifest.webmanifest');
      }
      if(route==='/account')assert.equal(await page.locator('link[rel="apple-touch-icon"]').count(),1);
-     if(route==='/')assert.equal(await page.locator('.market-motion').count(),1);
+     if(route==='/'){
+       await page.locator('.market-motion').waitFor({timeout:8000});
+       assert.equal(await page.locator('.market-motion').count(),1);
+     }
      results.push({width,lang,theme,route,overflow,pass:true});
    }catch(error){
      errors.push({width,lang,theme,route,error:String(error)});
