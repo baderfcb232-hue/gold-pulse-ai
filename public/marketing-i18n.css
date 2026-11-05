@@ -37,6 +37,8 @@ html[dir="ltr"] .mobile-menu nav{right:auto;left:0;direction:ltr}
  .nav-actions .btn{min-height:44px;padding:7px 12px}
  .nav-language{min-height:44px}
  .hero-visual{max-width:100%}
+ /* Keep the decorative halo inside narrow iPhone widths; never clip actual UI. */
+ .hero-visual .visual-orb-one{width:min(94%,460px);height:auto;aspect-ratio:1;}
  .hero-visual .desktop-preview{min-width:0}
  .mobile-menu nav{width:min(82vw,290px)}
 }
