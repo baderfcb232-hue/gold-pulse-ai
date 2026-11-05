@@ -1,6 +1,6 @@
 // NABD BTC FUSION SCALPER V2 — broker-fed closed-candle strategy, no direct order dispatch.
 import {analyze, ema, rsi, atr, defaults, TF_SECONDS} from '../engine.mjs';
-export const BTC_FUSION_STRATEGY = 'NABD-BTC-FUSION-M5M15-V2';
+export const BTC_FUSION_STRATEGY = 'NABD-BTC-FUSION-M5M15-V3';
 const sideOf = (fast, slow, close) => fast > slow && close > slow ? 'BUY' : fast < slow && close < slow ? 'SELL' : 'WAIT';
 const align = (value, spec, rounding = 'nearest') => {
   const op = rounding === 'down' ? Math.floor : rounding === 'up' ? Math.ceil : Math.round;
@@ -146,15 +146,15 @@ export function analyzeBtcFusion(snapshot, now = Date.now() / 1000) {
   if (distance > vol * 2.7) return {...assessed, reasons:['FUSION: stop distance too large vs ATR.']};
   const sl = align(entry - sign * distance, snapshot.spec, buy ? 'down' : 'up');
   const riskDistance = Math.abs(entry - sl);
-  const tp1 = align(entry + sign * riskDistance * 1.5, snapshot.spec);
-  const tp2 = align(entry + sign * riskDistance * 2, snapshot.spec);
+  const tp1 = align(entry + sign * riskDistance * 3, snapshot.spec);
+  const tp2 = align(entry + sign * riskDistance * 4, snapshot.spec);
   const orientation = buy ? sl < entry && entry < tp1 && tp1 < tp2 : tp2 < tp1 && tp1 < entry && entry < sl;
   if (!(sl > 0 && riskDistance > tick && orientation))
     return {...assessed, reasons:['FUSION: invalid stop/target orientation.']};
   const plan = {strategy:BTC_FUSION_STRATEGY, symbol:snapshot.symbol, side,
     bar_time:last.time, issued_at:Math.floor(now), expires_at:Math.floor(now + 180),
     timeframe:'M5', entry, sl, tp1, tp2, risk_distance:riskDistance,
-    score, mode:sweep ? 'LIQUIDITY_SWEEP' : 'EMA_BREAKOUT', adx14:adx,
+    score, reward_risk:3, mode:sweep ? 'LIQUIDITY_SWEEP' : 'EMA_BREAKOUT', adx14:adx,
     suggested_max_hold_seconds:900,
     reason:'BTC FUSION: EMA8/21+RSI14+ATR14+'+(sweep?'liquidity sweep':'breakout')+'+H1/H4 hierarchy; 5-15m scalp',
     status:'TRACKING', tracking:'VIRTUAL', tp1_hit:false};

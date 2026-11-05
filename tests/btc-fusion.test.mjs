@@ -83,3 +83,17 @@ test('BTC Fusion displays failed early prerequisite and leaves later gates pendi
   assert.equal(analysis.readinessChecks[0].pass,false);
   assert.ok(analysis.readinessChecks.slice(1).every(c=>c.pass===null));
 });
+
+test('BTC FUSION server requires the new 0.4 percent EA risk settings',async t=>{
+ const dir=mkdtempSync(join(tmpdir(),'nabd-btc-risk04-'));
+ const app=createApplication({dataDir:dir,clock:()=>NOW,commandJournal:{claimWebsite:async()=>null,close:async()=>{}},
+  config:{btcSignalStrategy:'FUSION',btcFusionDemoAutoExecution:true,
+   demoRecommendationExecution:true,publicationEnabled:true}});
+ t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
+ await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
+ const raw=source();raw.execution.risk_percent=.5;app.ingest(raw);
+ const health=async()=> (await (await fetch('http://127.0.0.1:'+app.server.address().port+'/healthz')).json()).btc;
+ assert.equal((await health()).demoExecutionReason,'SCALP_RISK_LIMITS_NOT_CONFIRMED');
+ raw.execution.risk_percent=.4;app.ingest(raw);
+ assert.notEqual((await health()).demoExecutionReason,'SCALP_RISK_LIMITS_NOT_CONFIRMED');
+});

@@ -378,7 +378,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     // Independent server cap, in addition to MT5's local 3-entries/day and risk limit.
     // Never rely on a stale or missing risk configuration to authorize an order.
     if ((scalpGold || fusionGold || scalpBtc || fusionBtc) && !(selected?.execution?.risk_percent > 0 &&
-      selected.execution.risk_percent <= 0.5 && selected.execution.max_daily_loss_percent > 0 &&
+      selected.execution.risk_percent <= (fusionBtc ? 0.4 : 0.5) && selected.execution.max_daily_loss_percent > 0 &&
       selected.execution.max_daily_loss_percent <= 2 &&
       selected.execution.news_filter === true))
       return {ready:false,reason:'SCALP_RISK_LIMITS_NOT_CONFIRMED',plan:null};
@@ -387,7 +387,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       brokerGoldMarket(selected,clock(),{goldStrategy:cfg.goldSignalStrategy})?.analysis.plan;
     return websiteTradeDecision({enabled: cfg.demoRecommendationExecution && cfg.publicationEnabled,
       snapshot: selected, market, analysisPlan, costs: costStatus(selected),
-      requiredStrategy:scalpGold ? 'NABD-GOLD-SCALP-M5M15-V1' : fusionGold ? 'NABD-GOLD-REGIME-FUSION-V1' : scalpBtc ? 'NABD-BTC-SCALP-M5M15-V1' : fusionBtc ? 'NABD-BTC-FUSION-M5M15-V2' : null,
+      requiredStrategy:scalpGold ? 'NABD-GOLD-SCALP-M5M15-V1' : fusionGold ? 'NABD-GOLD-REGIME-FUSION-V1' : scalpBtc ? 'NABD-BTC-SCALP-M5M15-V1' : fusionBtc ? 'NABD-BTC-FUSION-M5M15-V3' : null,
       durable: typeof commandJournal?.claimWebsite === 'function', now: clock(), tradeSizing});
   }
   // Independent, read-only Bitcoin health. Never classify a fresh Coinbase

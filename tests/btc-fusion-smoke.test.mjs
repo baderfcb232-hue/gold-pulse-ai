@@ -26,12 +26,16 @@ test('Fusion BUY builds valid broker oriented stop and target',()=>{
  assert.equal(a.strategy,BTC_FUSION_STRATEGY);
  assert.equal(a.decision,'BUY',a.reasons.join(' | '));
  assert.ok(a.score>=75);
+ assert.equal(a.plan.reward_risk,3);
+ assert.ok(Math.abs(Math.abs(a.plan.tp1-a.plan.entry)-3*a.plan.risk_distance)<=.011);
  assert.ok(a.plan.sl<a.plan.entry&&a.plan.entry<a.plan.tp1&&a.plan.tp1<a.plan.tp2);
  assert.equal(a.plan.suggested_max_hold_seconds,900);
 });
 test('Fusion SELL builds valid broker oriented stop and target',()=>{
  const a=analyzeBtcFusion(snapshot(-1),NOW);
  assert.equal(a.decision,'SELL',a.reasons.join(' | '));
+ assert.equal(a.plan.reward_risk,3);
+ assert.ok(Math.abs(Math.abs(a.plan.tp1-a.plan.entry)-3*a.plan.risk_distance)<=.011);
  assert.ok(a.plan.tp2<a.plan.tp1&&a.plan.tp1<a.plan.entry&&a.plan.entry<a.plan.sl);
 });
 test('Fusion blocks stale quotes/bars, USD news, spread and non BTC',()=>{
