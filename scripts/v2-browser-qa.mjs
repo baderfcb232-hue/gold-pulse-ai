@@ -152,6 +152,59 @@ try{
        await page.waitForFunction(value=>document.documentElement.lang===value,lang==='ar'?'en':'ar',{timeout:10000});
        await select.selectOption(lang);
        await page.waitForFunction(value=>document.documentElement.lang===value,lang,{timeout:10000});
+       if(width===390||width===1280){
+         await page.locator('[data-view="settings"]').click();
+         await page.locator('[data-panel="settings"]').waitFor({state:'visible'});
+         await page.locator('#setup-checks .setup-check').first().waitFor({state:'attached',timeout:10000});
+         const setup=await page.evaluate(()=>{
+           const card=document.querySelector('.connection-guide .setup-check');
+           const title=card.querySelector('h3'),note=card.querySelector('p'),indicator=card.querySelector('.step-indicator');
+           const colors=()=>({
+             card:getComputedStyle(card).backgroundColor,
+             title:getComputedStyle(title).color,
+             note:getComputedStyle(note).color,
+             indicator:getComputedStyle(indicator).color,
+             indicatorBackground:getComputedStyle(indicator).backgroundColor
+           });
+           const initial=card.classList.contains('complete');
+           card.classList.remove('complete');
+           const waiting=colors();
+           card.classList.add('complete');
+           const complete=colors();
+           card.classList.toggle('complete',initial);
+           return {waiting,complete};
+         });
+         const lum=color=>{
+           const rgb=(color.match(/[\d.]+/g)||[]).slice(0,3).map(Number);
+           assert.equal(rgb.length,3,'unexpected computed setup-card color '+color);
+           const [red,green,blue]=rgb.map(value=>{
+             const fraction=value/255;
+             return fraction<=.04045?fraction/12.92:((fraction+.055)/1.055)**2.4;
+           });
+           return .2126*red+.7152*green+.0722*blue;
+         };
+         const contrast=(a,b)=>{
+           const x=lum(a),y=lum(b);
+           return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);
+         };
+         for(const [kind,colors] of Object.entries(setup)){
+           const r=(colors.card.match(/\d+/g)||[]).map(Number);
+           if(theme==='light'){
+             assert.ok(r[0]>=225&&r[1]>=230&&r[2]>=230,title+' '+kind+' light background '+colors.card);
+             for(const label of ['title','note']){
+               const value=contrast(colors.card,colors[label]);
+               assert.ok(value>=4.5,title+' '+kind+' '+label+' text contrast '+value.toFixed(2));
+             }
+             const badge=contrast(colors.indicatorBackground,colors.indicator);
+             assert.ok(badge>=4.5,title+' '+kind+' step badge contrast '+badge.toFixed(2));
+           }else{
+             assert.ok(r[0]<85&&r[1]<85&&r[2]<85,title+' '+kind+' dark card unchanged '+colors.card);
+           }
+         }
+         results.push({title:title+' setup cards',theme,setup});
+         checks++;
+         await page.locator('[data-view="overview"]').click();
+       }
      }
      checks++;results.push({title,...metrics});
    }catch(err){

@@ -25,6 +25,42 @@
 :root[data-nabd-theme="light"] .dialog{background:#fff;color:#102f3b;border-color:#ccdee3}
 :root[data-nabd-theme="light"] .dialog .subtle{color:#536b78}
 :root[data-nabd-theme="light"] :is(.check,.diagnostics dd,.setup-troubleshooting,.portal-note){color:#294b57}
+
+/* Link guide: the legacy .setup-check cards were hardcoded #120f19.
+   Keep the night palette untouched; make every readiness step legible in day mode. */
+:root[data-nabd-theme="light"] .connection-guide .setup-check{
+ background:#f4fafb;
+ background-image:linear-gradient(180deg,#ffffff 0%,#f4fafb 100%);
+ border:1px solid #cfe1e5;
+ color:#173842;
+ box-shadow:0 5px 17px #153e4910;
+}
+:root[data-nabd-theme="light"] .connection-guide .setup-check h3{
+ color:#153846;
+ font-weight:700;
+}
+:root[data-nabd-theme="light"] .connection-guide .setup-check p{
+ color:#496573;
+}
+:root[data-nabd-theme="light"] .connection-guide .setup-check .step-indicator{
+ color:#355866;
+ background:#eef5f8;
+ border-color:#bcd1d9;
+}
+:root[data-nabd-theme="light"] .connection-guide .setup-check.complete{
+ background:#e8f6f0;
+ background-image:linear-gradient(180deg,#effaf6 0%,#e8f6f0 100%);
+ border-color:#a4d8c5;
+}
+:root[data-nabd-theme="light"] .connection-guide .setup-check.complete h3{
+ color:#0b654d;
+}
+:root[data-nabd-theme="light"] .connection-guide .setup-check.complete .step-indicator{
+ color:#086446;
+ background:#d9f4e5;
+ border-color:#84c6ab;
+}
+
 :root[data-nabd-theme="light"] .signal-card{border:1px solid #9ecfc6;border-top:4px solid #0f9488;box-shadow:0 16px 42px #11746814}
 :root[data-nabd-theme="light"] .value-cell{color:#14333f}
 :root[data-nabd-theme="light"] .signal-values .value-cell strong{color:#0e3c4c}
