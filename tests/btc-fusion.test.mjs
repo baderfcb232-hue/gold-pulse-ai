@@ -61,7 +61,7 @@ test('BTC Fusion timeframe conflict exposes nine evaluated checks but cannot ope
   }
   const snapshot=cleanSnapshot(raw,NOW);
   const analysis=analyzeBtcFusion(snapshot,NOW);
-  assert.match(analysis.reasons[0],/M15 conflicts with H1 and H4/);
+  assert.match(analysis.reasons[0],/explicit H1\/H4 direction conflict/);
   assert.equal(analysis.plan,null);
   assert.equal(analysis.decision,'WAIT');
   assert.equal(analysis.readinessChecks.length,8);
