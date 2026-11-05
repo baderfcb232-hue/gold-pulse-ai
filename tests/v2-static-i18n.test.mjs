@@ -61,6 +61,14 @@ test('localized display text never overwrites unknown trading, broker or custome
   assert.equal(translateUiText('عمر السعر 7 ثانية','en'),'Quote age: 7 seconds');
   assert.equal(translateUiText('1 ثانية','en'),'1 second');
   assert.equal(translateUiText('14 ثانية','en'),'14 seconds');
+  assert.equal(translateUiText('بانتظار أول سعر','en'),'Waiting for first live quote');
+  assert.equal(translateUiText('بانتظار المصادر.','en'),'Waiting for news sources.');
+  assert.equal(translateUiText('شارت الذهب','en'),'Gold chart');
+  assert.equal(translateUiText('شارت البيتكوين','en'),'Bitcoin chart');
+  assert.equal(translateUiText('شموع مغلقة من مصدر السعر','en'),'Closed candles from the source');
+  assert.match(translateUiText('الذهب المرجعي يُجلب كل نحو 30 ثانية؛ الشموع من عينات السعر المتاحة. مستقل عن سعر تنفيذ بروكرك.','en'),/separate from your broker/);
+  assert.match(translateUiText('بث Coinbase المباشر؛ سعر BTC-USD على المنصة. مستقل عن سعر تنفيذ بروكرك.','en'),/Coinbase live stream/);
+  assert.match(read('app.js'),/translateUiText\(stage.label\).*translateUiText\(stage.detail\)/);
   assert.equal(translateUiText('4,041.51','en'),'4,041.51');
   assert.equal(translateUiText('المس الشارت أو استخدم الأسهم لاستعراض السعر','en'),'Tap the chart or use arrow keys to inspect prices');
   assert.equal(translateUiText('الفحص التالي بعد 3 دقيقة حسب المصدر','en'),'Next source check in 3 minutes');
