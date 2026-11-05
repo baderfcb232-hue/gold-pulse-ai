@@ -58,7 +58,7 @@ try{
          return values;
        });
        const brightness=col=>{
-         const parts=(col.match(/[\\d.]+/g)||[]).slice(0,3).map(Number);
+         const parts=(col.match(/[\d.]+/g)||[]).slice(0,3).map(Number);
          assert.equal(parts.length,3,'Missing computed RGB '+col);
          const [red,green,blue]=parts.map(v=>{
            const x=v/255;return x<=0.04045?x/12.92:((x+.055)/1.055)**2.4;
@@ -84,7 +84,7 @@ try{
            for(const node of el.childNodes){
              if(node.nodeType!==3)continue;
              const value=(node.textContent||'').trim();
-             if(value && /[\\u0600-\\u06FF]/.test(value))seen.add(value.slice(0,190));
+             if(value && /[\u0600-\u06FF]/.test(value))seen.add(value.slice(0,190));
            }
          }
          return [...seen].slice(0,35);
