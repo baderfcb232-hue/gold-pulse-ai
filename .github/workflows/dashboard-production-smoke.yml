@@ -54,11 +54,11 @@ jobs:
           base='https://gold-pulse-ai.onrender.com'
           checks={
             '/': [b'DEMO PREVIEW', b'href="/dashboard"'],
-            '/dashboard': [b'id="market-symbols"', b'/dashboard-terminal.css?v=phase3-1', b'dashboard-theme-choice', b'/dashboard-themes.css?v=premium-1',b'dashboard-fixes.css?v=ux-20261104',b'dashboard-contrast-v2.css?v=20261104',b'market-loaders.css?v=v2-1',b'live-feedback.css?v=v2-1',b'nabd-ltr-brand.css?v=v2-1',b'mobile-polish.css?v=mobile-1',b'nabd-logo-en.svg?v=v2-1',b'nabd-toast-history-list',b'dashboard-locale.js?v=v2-i18n-4',b'mini-market-card',b'signal-date-filter',b'trade-sizing-lot'],
+            '/dashboard': [b'id="market-symbols"', b'/dashboard-terminal.css?v=phase3-1', b'dashboard-theme-choice', b'/dashboard-themes.css?v=premium-1',b'dashboard-fixes.css?v=ux-20261104',b'dashboard-contrast-v2.css?v=20261104',b'market-loaders.css?v=v2-loader-2',b'live-feedback.css?v=v2-1',b'nabd-ltr-brand.css?v=v2-1',b'mobile-polish.css?v=mobile-1',b'nabd-logo-en.svg?v=v2-1',b'nabd-toast-history-list',b'dashboard-locale.js?v=v2-i18n-4',b'mini-market-card',b'signal-date-filter',b'trade-sizing-lot'],
             '/dashboard-fixes.css': [b'.toast.error',b'.broker-quote-values>span:first-child',b'.mini-market-card'],
             '/dashboard-contrast-v2.css': [b'--nabd-notice-error-bg',b'.toast-stack',b'.broker-quote-values>span:first-child'],
-            '/market-loaders.css': [b'nabd-skeleton-shimmer',b'prefers-reduced-motion'],
-            '/market-loaders.js': [b'createMarketLoaders',b'timeoutMs=8000'],
+            '/market-loaders.css': [b'nabd-skeleton-shimmer',b'prefers-reduced-motion',b'#connection-hub[data-nabd-loading',b'#scalp-history-list[data-nabd-loading'],
+            '/market-loaders.js': [b'createMarketLoaders',b'timeoutMs=8000',b"history:['#scalp-recent'",b"connection:['.broker-connect'"],
             '/live-feedback.css': [b'nabd-toast-arrive',b'prefers-reduced-motion'],
             '/nabd-ltr-brand.css': [b'html[dir="ltr"] .nav{left:22px;right:auto}',b'html[dir="ltr"] .main{margin-left:200px'],
             '/nabd-locale-init.js': [b'nabd:dashboard:language',b'document.documentElement.dir'],

@@ -43,6 +43,24 @@
   linear-gradient(var(--nabd-skeleton-base),var(--nabd-skeleton-base)) 12px 132px/60% 13px no-repeat,
   var(--card,#fff);
 }
+/* Signal history is loaded separately from quotes; the MT5 bridge belongs to the state API. */
+#scalp-recent[data-nabd-loading="true"],#scalp-history-list[data-nabd-loading="true"]{min-height:135px}
+#scalp-recent[data-nabd-loading="true"]::before,#scalp-history-list[data-nabd-loading="true"]::before{
+ background:
+  linear-gradient(var(--nabd-skeleton-base),var(--nabd-skeleton-base)) 14px 17px/46% 18px no-repeat,
+  linear-gradient(var(--nabd-skeleton-base),var(--nabd-skeleton-base)) 14px 54px/85% 14px no-repeat,
+  linear-gradient(var(--nabd-skeleton-base),var(--nabd-skeleton-base)) 14px 88px/68% 14px no-repeat,
+  var(--card,#fff);
+}
+.broker-connect[data-nabd-loading="true"]{min-height:85px}
+#connection-hub[data-nabd-loading="true"]{min-height:155px}
+.broker-connect[data-nabd-loading="true"]::before,#connection-hub[data-nabd-loading="true"]::before{
+ background:
+  linear-gradient(var(--nabd-skeleton-base),var(--nabd-skeleton-base)) 16px 19px/40% 17px no-repeat,
+  linear-gradient(var(--nabd-skeleton-base),var(--nabd-skeleton-base)) 16px 53px/70% 14px no-repeat,
+  linear-gradient(var(--nabd-skeleton-base),var(--nabd-skeleton-base)) 16px 91px/55% 14px no-repeat,
+  var(--card,#fff);
+}
 @media(prefers-reduced-motion:reduce){
  [data-nabd-loading="true"]::after{animation:none!important;display:none}
 }

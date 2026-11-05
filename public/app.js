@@ -1,11 +1,12 @@
 import {positionSize, ema, botHeartbeatFresh, BOT_CONTROL_TTL} from '/engine.mjs';
-import {initLiveWorkspace} from '/live.js?v=v2-locale-4';
+import {initLiveWorkspace} from '/live.js?v=v2-loader-2';
 import {inSignalDateRange} from '/signal-date-filter.js';
 import {createStateConnection} from '/state-connection.js';
 import {requestJson} from '/http.js';
 import {translateUiText,currentLocale,setLocalizedText} from '/i18n-dom.js?v=v2-i18n-4';
 import {createToastCenter} from '/toast-ui.js';
 import {createPriceFeedback} from '/price-feedback.js';
+import {createMarketLoaders} from '/market-loaders.js?v=v2-loader-2';
 import {controlBlockers, marketControlStatus, marketControlWarnings, closeButtonDisplay} from '/control-readiness.js?v=stable-close-1';
 import {createCommandTracker, commandProgress, demoExecutionMessage} from '/command-feedback.js?v=mobile-controls-3';
 const $ = id => document.getElementById(id);
@@ -25,6 +26,8 @@ let stateErrorShown = false;
 let privateEpoch = 0, privateReadAllowed = true, privateLoading = null, commandSending = false, privateErrorShown = false;
 const commandTracker = createCommandTracker();
 const priceFeedback = createPriceFeedback();
+// Display-only bridge loading; removed on the first real state or explicit network failure.
+const connectionLoaders=createMarketLoaders({groups:['connection']});
 const toastCenter = createToastCenter({getContainer:()=>$('toasts'),createNode:e,getHistory:()=>$('nabd-toast-history-list')});
 let controlMarket='XAUUSD';
 const controlName=()=>controlMarket==='BTCUSD'?'البيتكوين':'الذهب';
@@ -66,6 +69,7 @@ function renderFaultAlerts() {
 }
 function applyState(raw) {
   const previousConnection=state?effectiveConnection():null;
+  connectionLoaders.ready('connection');
   state=normalize(raw);if(state.serverTime)clockOffset=state.serverTime*1000-Date.now();
   const currentConnection=effectiveConnection();
   if(previousConnection==='LIVE'&&currentConnection!=='LIVE')toast('انقطع استقبال بيانات MT5 الحديثة؛ أوقفت الواجهة اعتبار الأسعار صالحة.',{kind:'warning',eventKey:'bridge-offline'});
@@ -441,7 +445,7 @@ function drawChart(){
 const stateConnection=createStateConnection({
   readState:()=>api('/api/state'),
   applyState:raw=>{applyState(raw);stateErrorShown=false;},
-  onError:()=>{state={...state,connection:'ERROR',currentSignal:null,reasons:['تعذر الوصول للخادم؛ البيانات المعروضة قديمة.']};renderOverview();renderExecution();renderLink();renderDiagnostics();if(!stateErrorShown){toast('تعذر الاتصال بالخادم؛ عرض الإشارات معلّق.',true);stateErrorShown=true;}}
+  onError:()=>{connectionLoaders.fail('connection');state={...state,connection:'ERROR',currentSignal:null,reasons:['تعذر الوصول للخادم؛ البيانات المعروضة قديمة.']};renderOverview();renderExecution();renderLink();renderDiagnostics();if(!stateErrorShown){toast('تعذر الاتصال بالخادم؛ عرض الإشارات معلّق.',true);stateErrorShown=true;}}
 });
 function fetchState(){return stateConnection.refresh();}
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>switchView(b.dataset.view));document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>switchView(b.dataset.goto));$('diagnostics-open').onclick=()=>switchView('settings');$('refresh-now').onclick=fetchState;
