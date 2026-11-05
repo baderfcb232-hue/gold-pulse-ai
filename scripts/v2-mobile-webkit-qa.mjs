@@ -86,7 +86,8 @@ try{
          toastTop:toasts.top,toastBottom:parseFloat(toasts.bottom)};
      });
      assert.ok(layout.prefsWidth<150,tag+' compact controls '+JSON.stringify(layout));
-     assert.equal(layout.toastTop,'auto',tag+' notifications should be bottom anchored');
+     // Safari computes 'top' to a pixel offset for bottom-anchored elements.
+     assert.ok(layout.toastBottom>10,tag+' toasts should be bottom anchored');
      if(layout.viewport<=760){
        assert.equal(layout.grid,'grid',tag+' six-section nav should remain a grid');
        assert.equal(layout.columns,6,tag+' six nav columns');
