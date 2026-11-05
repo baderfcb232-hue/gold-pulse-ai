@@ -90,6 +90,7 @@ try{
          return [...seen].slice(0,35);
        });
        console.log('NABD English visible-copy audit:',JSON.stringify({page:route,remaining}));
+       assert.deepEqual(remaining,[],title+' unlocalized Arabic text in English UI');
        results.push({title:title+' English copy audit',remaining});
        checks++;
      }
