@@ -14,6 +14,7 @@ test('Demo lot saver enforces account authorization, fresh MT5 specs, lot step a
  const dir=mkdtempSync(join(tmpdir(),'nabd-sizing-'));
  let now=NOW, saved=[];
  const journal={
+  async close(){},
   async setTradeSizing(source,mode,lot,when){
    saved.push({source,mode,lot,when});
    return {mode,lot,updated_at:when};
@@ -62,7 +63,7 @@ test('Demo lot saver enforces account authorization, fresh MT5 specs, lot step a
 test('real-account flag is never accepted for Demo volume save',async t=>{
  const dir=mkdtempSync(join(tmpdir(),'nabd-sizing-real-'));
  const saved=[];const app=createApplication({dataDir:dir,ingestToken:INGEST,dashboardToken:OPERATOR,clock:()=>NOW,
-  commandJournal:{setTradeSizing:async(...args)=>{saved.push(args);return {mode:'FIXED',lot:args[2]}}}});
+  commandJournal:{close:async()=>{},setTradeSizing:async(...args)=>{saved.push(args);return {mode:'FIXED',lot:args[2]}}}});
  await new Promise(resolve=>app.server.listen(0,'127.0.0.1',resolve));
  t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
  const raw=eaFixture(NOW);raw.execution.demo=false;
