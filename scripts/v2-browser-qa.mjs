@@ -110,6 +110,40 @@ try{
      assert.ok(metrics.overflow<=5,title+' document overflow '+JSON.stringify(metrics));
      assert.ok(metrics.transfer<6_000_000,title+' assets exceed browser transfer budget');
      if(route==='/dashboard'){
+       const quickLanguage=page.locator('#nabd-language-quick'),quickTheme=page.locator('#nabd-theme-quick');
+       assert.equal(await quickLanguage.count(),1,title+' quick language button');
+       assert.equal(await quickTheme.count(),1,title+' quick theme button');
+       const beforeTheme=await page.locator('html').getAttribute('data-nabd-theme');
+       await quickTheme.click();
+       await page.waitForFunction(previous=>document.documentElement.getAttribute('data-nabd-theme')!==previous,
+         beforeTheme,{timeout:10000});
+       assert.equal(await page.evaluate(()=>localStorage.getItem('nabd:dashboard:theme')),
+         beforeTheme==='dark'?'light':'dark');
+       await quickTheme.click();
+       await page.waitForFunction(expected=>document.documentElement.getAttribute('data-nabd-theme')===expected,
+         beforeTheme,{timeout:10000});
+       await quickLanguage.click();
+       await page.waitForFunction(expected=>document.documentElement.lang===expected,
+         lang==='ar'?'en':'ar',{timeout:10000});
+       assert.equal(await page.evaluate(()=>localStorage.getItem('nabd:dashboard:language')),
+         lang==='ar'?'en':'ar');
+       await quickLanguage.click();
+       await page.waitForFunction(expected=>document.documentElement.lang===expected,lang,{timeout:10000});
+       if(width<=390){
+         const mobile=await page.evaluate(()=>{
+           const nav=document.querySelector('.header .nav'),controls=document.querySelector('.header .nav-footer');
+           const toast=document.querySelector('#toasts'),nr=nav.getBoundingClientRect(),cr=controls.getBoundingClientRect();
+           const style=getComputedStyle(toast);
+           return {navDisplay:getComputedStyle(nav).display,columns:getComputedStyle(nav).gridTemplateColumns.split(' ').length,
+             controlsWidth:cr.width,controlsBottom:cr.bottom,navTop:nr.top,toastTop:style.top,toastBottom:parseFloat(style.bottom)};
+         });
+         assert.equal(mobile.navDisplay,'grid',title+' must keep mobile nav as a grid');
+         assert.equal(mobile.columns,6,title+' must keep six nav items on one row');
+         assert.ok(mobile.controlsWidth<150,title+' control strip too wide '+JSON.stringify(mobile));
+         assert.ok(mobile.controlsBottom<=mobile.navTop+2,title+' controls overlap nav '+JSON.stringify(mobile));
+         assert.equal(mobile.toastTop,'auto',title+' toasts must not be at top');
+         assert.ok(mobile.toastBottom>85,title+' toasts must clear bottom navigation');
+       }
        await page.locator('#mini-market-chart').focus();
        assert.equal(await page.locator('#mini-market-chart').getAttribute('tabindex'),'0');
        const select=page.locator('#dashboard-language-choice');
