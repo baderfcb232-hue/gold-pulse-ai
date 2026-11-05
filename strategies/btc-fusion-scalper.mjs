@@ -53,8 +53,8 @@ export function analyzeBtcFusion(snapshot, now = Date.now() / 1000) {
     'خارج نافذة منع الأخبار عالية التأثير',
     'صحة سعر ومواصفات عقد الوسيط',
     'السبريد ضمن حدود الوسيط وATR',
-    'وجود اتجاه واضح على M15',
-    'توافق اتجاه M15 مع H1 أو H4'
+    'اتجاه M15 واضح أو حيادي قريب من المتوسطات مع تأكيد H1',
+    'عدم تعارض الفريمات العليا مع اتجاه الدخول'
   ].map(name => ({name, pass: null}));
   const mark = (index, pass) => (readinessChecks[index].pass = Boolean(pass));
   const base = {...legacy, strategy: BTC_FUSION_STRATEGY, decision: 'WAIT', plan: null,
@@ -84,19 +84,32 @@ export function analyzeBtcFusion(snapshot, now = Date.now() / 1000) {
   if (!(vol > 0) || !Number.isFinite(momentum)) return wait('FUSION: invalid ATR/RSI.', 'BLOCKED');
   const spreadOk = spread / point <= allowedPoints && spread <= vol * .18;
   if (!mark(5, spreadOk)) return wait('FUSION: excessive broker spread relative to ATR.', 'BLOCKED');
-  const side = sideOf(ema(close15, 8), ema(close15, 21), m15.at(-1).close);
-  if (!mark(6, side !== 'WAIT')) return wait('FUSION: waiting for M15 EMA8/21 bias.');
-  const buy = side === 'BUY', sign = buy ? 1 : -1;
-  const ema5Fast = ema(close5, 8), ema5Slow = ema(close5, 21);
-  const trendM5 = buy ? ema5Fast > ema5Slow && last.close > ema5Fast : ema5Fast < ema5Slow && last.close < ema5Fast;
-  const goodRsi = buy ? momentum >= 51 && momentum <= 74 : momentum <= 49 && momentum >= 26;
+  const m15Fast = ema(close15, 8), m15Slow = ema(close15, 21);
+  const m15Side = sideOf(m15Fast, m15Slow, m15.at(-1).close);
   const h1Side = sideOf(ema(h1.map(x => x.close), 50), ema(h1.map(x => x.close), 200), h1.at(-1).close);
   const h4Closes = h4.map(x => x.close);
   const h4Raw = sideOf(ema(h4Closes, 8), ema(h4Closes, 21), h4.at(-1).close);
   const h4Side = h4Raw === 'BUY' && h4.at(-1).close > ema(h4Closes, 200) ? 'BUY' :
     h4Raw === 'SELL' && h4.at(-1).close < ema(h4Closes, 200) ? 'SELL' : 'WAIT';
-  // Still block mismatched timeframes, but evaluate all read-only diagnostics first.
-  const higherTimeframeAligned = mark(7, h1Side === side || h4Side === side);
+  // Hierarchical confirmation: H1 gives context; neutral M15 may defer to H1
+  // only near its EMA band. An explicitly opposite M15 or H4 is never coerced.
+  const vol15 = atr(m15, 14);
+  const neutralM15NearBand = m15Side === 'WAIT' && vol15 > 0 &&
+    Math.abs(m15Fast - m15Slow) <= vol15 * .25 &&
+    Math.abs(m15.at(-1).close - m15Slow) <= vol15 * .7;
+  const side = m15Side !== 'WAIT' ? m15Side :
+    neutralM15NearBand && h1Side !== 'WAIT' ? h1Side : 'WAIT';
+  if (!mark(6, side !== 'WAIT'))
+    return wait('FUSION: M15 neutral without a safe H1-confirmed EMA-band setup.');
+  const buy = side === 'BUY', sign = buy ? 1 : -1;
+  const ema5Fast = ema(close5, 8), ema5Slow = ema(close5, 21);
+  const trendM5 = buy ? ema5Fast > ema5Slow && last.close > ema5Fast : ema5Fast < ema5Slow && last.close < ema5Fast;
+  const goodRsi = buy ? momentum >= 51 && momentum <= 74 : momentum <= 49 && momentum >= 26;
+  // Prefer H1, tolerate neutral H4, reject confirmed opposite higher context.
+  const higherTimeframeAligned = mark(7,
+    (h1Side === side || h1Side === 'WAIT' && h4Side === side && m15Side === side) &&
+    (h1Side === 'WAIT' || h1Side === side) &&
+    (h4Side === 'WAIT' || h4Side === side));
   const prior3 = m5.slice(-4, -1), prior6 = m5.slice(-7, -1);
   const upper = Math.max(...prior3.map(x => x.high)), lower = Math.min(...prior3.map(x => x.low));
   const swingHigh = Math.max(...prior6.map(x => x.high)), swingLow = Math.min(...prior6.map(x => x.low));
@@ -110,7 +123,7 @@ export function analyzeBtcFusion(snapshot, now = Date.now() / 1000) {
   const price = buy ? snapshot.ask : snapshot.bid;
   const near = Math.abs(price - last.close) <= vol * .5;
   const checks = [
-    {name:'M15 EMA8/21 direction', pass:true, weight:15},
+    {name:'M15 EMA8/21 direction', pass:m15Side === side, weight:15},
     {name:'M5 EMA8/21 agreement', pass:trendM5, weight:18},
     {name:'M5 closed-bar breakout or liquidity sweep', pass:breakout || sweep, weight:12},
     {name:'H1 context', pass:h1Side === side, weight:8},
@@ -123,7 +136,7 @@ export function analyzeBtcFusion(snapshot, now = Date.now() / 1000) {
   const score = checks.reduce((sum, c) => sum + (c.pass ? c.weight : 0), 0);
   const assessed = {...base, checks, score, risk:'ASSESSED', reasons:checks.filter(c => !c.pass).map(c => c.name)};
   if (!higherTimeframeAligned)
-    return {...assessed, risk:'CAUTION', reasons:['FUSION: M15 conflicts with H1 and H4.']};
+    return {...assessed, risk:'CAUTION', reasons:['FUSION: explicit H1/H4 direction conflict; waiting for confirmed alignment.']};
   if (!trendM5 || !goodRsi || !(breakout || sweep) || !near || score < 75)
     return {...assessed, reasons: ['FUSION: entry gates incomplete or score below 75.', ...assessed.reasons]};
   const entry = align(price, snapshot.spec);
@@ -143,7 +156,7 @@ export function analyzeBtcFusion(snapshot, now = Date.now() / 1000) {
     timeframe:'M5', entry, sl, tp1, tp2, risk_distance:riskDistance,
     score, mode:sweep ? 'LIQUIDITY_SWEEP' : 'EMA_BREAKOUT', adx14:adx,
     suggested_max_hold_seconds:900,
-    reason:'BTC FUSION: EMA8/21+RSI14+ATR14+'+(sweep?'liquidity sweep':'breakout')+'+H1/H4; 5-15m scalp',
+    reason:'BTC FUSION: EMA8/21+RSI14+ATR14+'+(sweep?'liquidity sweep':'breakout')+'+H1/H4 hierarchy; 5-15m scalp',
     status:'TRACKING', tracking:'VIRTUAL', tp1_hit:false};
   return {...assessed, decision:side, plan, reasons:[plan.reason]};
 }
