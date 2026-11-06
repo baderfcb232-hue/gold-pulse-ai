@@ -1,6 +1,7 @@
 import {positionSize, ema, botHeartbeatFresh, BOT_CONTROL_TTL} from '/engine.mjs';
 import {initLiveWorkspace} from '/live.js?v=short-iphone-20261106&analysis=phase6-1';
 import {inSignalDateRange} from '/signal-date-filter.js';
+import {initRecommendationExplainer,safeExecutionStatus} from '/recommendation-explainer.js?v=phase9-1';
 import {createStateConnection} from '/state-connection.js';
 import {requestJson} from '/http.js';
 import {translateUiText,currentLocale,setLocalizedText} from '/i18n-dom.js?v=v2-i18n-5';
@@ -20,6 +21,7 @@ const actions = {PAUSE:'إيقاف دخول جديد',RESUME:'تشغيل الد�
 const views = {overview:'نظرة السوق',signals:'التوصيات',positions:'الصفقات',news:'الأخبار الاقتصادية',results:'النتائج',settings:'الإعدادات والربط'};
 const descriptions = {overview:'أسعار وسياق السوق وأخبار، ومتابعة جاهزية التوصيات.',signals:'فرص المضاربة وخطط البوت، كل خطة بوقتها ومصدرها.',positions:'حسابك وصفقات البوت وأوامر الإدارة.',news:'عناوين المصادر ومواعيد الأحداث الاقتصادية بتوقيت غزة.',results:'متابعة الخطط وعمليات MT5 الفعلية.',settings:'ربط المنصة وفحص البيانات وحساب المخاطرة.'};
 let state = null, signals = [], privateData = null, authenticated = false, view = 'overview';
+const recommendationAssistant=initRecommendationExplainer();
 let chartTf = 'M5', chartRows = [], chartKey = '', chartLoading = false;
 let lastSignalId = null, signalsStamp = '', clockOffset = 0, pendingCommand = null, stream = null;
 let stateErrorShown = false;
@@ -146,7 +148,7 @@ function renderActiveSignal(){
   box.append(values,e('p','source-caption',p.source==='MT5_EA'?'المستويات من البوت؛ التنفيذ يُراجع في الصفقات.':'المستويات من محرك الموقع؛ متابعة افتراضية.'));
   const cap=e('div','signal-caption');for(const [label,value]of [['صدرت',time(p.issued_at,true)],['الصلاحية',time(p.expires_at)],['نوع المتابعة','افتراضية؛ تنفيذ MT5 يظهر في الصفقات']]){const row=e('div');row.append(e('span','',label),e('span','',value));cap.append(row);}box.append(cap);const button=e('button','button ghost wide','احسب لوت هذه الإشارة');button.onclick=()=>{switchView('settings');$('risk-form').elements.entry.value=p.entry;$('risk-form').elements.sl.value=p.sl;};box.append(button);replace('active-signal',box);
 }
-async function loadSignals(){try{const data=await api('/api/signals');signals=data.signals||[];renderSignals();renderResults();}catch(err){signals=[];renderResults();replace('signals-list',empty(err.status===401?'سجّل الدخول بحساب مؤكد ومخوّل لمشاهدة سجل التوصيات.':'تعذر جلب سجل التوصيات الآن.'),Object.assign(e('a','button primary','تسجيل الدخول'),{href:'/auth'}));}}
+async function loadSignals(){try{const data=await api('/api/signals');signals=data.signals||[];recommendationAssistant.updateSignals(signals);renderSignals();renderResults();}catch(err){signals=[];recommendationAssistant.updateSignals(null);renderResults();replace('signals-list',empty(err.status===401?'سجّل الدخول بحساب مؤكد ومخوّل لمشاهدة سجل التوصيات.':'تعذر جلب سجل التوصيات الآن.'),Object.assign(e('a','button primary','تسجيل الدخول'),{href:'/auth'}));}}
 function renderSignals(){
   const filter=$('signal-filter').value,source=$('signal-source-filter').value,range=$('signal-date-filter').value;
   const rows=signals.filter(s=>inSignalDateRange(Number(s.issued_at),range,now())&&(filter==='ALL'||s.status===filter)&&(source==='ALL'||(s.source==='MT5_EA'?'MT5_EA':'DASHBOARD')===source));
@@ -158,10 +160,25 @@ function renderSignals(){
     if(s.recommendation_code)status.append(e('small','subtle','رقم التوصية #'+s.recommendation_code));
     const execution=s.execution_trace;
     if(execution){
-      const labels={FILLED:'تأكد فتح صفقة من سجل الوسيط',SUBMITTED:'طلب MT5 أُرسل — لم يُثبت فتح صفقة',REJECTED:'رفض MT5 التنفيذ',DISPATCHED:'وصلت للجسر — لم يصل تأكيد MT5',BLOCKED:'مُنع إرسال الأمر',NOT_DISPATCHED:'لا يوجد أمر MT5 مسجل'};
-      status.append(e('small','subtle',(labels[execution.status]||execution.status)+(execution.approval_id?' · أمر #'+execution.approval_id:'')+(execution.reason?' · '+execution.reason:'')+(execution.reason_code!=null?' · EA '+execution.reason_code:'')+(execution.mt5_retcode!=null?' · MT5 '+execution.mt5_retcode:'')+(execution.broker_deal_ticket?' · Deal #'+execution.broker_deal_ticket:'')));
+      const verified=safeExecutionStatus(s,currentLocale());
+      status.append(e('small','subtle',verified.message+
+        (execution.approval_id?' · أمر #'+execution.approval_id:'')+
+        (execution.reason_code!=null?' · EA '+execution.reason_code:'')+
+        (execution.mt5_retcode!=null?' · MT5 '+execution.mt5_retcode:'')));
     }
-    row.append(head,levels,status);return row;
+    const context=e('div','signal-context-links');
+    if(['XAUUSD','BTCUSD'].includes(s.symbol)){
+      const chart=e('a','signal-context-link','افتح الشارت');
+      chart.href=s.symbol==='BTCUSD'?'/charts/bitcoin':'/charts/gold';
+      const history=e('a','signal-context-link','سجل التحليلات');
+      history.href='/analysis-history';
+      context.append(chart,history);
+    }
+    if(typeof s.strategy==='string'&&s.strategy){
+      const strategy=e('small','signal-context-summary','الاستراتيجية المسجلة: '+s.strategy);
+      status.append(strategy);
+    }
+    row.append(head,levels,status,context);return row;
   }):[empty('لم تصدر توصيات ضمن هذا الاختيار بعد.') ]));
 }
 function metric(label,value,note=''){const m=e('div','metric');m.append(e('span','',label),e('strong','',value),e('small','',note));return m;}
@@ -554,7 +571,7 @@ setInterval(()=>{if(authenticated&&activeCommandBusy())loadPrivate();},2000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)fetchState();});
 await fetchState();loadSignals();loadPrivate();
 stream=new EventSource('/api/events');stream.addEventListener('state',event=>{try{stateConnection.receive(JSON.parse(event.data));}catch{stateConnection.disconnected();}});stream.onerror=()=>stateConnection.disconnected();
-initLiveWorkspace({stream,api,time,num,now,notify:toast,priceFeedback,positionSize,getSizingContext:symbol=>{
+initLiveWorkspace({stream,api,time,num,now,notify:toast,priceFeedback,positionSize,onMarket:market=>recommendationAssistant.updateMarket(market),getSizingContext:symbol=>{
   const account=symbol==='BTCUSD'?privateData?.btc?.account:privateData?.account;
   const brokerSpec=symbol===state?.symbol?state?.spec:state?.controls?.[symbol]?.spec;
   return {spec:brokerSpec,equity:account?.equity,freeMargin:account?.free_margin};
