@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1">
+ <meta name="theme-color" content="#09141d">
+ <meta name="robots" content="noindex,nofollow">
+ <meta name="description" content="NABD private MT5 setup wizard for verified subscribers">
+ <title>NABD | Smart Onboarding</title>
+ <link rel="icon" href="/icon.svg" type="image/svg+xml">
+ <link rel="manifest" href="/manifest.webmanifest">
+ <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+ <script src="/theme-init.js?v=phase11-1"></script>
+ <script src="/nabd-locale-init.js?v=v2-1"></script>
+ <link rel="stylesheet" href="/onboarding.css?v=phase11-1">
+ <script src="/onboarding.js?v=phase11-1" type="module"></script>
+</head>
+<body>
+ <a class="skip-link" href="#onboarding-main" data-t="skip">تجاوز إلى المعالج</a>
+ <header class="onboarding-header">
+  <a href="/dashboard" class="brand"><img id="onboarding-logo" src="/nabd-logo.svg" alt="NABD" width="110" height="42"></a>
+  <nav><a href="/dashboard" data-t="dashboard">لوحة نبض</a><a href="/account" data-t="account">حسابي</a></nav>
+  <div class="preferences"><button type="button" id="onboarding-language" aria-label="Switch language">EN</button><button type="button" id="onboarding-theme" aria-label="Switch theme">☾</button></div>
+ </header>
+ <main id="onboarding-main" class="onboarding-main">
+  <div class="eyebrow">NABD / SMART ONBOARDING</div>
+  <div class="hero">
+   <div><h1 data-t="heading">ربط حساب MT5 خطوة بخطوة</h1><p data-t="intro">رحلة واضحة لتسجيل الحساب التجريبي وطلب المراقبة على سيرفر نبض المركزي، دون الحاجة إلى VPS خاص بالمشترك.</p></div>
+   <div class="safety"><strong data-t="safeTitle">بدون كلمات مرور MT5</strong><span data-t="safeText">المعالج لا يجمع كلمة مرور التداول أو المستثمر ولا يفتح صفقات.</span></div>
+  </div>
+  <section class="status-summary" aria-label="Setup readiness">
+   <span id="onboarding-state-dot" class="state-dot"></span>
+   <div><strong id="onboarding-state">—</strong><p id="onboarding-state-description" data-t="statusDisclaimer">حفظ الحساب أو قبول الطلب لا يعني اتصال MT5 أو تفعيل التداول.</p></div>
+   <button id="onboarding-refresh" type="button" data-t="refresh">تحديث الحالة</button>
+  </section>
+  <p class="feedback" id="onboarding-message" role="status" aria-live="polite"></p>
+  <section class="steps-panel" aria-labelledby="steps-heading">
+   <h2 id="steps-heading" data-t="progress">تقدّم الإعداد</h2>
+   <ol id="onboarding-steps" class="steps-list">
+    <li data-t="step1">تسجيل الدخول</li>
+    <li data-t="step2">تسجيل Demo</li>
+    <li data-t="step3">طلب الاستضافة</li>
+    <li data-t="step4">موافقة الإدارة</li>
+    <li data-t="step5">التحقق من المراقبة</li>
+   </ol>
+  </section>
+  <section class="setup-grid">
+   <article class="setup-card" id="onboarding-signin" hidden>
+    <span class="card-number">01 / ACCOUNT</span><h2 data-t="signin">ابدأ بتسجيل الدخول</h2>
+    <p data-t="signinDescription">سجّل الدخول إلى حساب نبض الموثّق لعرض طلبات MT5 الخاصة بك فقط.</p>
+    <a class="primary-link" href="/auth" data-t="signinAction">إنشاء حساب أو تسجيل الدخول</a>
+   </article>
+   <article class="setup-card" id="onboarding-register" hidden>
+    <span class="card-number">02 / DEMO</span><h2 data-t="register">معلومات حساب Demo</h2>
+    <p data-t="registerDescription">الوسيط المدعوم حاليًا: JustMarkets Demo فقط. وسطاء آخرون في مراحل لاحقة.</p>
+    <form id="onboarding-registration-form" autocomplete="off">
+     <label><span data-t="broker">الوسيط</span><select name="broker" required>
+       <option value="JustMarkets">JustMarkets · Demo</option>
+       <option value="" disabled data-t="others">وسطاء آخرون — غير متاحين حاليًا</option>
+     </select></label>
+     <label><span data-t="environment">نوع الحساب</span><select name="environment" required>
+       <option value="demo">Demo — تجريبي</option>
+       <option value="live" disabled data-t="realDisabled">Live — غير مفعّل للمشتركين</option>
+     </select></label>
+     <label><span data-t="server">اسم سيرفر MT5</span><input name="server" type="text" value="JustMarkets-Demo" maxlength="32" pattern="JustMarkets-Demo[0-9]{0,5}" required spellcheck="false" dir="ltr"></label>
+     <label><span data-t="login">رقم حساب MT5</span><input name="login" inputmode="numeric" type="text" pattern="[1-9][0-9]{3,15}" minlength="4" maxlength="16" required placeholder="12345678" dir="ltr"></label>
+     <label class="consent"><input type="checkbox" name="acknowledge" required><span data-t="acknowledge">أفهم أن هذا تسجيل بيانات الحساب فقط، ولا يتصل بمنصة MT5 أو يفعّل التداول.</span></label>
+     <button type="submit" id="onboarding-register-button" data-t="save">حفظ حساب Demo</button>
+    </form>
+   </article>
+   <article class="setup-card" id="onboarding-hosting" hidden>
+    <span class="card-number">03 / CENTRAL SERVER</span><h2 data-t="hosting">طلب استضافة مركزية</h2>
+    <p data-t="hostingDescription">يُرسل الطلب لإدارة نبض لمراجعة تجهيز مراقبة حساب Demo على Windows المركزي. الموافقة ليست ربطًا أو تشغيلًا للتداول.</p>
+    <div id="onboarding-account-summary" class="account-summary" dir="auto"></div>
+    <label class="consent"><input type="checkbox" id="onboarding-hosting-consent"><span data-t="hostingConsent">أوافق على إرسال طلب الاستضافة للمراجعة. أدرك أن كلمة المرور غير مطلوبة وأن التداول معطّل.</span></label>
+    <button type="button" id="onboarding-hosting-button" data-t="sendHosting">إرسال طلب الاستضافة</button>
+   </article>
+   <article class="setup-card monitoring-card" id="onboarding-monitor" hidden>
+    <span class="card-number">04 / VERIFICATION</span><h2 data-t="monitor">مراقبة اتصال Windows/MT5</h2>
+    <p id="onboarding-monitor-description">—</p>
+    <dl class="monitor-grid">
+      <div><dt data-t="broker">الوسيط</dt><dd id="onboarding-monitor-broker">—</dd></div>
+      <div><dt data-t="server">اسم سيرفر MT5</dt><dd id="onboarding-monitor-server">—</dd></div>
+      <div><dt data-t="hostingStatus">حالة طلب الاستضافة</dt><dd id="onboarding-monitor-hosting">—</dd></div>
+      <div><dt data-t="lastReport">آخر تقرير من المراقب</dt><dd id="onboarding-monitor-last">—</dd></div>
+    </dl>
+    <a href="/account" class="secondary-link" data-t="manage">إدارة طلب MT5 من حسابي</a>
+   </article>
+  </section>
+  <aside class="safety-note">
+    <h2 data-t="central">كيف يعمل السيرفر المركزي؟</h2>
+    <p data-t="centralDescription">تُقدّم طلبًا من موقع نبض، ثم تراجع الإدارة تجهيزه على Windows المركزي. كل حساب له طلب ومراقب مستقلان. إصدار رمز مراقبة لا يمنح صلاحية التداول، ولا يحتاج المشترك إلى استئجار VPS خاص.</p>
+    <p data-t="later">تفعيل ربط التداول الفعلي لكل مشترك يتطلب بنية تشغيل آمنة منفصلة واختبارات إضافية، وهو غير متاح في هذه الخطوة.</p>
+  </aside>
+ </main>
+</body>
+</html>
