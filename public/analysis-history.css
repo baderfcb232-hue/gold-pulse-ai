@@ -60,3 +60,20 @@
  .history-timeline{grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:reduce){.history-skeleton{animation:none}}
+
+/* Phase 8 search and export: compact controls, no additional dashboard cards. */
+.history-filter-panel .history-search-label{flex:1 1 220px;min-width:155px}
+.history-filter-panel input[type="search"]{
+ width:100%;min-height:39px;padding:8px 11px;border:1px solid var(--border);
+ background:var(--card);color:var(--ink);border-radius:9px;outline-offset:2px;
+}
+#history-export{
+ border:1px solid var(--accent);color:var(--accent);background:var(--card);
+ font-weight:750;min-height:39px;padding:8px 13px;border-radius:9px;white-space:nowrap;
+}
+#history-export:hover{background:var(--accent-bg)}
+@media(max-width:750px){
+ .history-filter-panel .history-search-label{flex:1 1 100%;min-width:100%}
+ #history-export{flex:1 1 calc(50% - 6px)}
+ #history-refresh{flex:1 1 calc(50% - 6px)}
+}
