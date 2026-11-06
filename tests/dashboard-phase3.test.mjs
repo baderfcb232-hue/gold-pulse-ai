@@ -58,3 +58,17 @@ test('phase 3 workspace shortcuts only target existing panels and keep private a
   assert.match(css,/@media\(max-width:600px\)/);
   assert.doesNotMatch(shortcut,/balance|equity|password|account_number/i);
 });
+
+
+test('phase 3 member card uses read-only account and market APIs and never infers a trade fill',()=>{
+ const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
+ const js=readFileSync(new URL('../public/dashboard-member.js',import.meta.url),'utf8');
+ for(const id of ['phase3-member-name','phase3-member-access','phase3-mt5-status','phase3-telegram-status','phase3-gold-status','phase3-btc-status','phase3-signal-count','phase3-trade-count'])
+   assert.ok(html.includes('id="'+id+'"'),id);
+ assert.match(js,/\/api\/auth\/me/);
+ assert.match(js,/\/api\/market/);
+ assert.match(js,/\/api\/state/);
+ assert.match(js,/notVerified/);
+ assert.doesNotMatch(js,/\/api\/commands|\/api\/bridge\/next|\/api\/auth\/mt5-accounts|localStorage|sessionStorage/);
+ assert.match(html,/dashboard-member\.js/);
+});
