@@ -1,11 +1,22 @@
 /* NABD Phase 8: read-only member-gated history browser, no market/order mutation.
    All historical observations are server-captured, never fabricated client-side. */
 export const HISTORY_PERIODS=Object.freeze({DAY:86400,WEEK:7*86400,MONTH:30*86400});
-export function historyQuery({symbol='ALL',status='ALL',period='WEEK',before=null,now=Date.now()/1000,limit=30}={}){
- const query=new URLSearchParams({symbol,status,limit:String(limit)});
- if(Object.hasOwn(HISTORY_PERIODS,period))query.set('since',String(Math.max(0,Math.floor(now-HISTORY_PERIODS[period]))));
- if(before!=null)query.set('before',String(before));
- return '/api/analysis-history?'+query.toString();
+export function historyQuery({symbol='ALL',status='ALL',period='WEEK',before=null,now=Date.now()/1000,limit=30,query=''}={}){
+ const params={symbol,status,limit:String(limit)};
+ if(query)params.q=String(query).slice(0,100);
+ const queryParams=new URLSearchParams(params);
+ if(Object.hasOwn(HISTORY_PERIODS,period))queryParams.set('since',String(Math.max(0,Math.floor(now-HISTORY_PERIODS[period]))));
+ if(before!=null)queryParams.set('before',String(before));
+ return '/api/analysis-history?'+queryParams.toString();
+}
+// Only broker-source observations may link to broker-only candle charts.
+// The chart link is contextual: old candles may no longer be available.
+export function historyChartLink(item){
+ if(!item||item.source_type!=='MT5'||!['XAUUSD','BTCUSD'].includes(item.symbol)||
+  !Number.isSafeInteger(item.recorded_at)||item.recorded_at<=0)return null;
+ const path=item.symbol==='XAUUSD'?'/charts/gold':'/charts/bitcoin';
+ const tf=['M15','M5','H1','H4'].find(frame=>Object.hasOwn(item.frames||{},frame))||'M15';
+ return path+'?at='+item.recorded_at+'&tf='+tf;
 }
 const i18n={
  ar:{
@@ -18,7 +29,7 @@ const i18n={
   blocked:'شروط تمنع الدخول',newsBlocked:'فلتر الأخبار',stale:'بيانات متأخرة',
   warming:'تجهيز الشموع',gap:'فجوة في الشموع',
   day:'آخر 24 ساعة',week:'آخر 7 أيام',month:'آخر 30 يومًا',allPeriod:'كل السجل المتاح',
-  refresh:'تحديث',more:'عرض تحليلات أقدم',
+  refresh:'تحديث',more:'عرض تحليلات أقدم',search:'بحث في الأسباب والشروط',searchPlaceholder:'ابحث عن سبب الانتظار أو المؤشر',exportCsv:'تصدير CSV',chart:'عرض الشمعة على الشارت',exportError:'تعذّر تصدير السجل، حاول مجددًا.',
   scopeNote:'السجل يخص تحليل السوق المركزي في نبض وليس حساب MT5 الخاص بأي مشترك. لا يتضمن أرقام الحسابات أو أوامر التداول.',
   historyNote:'يبدأ الحفظ من تفعيل هذه الميزة؛ لا توجد تحليلات مُنشأة بأثر رجعي. جاهزية التحليل لا تعني صدور توصية أو تنفيذ صفقة.',
   loading:'جاري جلب التحليلات المسجلة…',empty:'لا توجد تحليلات محفوظة مطابقة لهذه الفلاتر بعد.',
@@ -44,7 +55,7 @@ const i18n={
   blocked:'Entry gates incomplete',newsBlocked:'News filter',stale:'Market data delayed',
   warming:'Warming candles',gap:'Candle gap',
   day:'Last 24 hours',week:'Last 7 days',month:'Last 30 days',allPeriod:'Entire available history',
-  refresh:'Refresh',more:'Load older analyses',
+  refresh:'Refresh',more:'Load older analyses',search:'Search reasons and checks',searchPlaceholder:'Search reasons or indicator names',exportCsv:'Export CSV',chart:'View candle on chart',exportError:'Unable to export history. Try again.',
   scopeNote:'This is the platform’s global market analysis, not an individual subscriber’s MT5 account. Account numbers and orders are never stored.',
   historyNote:'History begins when this feature is enabled; older analyses are not backfilled. Aligned conditions do not prove a signal was published or a trade was executed.',
   loading:'Loading recorded analyses…',empty:'No recorded analyses match these filters yet.',
@@ -95,6 +106,7 @@ function init(){
    if(typeof t[key]==='string')n.textContent=t[key];
   });
   $('history-language').textContent=lang()==='ar'?'EN':'AR';
+  $('history-search').placeholder=t.searchPlaceholder;
   $('history-logo').src=lang()==='ar'?'/nabd-logo.svg':'/nabd-logo-en.svg';
   theme();
   render();
@@ -144,6 +156,10 @@ function init(){
   else sub.append(el('span','',t.noneScore));
   const reason=el('p','history-entry-reason',item.reason||t.unknown);
   article.append(head,sub,reason);
+  const url=historyChartLink(item);
+  if(url){const link=el('a','history-chart-link',t.chart);link.href=url;
+   link.title=t.chart+' · '+fmtDate(item.recorded_at);
+   article.append(link);}
   const checkCount=['indicator_checks','readiness_checks','entry_checks']
     .reduce((n,k)=>n+(Array.isArray(item[k])?item[k].length:0),0);
   if(checkCount){
@@ -175,7 +191,8 @@ function init(){
   $('history-more').disabled=true;
   const query=historyQuery({
    symbol:$('history-symbol').value,status:$('history-status').value,
-   period:$('history-period').value,before:reset?null:cursor,limit:30
+   period:$('history-period').value,before:reset?null:cursor,limit:30,
+   query:$('history-search').value.trim()
   });
   try{
    const response=await fetch(query,{credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}});
@@ -200,7 +217,27 @@ function init(){
   }
  }
  for(const key of ['history-symbol','history-status','history-period'])$(key).addEventListener('change',()=>load(true));
+ let searchDelay;
+ $('history-search').addEventListener('input',()=>{clearTimeout(searchDelay);searchDelay=setTimeout(()=>load(true),350);});
  $('history-refresh').addEventListener('click',()=>load(true));
+ $('history-export').addEventListener('click',async()=>{
+  const button=$('history-export');
+  if(button.disabled)return;
+  button.disabled=true;
+  const url=historyQuery({symbol:$('history-symbol').value,status:$('history-status').value,
+    period:$('history-period').value,query:$('history-search').value.trim()})
+    .replace('/api/analysis-history?','/api/analysis-history.csv?');
+  try {
+   const response=await fetch(url,{credentials:'same-origin',cache:'no-store',headers:{Accept:'text/csv'}});
+   if(response.status===401||response.status===403){message('signin',loc().signIn,true);return;}
+   if(!response.ok)throw new Error('CSV unavailable');
+   const blob=await response.blob(),blobUrl=URL.createObjectURL(blob);
+   const download=el('a');download.href=blobUrl;download.download='nabd-analysis-history.csv';
+   document.body.append(download);download.click();download.remove();
+   setTimeout(()=>URL.revokeObjectURL(blobUrl),1200);
+  }catch{message('error',loc().exportError);}
+  finally{button.disabled=false;}
+ });
  $('history-more').addEventListener('click',()=>{if(!pending&&cursor)load(false);});
  $('history-language').addEventListener('click',()=>{
   const value=lang()==='ar'?'en':'ar';
@@ -222,7 +259,7 @@ function init(){
   }else if(e.key==='nabd:dashboard:theme')theme();
  });
  const refresh=setInterval(()=>{if(!document.hidden&&!pending&&items.length<=30)load(true);},60000);
- window.addEventListener('pagehide',()=>clearInterval(refresh),{once:true});
+ window.addEventListener('pagehide',()=>clearInterval(refresh);clearTimeout(searchDelay),{once:true});
  translate();
  load(true);
 }
