@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+ <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+ <meta name="theme-color" content="#f8fafc">
+ <meta name="description" content="NABD Gold and Bitcoin — verified analysis history and waiting reasons">
+ <title>NABD | سجل التحليلات</title>
+ <link rel="icon" href="/icon.svg" type="image/svg+xml">
+ <link rel="manifest" href="/manifest.webmanifest">
+ <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+ <script src="/theme-init.js?v=phase8-1"></script>
+ <script src="/nabd-locale-init.js?v=v2-1"></script>
+ <link rel="stylesheet" href="/analysis-history.css?v=phase8-1">
+ <script src="/analysis-history.js?v=phase8-1" type="module"></script>
+</head>
+<body>
+ <a class="history-skip" href="#history-main" data-i18n="skip">تجاوز إلى السجل</a>
+ <header class="history-header">
+  <a href="/dashboard" aria-label="NABD dashboard"><img id="history-logo" src="/nabd-logo.svg" width="125" height="46" alt="NABD"></a>
+  <nav aria-label="NABD Navigation" class="history-links">
+   <a href="/dashboard" data-i18n="dashboard">لوحة التداول</a>
+   <a href="/charts/gold" data-i18n="goldChart">شارت الذهب</a>
+   <a href="/charts/bitcoin" data-i18n="btcChart">شارت البيتكوين</a>
+  </nav>
+  <div class="history-actions">
+   <button type="button" id="history-language" aria-label="Change language">EN</button>
+   <button type="button" id="history-theme" aria-label="Change theme">☾</button>
+   <a href="/account" data-i18n="account">حسابي</a>
+  </div>
+ </header>
+ <main class="history-main" id="history-main">
+  <div class="history-hero">
+   <div>
+    <span class="history-eyebrow">NABD / ANALYSIS JOURNAL</span>
+    <h1 data-i18n="title">سجل تحليلات السوق</h1>
+    <p data-i18n="description">مراجعة حالات تحليل الذهب والبيتكوين وسبب الانتظار أو توافق الشروط، حسب البيانات المسجلة فعلًا.</p>
+   </div>
+   <span class="history-not-trades" data-i18n="disclaimer">تحليلات مرصودة · ليست صفقات منفّذة</span>
+  </div>
+  <section class="history-filter-panel" aria-label="Analysis history filters">
+   <label><span data-i18n="market">السوق</span>
+    <select id="history-symbol">
+     <option value="ALL" data-i18n="both">الذهب والبيتكوين</option>
+     <option value="XAUUSD" data-i18n="gold">الذهب</option>
+     <option value="BTCUSD" data-i18n="bitcoin">بيتكوين</option>
+    </select>
+   </label>
+   <label><span data-i18n="status">الحالة</span>
+    <select id="history-status">
+     <option value="ALL" data-i18n="all">كل الحالات</option>
+     <option value="READY" data-i18n="ready">شروط متوافقة</option>
+     <option value="SCANNING" data-i18n="scanning">مراقبة الشروط</option>
+     <option value="WATCH" data-i18n="watch">فرصة مشروطة</option>
+     <option value="BLOCKED" data-i18n="blocked">شروط تمنع الدخول</option>
+     <option value="NEWS_BLOCK" data-i18n="newsBlocked">فلتر الأخبار</option>
+     <option value="STALE" data-i18n="stale">بيانات متأخرة</option>
+     <option value="WARMING" data-i18n="warming">تجهيز الشموع</option>
+     <option value="GAP" data-i18n="gap">فجوة في الشموع</option>
+    </select>
+   </label>
+   <label><span data-i18n="period">الفترة</span>
+    <select id="history-period">
+     <option value="DAY" data-i18n="day">آخر 24 ساعة</option>
+     <option value="WEEK" selected data-i18n="week">آخر 7 أيام</option>
+     <option value="MONTH" data-i18n="month">آخر 30 يومًا</option>
+     <option value="ALL" data-i18n="allPeriod">كل السجل المتاح</option>
+    </select>
+   </label>
+   <button type="button" id="history-refresh" data-i18n="refresh">تحديث</button>
+  </section>
+  <section class="history-details" aria-label="History provenance">
+   <span id="history-count" aria-live="polite">—</span>
+   <span id="history-first">—</span>
+   <span id="history-storage">—</span>
+  </section>
+  <div id="history-alert" class="history-alert" role="status" aria-live="polite" hidden></div>
+  <section class="history-timeline" id="history-list" aria-label="Recorded analysis entries">
+   <div class="history-skeleton" aria-hidden="true"></div>
+   <div class="history-skeleton" aria-hidden="true"></div>
+  </section>
+  <div class="history-paging">
+   <button type="button" id="history-more" data-i18n="more" hidden>عرض تحليلات أقدم</button>
+  </div>
+  <footer class="history-disclosure">
+   <p data-i18n="scopeNote">السجل يخص تحليل السوق المركزي في نبض وليس حساب MT5 الخاص بأي مشترك. لا يتضمن أرقام الحسابات أو أوامر التداول.</p>
+   <p data-i18n="historyNote">يبدأ الحفظ من تفعيل هذه الميزة؛ لا تُنشأ تحليلات تاريخية بأثر رجعي. جاهزية التحليل لا تعني صدور توصية أو تنفيذ صفقة.</p>
+  </footer>
+ </main>
+</body>
+</html>
