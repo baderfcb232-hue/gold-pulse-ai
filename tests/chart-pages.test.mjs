@@ -88,7 +88,7 @@ test('chart UI distinguishes real broker candles from opt-in external reference 
  assert.match(js,/brokerChartPath\(symbol,requestedTf\)/);
  assert.match(js,/drawBrokerCandles\(canvas,input,\[\]\)/);
  assert.match(js,/summarizeAnalysisMarket/);
- assert.match(js,/chart\.quote/);
+ assert.match(js,/chart\?\.quote/);
  assert.match(js,/TradingView/);
  assert.match(js,/source/i);
  assert.match(js,/localStorage\.setItem\('nabd:dashboard:theme'/);
