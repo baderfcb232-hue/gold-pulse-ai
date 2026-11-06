@@ -9,6 +9,7 @@ import {mt5Archive} from './archive.mjs';
 import {summarizeGoldPerformance} from './performance.mjs';
 import {createMarketFeed} from './market.mjs';
 import {createAnalysisHistory} from './analysis-history.mjs';
+import {analysisHistoryCsv,exportHistoryRows} from './analysis-history-csv.mjs';
 import {createNewsFeed} from './news.mjs';
 
 import {createTelegramPublisher} from './telegram.mjs';
@@ -616,7 +617,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         return send(req, res, 303, '', 'text/plain; charset=utf-8', {Location: '/'});
       if (path === '/api/state' && req.method === 'GET') return send(req, res, 200, protectSignals('state', publicState(), await canReadSignals(req)));
       if (path === '/api/market' && req.method === 'GET') return send(req, res, 200, protectSignals('market', marketState(), await canReadSignals(req)));
-      if (path === '/api/analysis-history' && req.method === 'GET') {
+      if (['/api/analysis-history','/api/analysis-history.csv'].includes(path) && req.method === 'GET') {
         if (!await canReadSignals(req)) return send(req,res,401,{error:'Verified member or operator sign-in required'});
         const parseIntParam=(name,defaultValue=null)=>{
           const value=url.searchParams.get(name);
@@ -627,12 +628,20 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           return numeric;
         };
         try{
-          return send(req,res,200,analysisHistory.list({
+          const filters={
             symbol:url.searchParams.get('symbol')||'ALL',
             status:url.searchParams.get('status')||'ALL',
             since:parseIntParam('since'),
-            before:parseIntParam('before'),
-            limit:parseIntParam('limit',40)
+            query:url.searchParams.get('query')||''
+          };
+          if(path.endsWith('.csv')){
+            const rows=exportHistoryRows(analysisHistory,filters);
+            return send(req,res,200,analysisHistoryCsv(rows),'text/csv; charset=utf-8',{
+              'Content-Disposition':'attachment; filename="nabd-analysis-history.csv"'
+            });
+          }
+          return send(req,res,200,analysisHistory.list({
+            ...filters,before:parseIntParam('before'),limit:parseIntParam('limit',40)
           }));
         }catch(e){
           if(e instanceof RangeError)return send(req,res,400,{error:e.message});
