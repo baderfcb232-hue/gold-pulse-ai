@@ -1,13 +1,20 @@
 // Read-only chart for MT5 closed OHLC. Never submits trades or creates quotes.
-export function drawBrokerCandles(canvas, payload, levels = []) {
+export function drawBrokerCandles(canvas, payload, levels = [], options = {}) {
   const rect=canvas.getBoundingClientRect(), W=Math.max(300,Math.floor(rect.width)), H=Math.max(300,Math.floor(rect.height));
   if (!canvas.getContext || !rect.width) return;
   const dpr=Math.min(2,window.devicePixelRatio||1);
   canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);
   const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
   ctx.fillStyle='#0c151d';ctx.fillRect(0,0,W,H);
-  const rows=(payload?.candles||[]).filter(c=>[c.open,c.high,c.low,c.close,c.time].every(Number.isFinite)).slice(-Math.max(25,Math.floor((W-85)/9)));
-  if (!rows.length) return;
+  const all=(payload?.candles||[]).filter(c=>[c.open,c.high,c.low,c.close,c.time].every(Number.isFinite));
+  const visibleCount=Math.max(25,Math.floor((W-85)/9));
+  let first=Math.max(0,all.length-visibleCount);
+  const target=options?.highlightAt,stepSeconds=options?.frameSeconds;
+  const match=Number.isFinite(target)&&Number.isFinite(stepSeconds)&&stepSeconds>0
+    ?all.findIndex(c=>target>=c.time&&target<c.time+stepSeconds):-1;
+  if(match>=0)first=Math.max(0,Math.min(Math.max(0,all.length-visibleCount),match-Math.floor(visibleCount/2)));
+  const rows=all.slice(first,first+visibleCount);
+  if(!rows.length)return false;
   const left=10,right=W-74,top=20,bottom=H-32,plotH=bottom-top,step=(right-left)/rows.length;
   const quotes=[payload?.quote?.bid,payload?.quote?.ask].filter(Number.isFinite);
   const prices=rows.flatMap(x=>[x.high,x.low]).concat(quotes,levels.map(x=>x.value).filter(Number.isFinite));
@@ -34,7 +41,16 @@ export function drawBrokerCandles(canvas, payload, levels = []) {
   if(Number.isFinite(payload?.quote?.bid))labels.push({name:'Bid',value:payload.quote.bid,color:'#73d9b7'});
   if(Number.isFinite(payload?.quote?.ask))labels.push({name:'Ask',value:payload.quote.ask,color:'#ed9f65'});
   for(const line of labels){if(!Number.isFinite(line.value))continue;const yy=y(line.value);ctx.strokeStyle=line.color||'#b89bff';ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(left,yy);ctx.lineTo(right,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=ctx.strokeStyle;ctx.font='bold 11px sans-serif';ctx.fillText(line.name,left+7,Math.max(top+10,Math.min(bottom-4,yy-4)));}
+  const highlighted=match>=first&&match<first+rows.length;
+  if(highlighted){
+    const xx=left+step*(match-first+.5);
+    ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle='#f3cb65';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(xx,top);ctx.lineTo(xx,bottom);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#f3cb65';ctx.font='bold 11px sans-serif';
+    ctx.fillText('History',Math.max(left,Math.min(right-52,xx+5)),top+13);ctx.restore();
+  }
   ctx.fillStyle='#9a91a8';ctx.font='11px sans-serif';
   [0,Math.floor((rows.length-1)/2),rows.length-1].forEach(i=>{const x=left+(i+.5)*step;ctx.fillText(new Date(rows[i].time*1000).toISOString().slice(11,16),Math.min(right-40,x),H-9);});
   canvas.onpointermove=e=>{const i=Math.max(0,Math.min(rows.length-1,Math.floor((e.offsetX-left)/step)));const c=rows[i];canvas.title=`MT5 ${payload.broker_symbol} · ${new Date(c.time*1000).toISOString()}\nO ${c.open} H ${c.high} L ${c.low} C ${c.close}`;};
+  return highlighted;
 }
