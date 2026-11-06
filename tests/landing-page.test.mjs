@@ -55,3 +55,18 @@ test('mobile marketing navigation is bilingual',()=>{
     assert.match(readFileSync(new URL('../public/'+name,import.meta.url),'utf8'),/<details class="mobile-menu">/);
   assert.match(readFileSync(new URL('../public/dashboard-themes.css',import.meta.url),'utf8'),/Mobile phase: keep dashboard navigation/);
 });
+
+
+test('phase 2 marketing sections are bilingual, transparent and accessible',()=>{
+  for(const name of ['landing.html','landing-en.html']){
+    const page=readFileSync(new URL('../public/'+name,import.meta.url),'utf8');
+    for(const id of ['market-strip-title','chart-previews','plans','faq','contact']) assert.ok(page.includes('id="'+id+'"'),name+': '+id);
+    assert.match(page,/<details><summary>/);
+    assert.match(page,/href="\/dashboard"/);
+    assert.match(page,/href="\/account"/);
+    assert.doesNotMatch(page,/\$\d+\s*\/\s*month|[0-9]+%\s*(?:win|success)/i);
+  }
+  const css=readFileSync(new URL('../public/landing.css',import.meta.url),'utf8');
+  assert.match(css,/\.phase2-market-grid/);
+  assert.match(css,/@media\(max-width:700px\)/);
+});
