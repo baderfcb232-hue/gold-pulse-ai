@@ -73,3 +73,7 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-off
 }
 @media(max-width:360px){.chart-main{padding-inline:8px}.chart-display{height:360px}.chart-primary-nav a small{font-size:9px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+.chart-history-note{flex:1 1 100%;padding:6px 9px;background:var(--surface2);
+ border:1px solid var(--border);border-radius:8px;color:var(--gold);font-weight:700;
+ font-size:11px;line-height:1.5}
