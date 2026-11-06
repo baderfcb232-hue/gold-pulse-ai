@@ -1,0 +1,43 @@
+name: NABD Phase 12 Windows MT5 fleet safety
+on:
+  pull_request:
+    paths:
+      - 'windows/**'
+      - 'tests/windows-fleet-phase12.test.mjs'
+      - 'WINDOWS_MT5_FLEET_PHASE12_AR.md'
+      - '.github/workflows/windows-mt5-fleet-phase12.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'windows/**'
+      - 'tests/windows-fleet-phase12.test.mjs'
+      - '.github/workflows/windows-mt5-fleet-phase12.yml'
+jobs:
+  windows-readonly-fleet:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify Windows PowerShell 5.1 launcher syntax
+        shell: powershell
+        run: |
+          $tokens = $null
+          $syntaxErrors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'windows/NABD-Monitor.ps1').Path,
+            [ref]$tokens, [ref]$syntaxErrors
+          ) | Out-Null
+          if ($syntaxErrors.Count -ne 0) {
+            $syntaxErrors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+      - name: Test account isolation without MT5 or secrets
+        shell: pwsh
+        run: python -m unittest discover -s windows -p "test_mt5_instance_guard.py" -v
+      - name: Test fleet manifest rejects overlaps and secret fields
+        shell: pwsh
+        run: python -m unittest discover -s windows -p "test_mt5_fleet_preflight.py" -v
