@@ -19,7 +19,7 @@ export function tickerItems(feed,filter='ALL',at=Date.now()/1000,limit=12){
  return out.sort((a,b)=>b.published_at-a.published_at).slice(0,limit);
 }
 export function tickerFeedStatus(feed,at=Date.now()/1000){
- if(!Array.isArray(feed?.sources))return 'UNAVAILABLE';
+ if(!Array.isArray(feed?.sources)||!feed.sources.length)return 'UNAVAILABLE';
  if(feed.sources.some(s=>s.status==='LIVE'&&Number.isFinite(s.last_success)&&s.last_success>0&&s.last_success<=at+300&&at-s.last_success<=900))return 'LIVE';
  if(feed.sources.every(s=>s.status==='PENDING'))return 'PENDING';
  return 'STALE';
@@ -31,7 +31,7 @@ const labels={
 export function initNewsTicker(root=document.getElementById('nabd-news-ticker')){
  if(!root)return()=>{};
  const find=q=>root.querySelector(q),title=find('[data-ticker-title]'),status=find('[data-ticker-status]'),headline=find('[data-ticker-link]'),placeholder=find('[data-ticker-placeholder]'),meta=find('[data-ticker-meta]'),topic=find('[data-ticker-topic]'),note=find('[data-ticker-note]'),previous=find('[data-ticker-prev]'),next=find('[data-ticker-next]'),pause=find('[data-ticker-pause]'),filters=[...root.querySelectorAll('[data-ticker-filter]')];
- let feed=null,filter='ALL',index=0,paused=false;
+ let feed=null,filter='ALL',index=0,paused=false,initialFailed=false;
  const reduced=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
  if(reduced)paused=true;
  const locale=()=>document.documentElement.lang==='en'?'en':'ar';
@@ -75,9 +75,10 @@ export function initNewsTicker(root=document.getElementById('nabd-news-ticker'))
  next.addEventListener('click',()=>{index++;draw();});
  pause.addEventListener('click',()=>{paused=!paused;draw();});
  const language=()=>draw();document.addEventListener('nabd:language-change',language);
+ const missingTimer=setTimeout(()=>{if(!feed){initialFailed=true;draw();}},15000);
  const interval=setInterval(()=>{if(!paused&&!reduced&&!document.hidden&&!root.matches(':hover')&&!root.contains(document.activeElement)){const count=tickerItems(feed,filter).length;if(count>1){index++;draw();}}},9000);
  const freshnessInterval=setInterval(()=>{if(!document.hidden)draw();},60000);
- window.addEventListener('pagehide',()=>{clearInterval(interval);clearInterval(freshnessInterval);document.removeEventListener('nabd:language-change',language);},{once:true});
+ window.addEventListener('pagehide',()=>{clearTimeout(missingTimer);clearInterval(interval);clearInterval(freshnessInterval);document.removeEventListener('nabd:language-change',language);},{once:true});
  draw();
- return data=>{if(data&&Array.isArray(data.items)&&Array.isArray(data.sources)){feed=data;index=0;draw();}};
+ return data=>{if(data&&Array.isArray(data.items)&&Array.isArray(data.sources)){feed=data;index=0;initialFailed=false;clearTimeout(missingTimer);draw();}};
 }
