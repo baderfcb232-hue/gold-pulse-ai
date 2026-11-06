@@ -13,6 +13,7 @@ import {localeOf,translations} from './i18n-core.js';
 const corePairs=Object.fromEntries(Object.keys(translations.ar).map(k=>[translations.ar[k],translations.en[k]]));
 const en=Object.freeze({...corePairs,...dashboardStaticEnglish,...accountStaticEnglish,...attributeStaticEnglish,...runtimeStatusEnglish,...liveStatusEnglish,...appExtraEnglish,...safetyStatusEnglish,...serverStatusEnglish});
 const dynamicPatterns=[
+  [/^الاستراتيجية المسجلة: (.+)$/,m=>`Recorded strategy: ${m[1]}`],
   [/^عمر السعر ([\d,.]+) ثانية$/,m=>`Quote age: ${m[1]} seconds`],
   [/^(بث Coinbase المباشر؛|جلب Coinbase الاحتياطي كل ثانية؛) سعر BTC-USD على المنصة\. مستقل عن سعر تنفيذ بروكرك\.$/,m=>translateUiText(m[1],'en')+' BTC-USD platform quote. This quote is separate from your broker execution price.'],
   [/^عمر آخر تيك حقيقي ([\d,.]+) ثانية$/,m=>`Last real tick age: ${m[1]} seconds`],

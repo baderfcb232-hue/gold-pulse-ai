@@ -1,0 +1,18 @@
+/* Phase 9: compact, read-only, source-backed recommendation explanation. */
+.recommendation-assistant{display:grid;gap:11px;margin:0 0 16px;padding:15px 16px;border:1px solid var(--border);border-radius:14px;background:var(--card);color:var(--ink);min-width:0}
+.recommendation-assistant-heading{display:flex;flex-wrap:wrap;align-items:baseline;gap:7px 15px}
+.recommendation-assistant-heading h3{margin:0;font-size:15px;font-weight:750;color:var(--ink)}
+.recommendation-assistant-heading small{font-size:11px;color:var(--muted);line-height:1.5}
+.recommendation-assistant-selection,.recommendation-assistant-topics{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.recommendation-assistant-button{font-family:inherit;font-size:11px;font-weight:650;line-height:1.35;cursor:pointer;min-height:31px;padding:5px 12px;border:1px solid var(--border);border-radius:8px;background:var(--elevated);color:var(--muted);max-width:100%}
+.recommendation-assistant-button[data-selected="true"]{background:var(--card);border-color:var(--green);color:var(--green)}
+.recommendation-assistant-button:focus-visible,.recommendation-chart-link:focus-visible,.signal-context-link:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.recommendation-assistant-result{display:grid;gap:5px;background:var(--elevated);border:1px solid var(--border);border-radius:9px;padding:11px 13px;min-height:57px}
+.recommendation-assistant-result p{margin:0;color:var(--ink);font-size:12px;line-height:1.65;overflow-wrap:anywhere}
+.recommendation-assistant[data-feed-state="unavailable"] .recommendation-assistant-result p:first-child{color:var(--muted)}
+.recommendation-assistant-links,.signal-context-links{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.recommendation-chart-link,.signal-context-link{color:var(--green);font-size:11px;font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.signal-context-links{margin:8px 0 1px}
+.signal-context-summary{font-size:11px;line-height:1.55;color:var(--muted);margin:4px 0}
+.signal-context-summary strong{color:var(--ink)}
+@media(max-width:680px){.recommendation-assistant{padding:11px;border-radius:11px;gap:9px;margin-bottom:12px}.recommendation-assistant-heading h3{font-size:14px}.recommendation-assistant-button{font-size:10px;min-height:30px;padding:5px 9px}.recommendation-assistant-result{padding:9px}.recommendation-assistant-result p{font-size:11px}}

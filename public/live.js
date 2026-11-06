@@ -5,7 +5,7 @@ import {initMiniSparkline} from './mini-spark.js?v=touch-2';
 import {createMarketLoaders} from './market-loaders.js?v=v2-loader-2';
 import {inSignalDateRange} from './signal-date-filter.js';
 import {translateUiText,externalHeadlineForLocale,currentLocale,setLocalizedText} from './i18n-dom.js?v=v2-i18n-5';
-export function initLiveWorkspace({stream, api, time, num, now, notify, priceFeedback, positionSize, getSizingContext}) {
+export function initLiveWorkspace({stream, api, time, num, now, notify, priceFeedback, positionSize, getSizingContext, onMarket=()=>{}}) {
   const $ = id => document.getElementById(id);
   const node = (tag, cls, text) => {const n = document.createElement(tag); if (cls) n.className = cls;
     if (text != null) setLocalizedText(n,text); return n;};
@@ -36,6 +36,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, priceFee
     const prior=data;
     data = next; lastServerSeen = Date.now();
     updateAnalysisRibbon(next);
+    onMarket(next); // read-only Phase 9 explanation, sourced from the same market stream
     loaders.ready('market');
     if (!data.markets[symbol]) symbol = 'XAUUSD';
     $('market-symbols').querySelectorAll('button').forEach(b => {
