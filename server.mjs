@@ -10,6 +10,7 @@ import {summarizeGoldPerformance} from './performance.mjs';
 import {createMarketFeed} from './market.mjs';
 import {createAnalysisHistory,analysisHistoryCsv} from './analysis-history.mjs';
 import {createPgAnalysisArchive} from './analysis-history-pg.mjs';
+import {verifiedAnalysisLink} from './analysis-history-link.mjs';
 import {createNewsFeed} from './news.mjs';
 
 import {createTelegramPublisher} from './telegram.mjs';
@@ -137,9 +138,15 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     onRecord:observation=>analysisArchive?.enqueue(observation)});
   async function historyRead(options){
     if(analysisArchive){
-      try{return await analysisArchive.list(options);}catch{}
+      try{return {...await analysisArchive.list(options),storage_backend:'postgres',sync_state:'READY'};}
+      catch(e){
+        if(e instanceof RangeError)throw e;
+        return {...analysisHistory.list(options),storage_persistent:false,
+          storage_backend:'sqlite_fallback',sync_state:'POSTGRES_UNAVAILABLE'};
+      }
     }
-    return analysisHistory.list(options);
+    return {...analysisHistory.list(options),storage_backend:'sqlite',
+      sync_state:'POSTGRES_NOT_CONFIGURED'};
   }
   const marketFeed = createMarketFeed({db, clock, ...feedOptions, calendar: () => snapshot?.calendar || null,
     enabledSymbols: cfg.goldOnly ? ['XAUUSD'] : undefined,
@@ -676,6 +683,22 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         } catch (e) {
           if(e instanceof RangeError)return send(req,res,400,{error:'Invalid history filter'});
           throw e;
+        }
+      }
+      // Exact match only. Operators see broker-confirmed fills; members do not
+      // receive account-bound execution data or inferred P&L.
+      if(path==='/api/analysis-history/link'&&req.method==='GET'){
+        if(!operator(req))return send(req,res,403,{error:'Operator authorization required'});
+        const raw=url.searchParams.get('id');
+        if(!raw||!/^[1-9][0-9]{0,12}$/.test(raw))return send(req,res,400,{error:'Invalid history id'});
+        try{
+          const observation=analysisArchive?
+            await analysisArchive.get(Number(raw)):analysisHistory.get(Number(raw));
+          if(!observation)return send(req,res,404,{error:'Observation not found'});
+          return send(req,res,200,verifiedAnalysisLink(observation,await tracedSignalRows()));
+        }catch(e){
+          if(e instanceof RangeError)return send(req,res,400,{error:'Invalid history id'});
+          return send(req,res,503,{error:'Verified execution history unavailable'});
         }
       }
       if (path === '/api/news' && req.method === 'GET') return send(req, res, 200, newsFeed.publicState());
