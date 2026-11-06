@@ -76,7 +76,7 @@ test('phase 9 UI reuses market SSE and existing member-gated signals without new
  const app=read('public/app.js'),live=read('public/live.js'),css=read('public/recommendation-explainer.css'),server=read('server.mjs');
  assert.match(html,/id="recommendation-explainer"/);
  assert.match(html,/recommendation-explainer\.css\?v=phase9-1/);
- assert.match(html,/recommendations=phase9-1/);
+ assert.match(html,/recommendations=phase9-2/);
  assert.match(app,/initRecommendationExplainer\(\)/);
  assert.match(app,/recommendationAssistant\.updateSignals\(signals\)/);
  assert.match(app,/recommendationAssistant\.updateSignals\(null\)/);
