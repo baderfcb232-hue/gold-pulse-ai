@@ -78,3 +78,22 @@ test('site serves toast and price animations without enabling any trading action
  assert.equal((await fetch(base+'/api/account')).status,401);
  assert.equal((await (await fetch(base+'/healthz')).json()).ok,true);
 });
+
+
+test('all toast kinds disappear after five seconds and retain history; manual close still works',t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ for(const kind of ['error','warning','success','info']){
+  const host=domNode();
+  const factory=(tag,cls,txt)=>Object.assign(domNode(),{tag,className:cls,textContent:txt||''});
+  const center=createToastCenter({getContainer:()=>host,createNode:factory});
+  center.push('Test '+kind,{kind});
+  t.mock.timers.tick(4999);assert.equal(host.children.length,1,kind);
+  t.mock.timers.tick(1);assert.equal(host.children.length,0,kind);
+  assert.equal(center.history().length,1);
+  center.push('Manual close '+kind,{kind});
+  host.children[0].children[2].onclick();
+  assert.equal(host.children.length,0);
+  t.mock.timers.tick(5000);
+  assert.equal(host.children.length,0);
+ }
+});
