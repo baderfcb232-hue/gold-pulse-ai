@@ -37,6 +37,7 @@ const i18n={
   signInLink:'الدخول إلى حساب المشترك',error:'تعذّر جلب سجل التحليلات؛ جرّب تحديث الصفحة.',
   records:n=>'المعروض: '+n+' سجل',first:'أول تحليل محفوظ',none:'لم يبدأ الحفظ بعد',
   persistent:'حفظ دائم مهيأ',ephemeral:'مدة الاحتفاظ غير مضمونة عند إعادة تشغيل الخادم',
+  postgres:'PostgreSQL · حفظ دائم',postgresFallback:'PostgreSQL غير متاح · السجل المحلي احتياطي وغير مضمون',sqliteOnly:'SQLite · لا يوجد تأكيد لاتصال أرشيف PostgreSQL',
   source:'المصدر',mt5:'MT5',reference:'مرجعي',reason:'سبب الحالة',checks:'تفاصيل الشروط',
   indicators:'المؤشرات',readiness:'الجاهزية',safety:'الأمان',unknown:'غير محدد',unknownCheck:'بانتظار',
   score:'توافق',noneScore:'لا توجد درجة مؤكدة',buy:'شراء',sell:'بيع',wait:'انتظار',
@@ -67,6 +68,7 @@ const i18n={
   signInLink:'Open member sign-in',error:'Unable to load analysis history. Please retry.',
   records:n=>'Displayed: '+n+' records',first:'First recorded analysis',none:'No observations yet',
   persistent:'Persistent storage configured',ephemeral:'History may be lost when the server is restarted',
+  postgres:'PostgreSQL · persistent archive',postgresFallback:'PostgreSQL unavailable · temporary local fallback',sqliteOnly:'SQLite · PostgreSQL archive not confirmed',
   source:'Source',mt5:'MT5',reference:'Reference',reason:'Reason',checks:'Condition details',
   indicators:'Indicators',readiness:'Readiness',safety:'Safety',unknown:'Unavailable',unknownCheck:'Pending',
   score:'Alignment',noneScore:'No verified score',buy:'Buy',sell:'Sell',wait:'Waiting',
@@ -96,7 +98,7 @@ function init(){
   return new Intl.DateTimeFormat(lang()==='en'?'en-US':'ar',{timeZone:'Asia/Gaza',
    day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(timestamp*1000));
  };
- let items=[],cursor=null,firstRecorded=null,storagePersistent=null,pending=false,epoch=0;
+ let items=[],cursor=null,firstRecorded=null,storagePersistent=null,storageBackend=null,pending=false,epoch=0;
  function theme(){
   let theme='light';
   try{theme=localStorage.getItem('nabd:dashboard:theme')||'light';}catch{}
@@ -214,7 +216,7 @@ function init(){
   if(items.length)list.append(...items.map(entry));
   $('history-count').textContent=t.records(items.length);
   $('history-first').textContent=t.first+': '+(firstRecorded?fmtDate(firstRecorded):t.none);
-  $('history-storage').textContent=storagePersistent===null?'':storagePersistent?t.persistent:t.ephemeral;
+  $('history-storage').textContent=storageBackend==='postgres'?t.postgres:storageBackend==='sqlite_fallback'?t.postgresFallback:storageBackend==='sqlite'?t.sqliteOnly:storagePersistent===null?'':storagePersistent?t.persistent:t.ephemeral;
   $('history-more').hidden=!cursor;
   $('history-more').disabled=pending;
   if(!pending&&!items.length&&!(!$('history-alert').hidden))message('empty',t.empty);
@@ -244,6 +246,7 @@ function init(){
    cursor=Number.isSafeInteger(body.next_cursor)?body.next_cursor:null;
    firstRecorded=body.first_recorded_at||null;
    storagePersistent=body.storage_persistent===true;
+   storageBackend=typeof body.storage_backend==='string'?body.storage_backend:null;
    message(null,null);
   }catch{
    if(token===epoch)message('error',loc().error);
