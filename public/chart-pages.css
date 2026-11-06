@@ -73,3 +73,7 @@ button:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-off
 }
 @media(max-width:360px){.chart-main{padding-inline:8px}.chart-display{height:360px}.chart-primary-nav a small{font-size:9px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+/* Historical journal links clearly identify the observed candle, never promise replay. */
+.chart-history-context{margin:0 0 11px;padding:9px 13px;border:1px solid var(--border);border-inline-start:3px solid var(--gold);background:var(--surface);border-radius:9px;font-size:12px;line-height:1.6;color:var(--ink)}
+@media(max-width:760px){.chart-history-context{font-size:11px;margin-bottom:8px}}
