@@ -1,4 +1,5 @@
 import {drawBrokerCandles} from './broker-chart.js';
+import {initNewsTicker} from './news-ticker.js?v=phase5-1';
 import {initMiniSparkline} from './mini-spark.js?v=touch-2';
 import {createMarketLoaders} from './market-loaders.js?v=v2-loader-2';
 import {inSignalDateRange} from './signal-date-filter.js';
@@ -17,6 +18,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, priceFee
   const tfLabels = {M1: 'دقيقة', M5: '5 دقائق', M15: '15 دقيقة', H1: 'ساعة', H4: '4 ساعات'};
   const tfButtons = {M1: '1د', M5: '5د', M15: '15د', H1: '1س', H4: '4س'};
   let data = null, news = null, symbol = 'XAUUSD', tf = 'M15', chartKey = '';
+  const updateNewsTicker=initNewsTicker();
   let lastServerSeen = 0, lastNewsSeen = 0, fetched = false, historyFetched = false, historyRows = [], historyStamp = '', newsStamp = '';
   let initialized = false;
   let chartSourceKey = '', referenceChart = false, brokerChartData = null, brokerChartKey = '', brokerChartLoading = false;
@@ -380,7 +382,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, priceFee
   function applyNews(next) {
     if (!next || !Number.isFinite(next.serverTime) || !Array.isArray(next.items) || !Array.isArray(next.sources)) return;
     if (news && next.serverTime < news.serverTime) return;
-    news = next; lastNewsSeen = Date.now(); newsStamp = ''; loaders.ready('news'); renderNews();
+    news = next; lastNewsSeen = Date.now(); newsStamp = ''; loaders.ready('news'); renderNews(); updateNewsTicker(next);
   }
   async function fetchLive() {
     if (fetched) return; fetched = true;
