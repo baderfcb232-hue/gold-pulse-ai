@@ -42,3 +42,19 @@ test('terminal style only loads on /dashboard; homepage and API stay intact',asy
   const health=await fetch(base+'/healthz');
   assert.equal((await health.json()).ok,true);
 });
+
+
+test('phase 3 workspace shortcuts only target existing panels and keep private account data gated',()=>{
+  const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
+  const css=readFileSync(new URL('../public/dashboard-terminal.css',import.meta.url),'utf8');
+  assert.match(html,/class="phase3-workspace"/);
+  const shortcut=html.match(/<div class="phase3-shortcuts"[\s\S]*?<\/div>/)?.[0];
+  assert.ok(shortcut);
+  const targets=[...shortcut.matchAll(/data-goto="([^"]+)"/g)].map(match=>match[1]);
+  assert.deepEqual(targets,['overview','signals','positions','results','news','settings']);
+  for(const target of targets) assert.ok(html.includes('data-panel="'+target+'"'),'missing panel '+target);
+  assert.match(html,/href="\/account"/);
+  assert.match(css,/\.phase3-shortcuts/);
+  assert.match(css,/@media\(max-width:600px\)/);
+  assert.doesNotMatch(shortcut,/balance|equity|password|account_number/i);
+});
