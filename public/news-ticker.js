@@ -99,7 +99,12 @@ export function initNewsTicker(root=typeof document!=='undefined'?document.getEl
     if(viewport.clientWidth>0 && group.scrollWidth>0){
       const originals=[...group.children].map(node=>node.cloneNode(true));
       for(let n=0;n<10 && group.scrollWidth<viewport.clientWidth+48;n++){
-        group.append(...originals.map(node=>node.cloneNode(true)));
+        group.append(...originals.map(node=>{
+          const copy=node.cloneNode(true);
+          copy.setAttribute('aria-hidden','true');
+          if(copy.tagName==='A')copy.tabIndex=-1;
+          return copy;
+        }));
       }
     }
     const duplicate=group.cloneNode(true);
