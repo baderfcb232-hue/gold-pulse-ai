@@ -68,7 +68,8 @@ test('onboarding progress always distinguishes request, approval, monitoring and
 
 test('phase 11 page, assets and links have separate routes and no password form',async t=>{
  const dir=mkdtempSync(join(tmpdir(),'nabd-onboarding-'));
- const app=createApplication({dataDir:dir,accountOptions:{env:{}}});
+ const app=createApplication({dataDir:dir,accountOptions:{store:sqliteAuthStore(),env:{},
+  encryptionKey:randomBytes(32),mailer:async()=>{}}});
  await app.accounts.ready;
  await new Promise(done=>app.server.listen(0,'127.0.0.1',done));
  t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
