@@ -95,6 +95,7 @@ function initChartPage(){
    const key=node.dataset.i18n;
    if(Object.hasOwn(labels,key))node.textContent=labels[key];
   });
+  $('chart-brand-image').src=lang()==='ar'?'/nabd-logo.svg':'/nabd-logo-en.svg';
   const choice=$('chart-language');choice.textContent=lang()==='ar'?'EN':'AR';
   choice.setAttribute('aria-label',lang()==='ar'?'Switch to English':'التحويل إلى العربية');
   document.querySelectorAll('[data-chart-nav]').forEach(a=>a.setAttribute('aria-current',a.dataset.chartNav===symbol?'page':'false'));
@@ -144,7 +145,14 @@ function initChartPage(){
   text('chart-reason',analysis?.reason||labels.unconfirmed);
  }
  function makeSummary(payload,now){
-  return summarizeAnalysisMarket(payload?.markets?.[symbol],{locale:lang(),nowSeconds:now,serverTime:payload?.serverTime});
+  // Never mix a live Coinbase/Gold-API analysis with an old MT5 chart. The
+  // site's public market endpoint can legitimately fall back to reference
+  // sources when broker data is stale, while this page stays broker-only.
+  const m=payload?.markets?.[symbol];
+  if(!m||m.candle_kind!=='BROKER_OHLC'||!lastBroker||
+    !brokerChartFresh(lastBroker,now,m.quoteTtl)||
+    (m.source_id&&lastBroker.source_id&&m.source_id!==lastBroker.source_id))return null;
+  return summarizeAnalysisMarket(m,{locale:lang(),nowSeconds:now,serverTime:payload?.serverTime});
  }
  async function getJson(path){
   const response=await fetch(path,{cache:'no-store',credentials:'same-origin',headers:{Accept:'application/json'}});
