@@ -132,7 +132,8 @@ export function buildPerformanceCenter({sources=[],filters={},now=Date.now()/100
   if(result.excluded)excluded.push({symbol:src.symbol,reason:'INCOMPLETE_OR_INVALID_DEAL_RECORDS',count:result.excluded});
   included.push(...result.trades.filter(t=>t.closed_at>=after));
  }
- const selected=included.filter(t=>(symbol==='ALL'||symbol===t.symbol)&&(mode==='ALL'||mode===t.mode));
+ const selected=included.filter(t=>(symbol==='ALL'||symbol===t.symbol)&&(mode==='ALL'||mode===t.mode))
+  .sort((a,b)=>a.closed_at-b.closed_at||a.symbol.localeCompare(b.symbol));
  const currencies=[...new Set(selected.map(t=>t.currency))];
  const accountModes=[...new Set(selected.map(t=>t.mode))];
  const mixedCurrency=currencies.length>1,mixedMode=accountModes.length>1;
