@@ -195,3 +195,20 @@ test('i18n assets are public but account and trade APIs remain protected',async 
  assert.equal((await fetch(base+'/api/account')).status,401);
  assert.equal((await (await fetch(base+'/healthz')).json()).ok,true);
 });
+
+
+test('phase 4 preserves visual preferences across tabs and translates the Bitcoin quote title',()=>{
+  assert.equal(translateUiText('بيتكوين / دولار','en'),'Bitcoin / US Dollar');
+  assert.equal(translateUiText('بيتكوين / دولار','ar'),'بيتكوين / دولار');
+  const theme=read('theme-init.js'),locale=read('dashboard-locale.js');
+  const account=read('account-language.js');
+  assert.match(theme,/addEventListener\('storage'/);
+  assert.match(theme,/nabd:theme-change/);
+  assert.match(theme,/meta\[name="theme-color"\]/);
+  assert.match(locale,/addEventListener\('storage'/);
+  assert.match(locale,/nabd:theme-change/);
+  assert.match(account,/addEventListener\('storage'/);
+  for(const source of [theme,locale,account]){
+    assert.doesNotMatch(source,/\/api\/commands|OrderSend|\/api\/bridge\/next/);
+  }
+});
