@@ -32,7 +32,7 @@ test('PostgreSQL archive stores only sanitized observations and validates filter
  assert.ok(select.sql.includes('symbol=$1'));
  assert.ok(select.sql.includes('status=$2'));
  assert.ok(select.sql.includes('ILIKE'));
- assert.throws(()=>archive.list({query:'!'.repeat(81)}),undefined);
+ await assert.rejects(archive.list({query:'!'.repeat(81)}),RangeError);
  await assert.rejects(archive.list({symbol:'ETHUSD'}),RangeError);
  await archive.close();
 });
