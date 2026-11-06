@@ -54,6 +54,28 @@ function fingerprint(row){
   row.frames,row.indicator_checks.map(x=>x.pass),row.readiness_checks.map(x=>x.pass),
   row.entry_checks.map(x=>x.pass)]);
 }
+// CSV is generated solely from sanitized observation fields. Prefix spreadsheet
+// formula starters to prevent CSV injection when a source sends malicious text.
+export function analysisHistoryCsv(rows){
+ const columns=['recorded_at','symbol','status','source_type','decision','score','strategy',
+  'reason','M5','M15','H1','H4','failed_checks','kind'];
+ const cell=value=>{
+  let text=String(value??'').replace(/[\u0000-\u001F\u007F]/g,' ').trim();
+  if(/^[=+\-@]/.test(text))text="'"+text;
+  return '"'+text.replaceAll('"','""')+'"';
+ };
+ const data=[columns.join(',')];
+ for(const row of rows){
+  const failure=[...(row.indicator_checks||[]),...(row.readiness_checks||[]),...(row.entry_checks||[])]
+   .filter(x=>x?.pass===false).map(x=>x.label).slice(0,12).join(' | ');
+  const values=[
+   row.recorded_at,row.symbol,row.status,row.source_type,row.decision,row.score,row.strategy,
+   row.reason,...['M5','M15','H1','H4'].map(tf=>row.frames?.[tf]||''),failure,'ANALYSIS_OBSERVATION'
+  ];
+  data.push(values.map(cell).join(','));
+ }
+ return '\uFEFF'+data.join('\r\n')+'\r\n';
+}
 function readRow(record){
  if(!record)return null;
  try{return {id:record.id,...JSON.parse(record.data)};}catch{return null;}
@@ -101,17 +123,20 @@ export function createAnalysisHistory({db,clock=()=>Date.now()/1000,storagePersi
   if(writes>=80){prune();writes=0;}
   return written;
  }
- function list({symbol='ALL',status='ALL',since=null,before=null,limit=40}={}){
+ function list({symbol='ALL',status='ALL',since=null,before=null,limit=40,query=''}={}){
   if(symbol!=='ALL'&&!VALID_SYMBOL.has(symbol))throw new RangeError('Invalid symbol');
   if(status!=='ALL'&&!VALID_STATUS.has(status))throw new RangeError('Invalid analysis status');
   if(since!=null&&(!Number.isSafeInteger(since)||since<0))throw new RangeError('Invalid time window');
   if(before!=null&&(!Number.isSafeInteger(before)||before<1))throw new RangeError('Invalid cursor');
   if(!Number.isSafeInteger(limit)||limit<1||limit>100)throw new RangeError('Invalid page size');
+  if(typeof query!=='string'||query.length>100||/[\u0000-\u001F\u007F]/.test(query))throw new RangeError('Invalid search query');
+  const search=query.trim();
   const clauses=['1=1'],args=[];
   if(symbol!=='ALL'){clauses.push('symbol=?');args.push(symbol);}
   if(status!=='ALL'){clauses.push('status=?');args.push(status);}
   if(since!=null){clauses.push('recorded_at>=?');args.push(since);}
   if(before!=null){clauses.push('id<?');args.push(before);}
+  if(search){clauses.push('instr(lower(data),lower(?))>0');args.push(search);}
   const results=db.prepare('SELECT id,recorded_at,data FROM analysis_history WHERE '+clauses.join(' AND ')+
     ' ORDER BY id DESC LIMIT ?').all(...args,limit+1);
   const hasMore=results.length>limit;
@@ -122,5 +147,15 @@ export function createAnalysisHistory({db,clock=()=>Date.now()/1000,storagePersi
    storage_persistent:Boolean(storagePersistent),kind:'ANALYSIS_OBSERVATIONS_NOT_TRADES',
    scope:'GLOBAL_MARKET',backfilled:false};
  }
- return {capture,list,prune};
+ function exportCsv({symbol='ALL',status='ALL',since=null,query=''}={}){
+  const rows=[];let before=null;
+  while(rows.length<1000){
+   const page=list({symbol,status,since,query,before,limit:100});
+   rows.push(...page.items);
+   if(!page.next_cursor)break;
+   before=page.next_cursor;
+  }
+  return analysisHistoryCsv(rows.slice(0,1000));
+ }
+ return {capture,list,exportCsv,prune};
 }

@@ -60,3 +60,18 @@
  .history-timeline{grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:reduce){.history-skeleton{animation:none}}
+
+
+/* Phase 8 history controls: searchable, exportable, chart contextual links. */
+.history-search-label{flex:1 1 190px;min-width:min(190px,100%)}
+.history-search-label input{display:block;width:100%;min-width:0;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--ink);padding:9px 11px;font:inherit;font-size:13px;outline-offset:2px}
+.history-search-label input:focus-visible{outline:2px solid var(--accent);border-color:var(--accent)}
+#history-export{border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--accent);font-weight:700;min-height:39px;padding:7px 12px}
+#history-export:disabled{opacity:.65;cursor:progress}
+.history-chart-link{display:inline-flex;align-items:center;justify-content:center;gap:5px;align-self:flex-start;width:fit-content;margin-top:7px;padding:5px 11px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;color:var(--accent);background:var(--elevated)}
+.history-chart-link:hover{border-color:var(--accent)}
+@media(max-width:650px){
+ .history-search-label{flex-basis:100%}
+ #history-export{flex:1}
+ .history-chart-link{font-size:11px}
+}

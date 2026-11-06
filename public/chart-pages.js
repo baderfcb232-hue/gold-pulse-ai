@@ -58,6 +58,9 @@ const copy={
   noCandles:'لم تصل شموع MT5 لهذا الفريم. لا نستخدم شموع منصة أخرى بدلها.',
   staleCandles:'الشموع محفوظة، لكن السعر متأخر؛ لا تعتمد عليها كإشارة جديدة.',
   source:'المصدر',last:'آخر شمعة',unknown:'بانتظار المصدر',referenceNote:'مرجع TradingView الخارجي فقط · سعره قد يختلف عن وسيط MT5',
+  historicalFound:'تم تحديد شمعة وقت التحليل المحفوظ بين شموع MT5 المتاحة. هذه ليست إعادة بناء كاملة لحالة السوق السابقة.',
+  historicalMissing:'شمعة وقت التحليل غير متاحة ضمن شموع MT5 المحفوظة حاليًا؛ المعروض هو الشارت الحالي، وليس تحليلًا تاريخيًا معادًا.',
+  historicalReference:'هذا شارت خارجي للمقارنة، ولا يعيد عرض شموع MT5 وقت التحليل.',
   currency:'دولار',referenceStatus:'مقارنة خارجية',frames:'الفريمات',unconfirmed:'لم تتوفر قراءة تحليل حديثة'
  },
  en:{
@@ -70,9 +73,23 @@ const copy={
   noCandles:'No MT5 candles for this timeframe. Other exchange candles are not substituted.',
   staleCandles:'Previous candles are retained, but prices are stale; this is not a new signal.',
   source:'Source',last:'Last candle',unknown:'Waiting for source',referenceNote:'External TradingView comparison only · prices may differ from the MT5 broker',
+  historicalFound:'The recorded observation candle is marked in available MT5 candles. This is not a full historical replay.',
+  historicalMissing:'The observed candle is no longer in the available MT5 cache; this shows the current chart, not a historical reconstruction.',
+  historicalReference:'External comparison only; this is not a replay of historical MT5 candles.',
   currency:'USD',referenceStatus:'External comparison',frames:'Timeframes',unconfirmed:'No fresh analysis available'
  }
 };
+// A deep link locates the historical *time* within currently available MT5
+// closed candles. It never replays old broker state or substitutes reference data.
+export function chartHistoryContext(search,symbol,now=Date.now()/1000){
+ if(!Object.hasOwn(CHART_SYMBOLS,symbol))return null;
+ const params=new URLSearchParams(search);
+ const raw=params.get('at'),tf=params.get('tf')||'M15';
+ if(!raw||!/^[0-9]{9,12}$/.test(raw)||!BROKER_FRAMES.includes(tf))return null;
+ const at=Number(raw);
+ if(!Number.isSafeInteger(at)||at>now+60||at<now-90*86400)return null;
+ return {at,tf};
+}
 function initChartPage(){
  const symbol=document.body.dataset.chartSymbol;
  if(!Object.hasOwn(CHART_SYMBOLS,symbol))return;
@@ -80,7 +97,8 @@ function initChartPage(){
  const tfButtons=[...document.querySelectorAll('[data-chart-tf]')];
  const modeButtons=[...document.querySelectorAll('[data-chart-mode]')];
  const title=$('chart-title'),frame=$('chart-reference-frame'),canvas=$('chart-canvas'),overlay=$('chart-overlay'),overlayText=$('chart-overlay-text');
- let tf='M15',mode='mt5',request=0,lastBroker=null,lastMarket=null,lastUpdated=0,previousReferenceKey='';
+ const historical=chartHistoryContext(window.location.search,symbol);
+ let tf=historical?.tf||'M15',mode='mt5',request=0,lastBroker=null,lastMarket=null,lastUpdated=0,previousReferenceKey='';
  const lang=()=>document.documentElement.lang==='en'?'en':'ar';
  const t=()=>copy[lang()];
  const text=(id,value)=>{const node=$(id);if(node)node.textContent=value;};
@@ -120,6 +138,9 @@ function initChartPage(){
   text('chart-connection',mode==='reference'?labels.referenceStatus:fresh?labels.online:chart?labels.stale:labels.unavailable);
   text('chart-source',mode==='reference'?'TradingView · '+(symbol==='BTCUSD'?'COINBASE:BTCUSD':'OANDA:XAUUSD'):chart?.source||market?.source||'—');
   text('chart-quote-age',mode==='reference'?labels.referenceNote:chart?.quote?.time?labels.source+' · '+date(chart.quote.time):labels.unknown);
+  if(historical){$('chart-history-context').hidden=false;
+    if(mode==='reference')text('chart-history-context',date(historical.at)+' · '+labels.historicalReference);
+  }
   if(mode==='reference'){
    $('chart-candle-note').textContent=labels.referenceNote;
    text('chart-last-candle','');
@@ -129,9 +150,17 @@ function initChartPage(){
    if(chart?.candles?.length){
     // Historical closed candles remain visible but stale Bid/Ask must not imply live quotes.
     const input=fresh?chart:{...chart,quote:{bid:null,ask:null}};
-    drawBrokerCandles(canvas,input,[]);
+    const historicalInput=historical?{...input,quote:{bid:null,ask:null}}:input;
+    const marked=drawBrokerCandles(canvas,historicalInput,[],historical?{
+      highlightAt:historical.at,frameSeconds:{M5:300,M15:900,H1:3600,H4:14400}[tf]
+    }:{});
+    if(historical)text('chart-history-context',date(historical.at)+' · '+
+      (marked?labels.historicalFound:labels.historicalMissing));
     setOverlay(fresh?'':labels.staleCandles);
-   }else setOverlay(labels.noCandles);
+   }else{
+     setOverlay(labels.noCandles);
+     if(historical)text('chart-history-context',date(historical.at)+' · '+labels.historicalMissing);
+   }
   }
   const rows=chart?.candles||[];
   text('chart-close',rows.length?num(rows.at(-1).close,chart?.digits??2):'—');
@@ -230,6 +259,7 @@ function initChartPage(){
  let redraw;
  window.addEventListener('resize',()=>{clearTimeout(redraw);redraw=setTimeout(render,160);});
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
+ for(const b of tfButtons)b.setAttribute('aria-pressed',String(b.dataset.chartTf===tf));
  applyText();applyTheme();setOverlay(t().loading);
  refresh();
  const interval=setInterval(refresh,12000);
