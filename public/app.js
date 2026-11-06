@@ -1,5 +1,5 @@
 import {positionSize, ema, botHeartbeatFresh, BOT_CONTROL_TTL} from '/engine.mjs';
-import {initLiveWorkspace} from '/live.js?v=v2-locale-5';
+import {initLiveWorkspace} from '/live.js?v=thin-20261106';
 import {inSignalDateRange} from '/signal-date-filter.js';
 import {createStateConnection} from '/state-connection.js';
 import {requestJson} from '/http.js';

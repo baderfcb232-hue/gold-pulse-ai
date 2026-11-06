@@ -33,25 +33,34 @@ test('RSS freshness status never confuses cached headlines with a live feed',()=
  assert.equal(tickerFeedStatus(null,NOW),'UNAVAILABLE');
 });
 
-test('news ribbon reuses read-only RSS events, has source timing, safe links and motion controls',()=>{
+test('thin headline strip stays before the market heading and contains no controls',()=>{
  const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
- const html=read('public/index.html'),js=read('public/news-ticker.js'),css=read('public/news-ticker.css'),live=read('public/live.js'),server=read('server.mjs');
- assert.match(html,/id="nabd-news-ticker"/);
- assert.match(html,/data-ticker-filter="GOLD"/);
- assert.match(html,/data-ticker-filter="BTC"/);
- assert.match(html,/data-ticker-prev/);
- assert.match(html,/data-ticker-pause/);
- assert.match(html,/data-ticker-next/);
- assert.match(html,/rel="noopener noreferrer"/);
- assert.match(html,/news-ticker\.css/);
- assert.match(live,/initNewsTicker\(/);
- assert.match(live,/updateNewsTicker\(next\)/);
- assert.match(server,/'\/news-ticker\.js':'news-ticker\.js'/);
- assert.match(server,/'\/news-ticker\.css':'news-ticker\.css'/);
- assert.match(js,/published_at/);
- assert.match(js,/source_name/);
- assert.match(js,/last_success/);
+ const html=read('public/index.html'),js=read('public/news-ticker.js');
+ const css=read('public/news-ticker.css'),live=read('public/live.js'),app=read('public/app.js'),server=read('server.mjs');
+ const start=html.indexOf('<section class="nabd-news-ticker"');
+ const end=html.indexOf('</section>',start);
+ assert.ok(start>=0&&end>start);
+ assert.ok(start>html.indexOf('<main id="main"'));
+ assert.ok(start<html.indexOf('class="page-heading"'));
+ const strip=html.slice(start,end+10);
+ assert.match(strip,/data-ticker-track/);
+ assert.match(strip,/data-ticker-viewport/);
+ assert.match(strip,/data-ticker-placeholder/);
+ assert.doesNotMatch(strip,/<button\b|<select\b|data-ticker-(?:pause|filter|prev|next)/);
+ assert.match(css,/height:38px/);
+ assert.match(css,/height:34px/);
+ assert.match(css,/@keyframes nabd-news-crawl/);
  assert.match(css,/prefers-reduced-motion:reduce/);
+ assert.match(js,/tickerItems\(feed,'ALL'/);
+ assert.match(js,/source_name/);
+ assert.match(js,/published_at/);
+ assert.match(js,/cloneNode\(true\)/);
+ assert.match(js,/aria-hidden/);
+ assert.match(js,/tabIndex=-1/);
+ assert.match(js,/\.textContent=item\.title/);
+ assert.match(live,/updateNewsTicker\(next\)/);
+ assert.match(app,/live\.js\?v=thin-20261106/);
+ assert.match(server,/'\/news-ticker\.js':'news-ticker\.js'/);
  for(const source of [js,css]){
   assert.doesNotMatch(source,/\/api\/commands|OrderSend|\/api\/bridge\/next/);
  }
