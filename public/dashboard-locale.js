@@ -108,6 +108,15 @@ import {translateStaticUi,translateUiText,observeLocaleUi} from '/i18n-dom.js?v=
    refreshQuickControls();
   });
   themeChoice?.addEventListener('change',refreshQuickControls);
+  document.addEventListener('nabd:theme-change',refreshQuickControls);
+  window.addEventListener('storage',event=>{
+    if(event.key!==key&&event.key!==marketing)return;
+    const persisted=event.key===key?event.newValue:(localStorage.getItem(key)||event.newValue);
+    const next=persisted==='en'?'en':'ar';
+    if(next===lang)return;
+    lang=next;
+    translate();
+  });
   if(typeof matchMedia==='function'){
    const os=matchMedia('(prefers-color-scheme: dark)');
    if(os.addEventListener)os.addEventListener('change',refreshQuickControls);
