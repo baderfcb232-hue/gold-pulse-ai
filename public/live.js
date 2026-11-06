@@ -339,6 +339,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, priceFee
     $('broker-chart-wrap').hidden = referenceChart;
     $('reference-chart-wrap').hidden = !referenceChart;
     $('live-chart-full').hidden = !referenceChart;
+    $('dedicated-chart-link').href = symbol === 'BTCUSD' ? '/charts/bitcoin' : '/charts/gold';
     $('chart-reference-toggle').textContent = referenceChart ? 'العودة إلى شارت MT5' : 'عرض TradingView للمقارنة';
     $('chart-reference-toggle').setAttribute('aria-pressed',String(referenceChart));
     if (referenceChart) {
