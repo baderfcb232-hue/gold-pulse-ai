@@ -82,7 +82,7 @@ function readRow(record){
 }
 export function createAnalysisHistory({db,clock=()=>Date.now()/1000,storagePersistent=false,
  retentionDays=ANALYSIS_HISTORY_RETENTION_DAYS,minChangeSeconds=45,sampleSeconds=1800,
- maxRows=12000}={}){
+ maxRows=12000,onRecord=()=>{}}={}){
  if(!db)throw new Error('SQLite database required');
  db.exec('CREATE TABLE IF NOT EXISTS analysis_history ('+
   'id INTEGER PRIMARY KEY AUTOINCREMENT,'+
@@ -117,6 +117,8 @@ export function createAnalysisHistory({db,clock=()=>Date.now()/1000,storagePersi
    if(prev&&elapsed<10)continue;
    if(prev&&prev.fingerprint===next&&elapsed<Math.max(sampleSeconds,minChangeSeconds))continue;
    insert.run(data.recorded_at,symbol,data.status,next,JSON.stringify(data));
+   // Durable mirror receives only the same sanitized observation.
+   try{onRecord(data);}catch{}
    lastBySymbol.set(symbol,{at,status:data.status,fingerprint:next,id:insertedId.get().id});
    written++;writes++;
   }

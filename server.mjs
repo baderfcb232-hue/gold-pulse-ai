@@ -8,7 +8,8 @@ import {analyze, previewFlexibleAnalysis, sourceAnalysis, cleanSnapshot, trackPl
 import {mt5Archive} from './archive.mjs';
 import {summarizeGoldPerformance} from './performance.mjs';
 import {createMarketFeed} from './market.mjs';
-import {createAnalysisHistory} from './analysis-history.mjs';
+import {createAnalysisHistory,analysisHistoryCsv} from './analysis-history.mjs';
+import {createPgAnalysisArchive} from './analysis-history-pg.mjs';
 import {createNewsFeed} from './news.mjs';
 
 import {createTelegramPublisher} from './telegram.mjs';
@@ -44,7 +45,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   ingestToken = process.env.MT5_INGEST_TOKEN || '', dashboardToken = process.env.DASHBOARD_TOKEN || '',
   publicBase = process.env.PUBLIC_BASE_URL || (process.env.RENDER === 'true' ? 'https://gold-pulse-ai.onrender.com' : ''),
   storagePersistent = process.env.PERSISTENT_STORAGE_CONFIRMED === 'true', clock = () => Date.now() / 1000,
-  runtimeBackup = null, commandJournal = null, config = {}, feedOptions = {}, researchOptions = {}, telegramOptions = {}, accountOptions = {}} = {}) {
+  runtimeBackup = null, commandJournal = null, analysisArchive = null, config = {}, feedOptions = {}, researchOptions = {}, telegramOptions = {}, accountOptions = {}} = {}) {
   if (ingestToken.length >= 32 && ingestToken === dashboardToken)
     throw new Error('MT5_INGEST_TOKEN and DASHBOARD_TOKEN must be different.');
   mkdirSync(dataDir, {recursive: true, mode: 0o700});
@@ -132,7 +133,14 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     return {...btcSnapshot,bid:btcFastQuote.bid,ask:btcFastQuote.ask,
       quote_at:btcFastQuote.quote_at,received_at:btcFastQuote.received_at};
   };
-  const analysisHistory=createAnalysisHistory({db,clock,storagePersistent});
+  const analysisHistory=createAnalysisHistory({db,clock,storagePersistent,
+    onRecord:observation=>analysisArchive?.enqueue(observation)});
+  async function historyRead(options){
+    if(analysisArchive){
+      try{return await analysisArchive.list(options);}catch{}
+    }
+    return analysisHistory.list(options);
+  }
   const marketFeed = createMarketFeed({db, clock, ...feedOptions, calendar: () => snapshot?.calendar || null,
     enabledSymbols: cfg.goldOnly ? ['XAUUSD'] : undefined,
     brokerSnapshot: () => snapshot, brokerSnapshotBTC: () => cfg.goldOnly ? null : latestBtcSnapshot(),
@@ -539,7 +547,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       btcSnapshot = next; lastSourceBTC = sourceBTC; revision++;
       db.prepare('INSERT INTO btc_snapshot(id,data) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data')
         .run(JSON.stringify(next));
-      marketFeed.recalculate(); researchWorker.acceptBrokerDaily(next); researchWorker.reviewCandidates(); broadcast();
+      marketFeed.recalculate(); analysisHistory.capture(marketFeed.publicState()); researchWorker.acceptBrokerDaily(next); researchWorker.reviewCandidates(); broadcast();
       return;
     }
     const source = `${next.account_ref}|${next.broker}|${next.symbol}|${next.execution.managed_magic}`;
@@ -562,7 +570,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       if (saved.changes) audit('SIGNAL_ISSUED', {id, side: plan.side});
     }
     researchWorker.acceptBrokerDaily(next);
-    marketFeed.recalculate(); researchWorker.reviewCandidates(); broadcast();
+    marketFeed.recalculate(); analysisHistory.capture(marketFeed.publicState()); researchWorker.reviewCandidates(); broadcast();
   }
   const server = http.createServer(async (req, res) => {
     try {
@@ -627,7 +635,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           return numeric;
         };
         try{
-          return send(req,res,200,analysisHistory.list({
+          return send(req,res,200,await historyRead({
             symbol:url.searchParams.get('symbol')||'ALL',
             status:url.searchParams.get('status')||'ALL',
             since:parseIntParam('since'),
@@ -648,12 +656,20 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         if(rawSince!==null&&!/^\d{1,12}$/.test(rawSince))
           return send(req,res,400,{error:'Invalid time filter'});
         try {
-          const csv=analysisHistory.exportCsv({
+          const filters={
             symbol:url.searchParams.get('symbol')||'ALL',
             status:url.searchParams.get('status')||'ALL',
             since:rawSince===null?null:Number(rawSince),
             query:url.searchParams.get('q')||''
-          });
+          };
+          const rows=[];let before=null;
+          for(let part=0;part<10;part++){
+            const page=await historyRead({...filters,before,limit:100});
+            rows.push(...page.items);
+            if(!page.next_cursor)break;
+            before=page.next_cursor;
+          }
+          const csv=analysisHistoryCsv(rows.slice(0,1000));
           return send(req,res,200,csv,'text/csv; charset=utf-8',{
             'Content-Disposition':'attachment; filename="nabd-analysis-history.csv"'
           });
@@ -744,7 +760,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         if (q.quote_at<Math.max(btcSnapshot.quote_at,btcFastQuote?.quote_at||0))
           return send(req,res,200,{ok:true,ignored:true});
         btcFastQuote={bid:q.bid,ask:q.ask,quote_at:q.quote_at,received_at:now};
-        marketFeed.recalculate();
+        marketFeed.recalculate(); analysisHistory.capture(marketFeed.publicState());
         return send(req,res,200,{ok:true});
       }
       if (['/api/mt5', '/api/update'].includes(path) && req.method === 'POST') {
@@ -1070,7 +1086,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   }, 5000); timer.unref();
   const close = async () => {clearInterval(timer); for (const c of clients) c.end();
     await Promise.allSettled([telegram.close(), marketFeed.close(), newsFeed.close(), researchWorker.close(), accounts.close()]);
-    await new Promise(r => server.close(r)); await runtimeBackup?.close(); await commandJournal?.close(); db.close();};
+    await new Promise(r => server.close(r)); await runtimeBackup?.close(); await commandJournal?.close(); await analysisArchive?.close(); db.close();};
   return {server, ingest, publicState, signalRows, db, close, marketFeed, analysisHistory, newsFeed, researchWorker, telegram, accounts,
     startFeeds: () => {marketFeed.start(); newsFeed.start(); researchWorker.start();}};
 }
@@ -1078,7 +1094,12 @@ export async function startServer() {
   const dataDir = process.env.DATA_DIR || resolve(ROOT, '.data');
   const runtimeBackup = await createRuntimeBackup({connectionString: process.env.AUTH_DATABASE_URL, dataDir});
   const commandJournal = await createCommandJournal(process.env.AUTH_DATABASE_URL);
-  const app = createApplication({dataDir, runtimeBackup, commandJournal});
+  const analysisArchive = await createPgAnalysisArchive({connectionString:process.env.AUTH_DATABASE_URL}).catch(()=>null);
+  const app = createApplication({dataDir, runtimeBackup, commandJournal, analysisArchive});
+  if(analysisArchive){
+    try{await analysisArchive.bootstrapFromSqlite(app.db);}
+    catch{console.warn('PostgreSQL analysis archival unavailable; using existing SQLite history fallback.');}
+  }
   runtimeBackup.start(app.db);
   const port = Number(process.env.PORT || 3000);
   app.server.listen(port, process.env.BIND_ADDRESS || '0.0.0.0', () => {
