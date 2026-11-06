@@ -121,13 +121,15 @@ export function initRecommendationExplainer(root=typeof document!=='undefined'?d
   b.addEventListener('click',()=>{handler(key);draw();});
   group.append(b);
  }
- function draw(){
+ function draw(controls=true){
   const t=T[loc()];title.textContent=t.title;note.textContent=t.note;
   root.setAttribute('aria-label',t.title);
-  selection.replaceChildren();
-  for(const value of EXPLAINER_SYMBOLS)button(selection,value,symbol,value==='BTCUSD'?t.bitcoin:t.gold,v=>{symbol=v;});
-  topics.replaceChildren();
-  for(const value of EXPLAINER_QUESTIONS)button(topics,value,question,t[value.toLowerCase()],v=>{question=v;});
+  if(controls){
+   selection.replaceChildren();
+   for(const value of EXPLAINER_SYMBOLS)button(selection,value,symbol,value==='BTCUSD'?t.bitcoin:t.gold,v=>{symbol=v;});
+   topics.replaceChildren();
+   for(const value of EXPLAINER_QUESTIONS)button(topics,value,question,t[value.toLowerCase()],v=>{question=v;});
+  }
   const explanation=explainNabdRecommendation({symbol,question,market:market?.markets?.[symbol],
    serverTime:marketTime,signals:allSignals,now:Date.now()/1000,locale:loc()});
   result.replaceChildren(...explanation.lines.map(line=>el('p','',line)));
@@ -137,11 +139,11 @@ export function initRecommendationExplainer(root=typeof document!=='undefined'?d
   root.dataset.feedState=explanation.fresh?'fresh':'unavailable';
  }
  const relang=()=>draw();document.addEventListener('nabd:language-change',relang);
- const freshness=setInterval(()=>{if(!document.hidden)draw();},10000);
+ const freshness=setInterval(()=>{if(!document.hidden)draw(false);},10000);
  window.addEventListener('pagehide',()=>{clearInterval(freshness);document.removeEventListener('nabd:language-change',relang);},{once:true});
  draw();
  return {
-  updateMarket(value){if(value&&value.markets){market=value;marketTime=value.serverTime;draw();}},
-  updateSignals(value){allSignals=Array.isArray(value)?value:null;draw();}
+  updateMarket(value){if(value&&value.markets){market=value;marketTime=value.serverTime;draw(false);}},
+  updateSignals(value){allSignals=Array.isArray(value)?value:null;draw(false);}
  };
 }
