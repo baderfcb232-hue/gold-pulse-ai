@@ -20,7 +20,7 @@ const i18n={
   warming:'تجهيز الشموع',gap:'فجوة في الشموع',
   day:'آخر 24 ساعة',week:'آخر 7 أيام',month:'آخر 30 يومًا',allPeriod:'كل السجل المتاح',
   refresh:'تحديث',more:'عرض تحليلات أقدم',
-  search:'البحث',searchPlaceholder:'ابحث في الأسباب أو الاستراتيجية',export:'تصدير CSV',exportHint:'تصدير أول 1000 سجل مطابق للفلاتر',
+  search:'البحث',searchPlaceholder:'ابحث في الأسباب أو الاستراتيجية',export:'تصدير CSV',exportHint:'تصدير أول 1000 سجل مطابق للفلاتر',viewChart:'عرض على الشارت',
   scopeNote:'السجل يخص تحليل السوق المركزي في نبض وليس حساب MT5 الخاص بأي مشترك. لا يتضمن أرقام الحسابات أو أوامر التداول.',
   historyNote:'يبدأ الحفظ من تفعيل هذه الميزة؛ لا توجد تحليلات مُنشأة بأثر رجعي. جاهزية التحليل لا تعني صدور توصية أو تنفيذ صفقة.',
   loading:'جاري جلب التحليلات المسجلة…',empty:'لا توجد تحليلات محفوظة مطابقة لهذه الفلاتر بعد.',
@@ -47,7 +47,7 @@ const i18n={
   warming:'Warming candles',gap:'Candle gap',
   day:'Last 24 hours',week:'Last 7 days',month:'Last 30 days',allPeriod:'Entire available history',
   refresh:'Refresh',more:'Load older analyses',
-  search:'Search',searchPlaceholder:'Search reasons or strategy',export:'Export CSV',exportHint:'Export first 1,000 matching records',
+  search:'Search',searchPlaceholder:'Search reasons or strategy',export:'Export CSV',exportHint:'Export first 1,000 matching records',viewChart:'Show on chart',
   scopeNote:'This is the platform’s global market analysis, not an individual subscriber’s MT5 account. Account numbers and orders are never stored.',
   historyNote:'History begins when this feature is enabled; older analyses are not backfilled. Aligned conditions do not prove a signal was published or a trade was executed.',
   loading:'Loading recorded analyses…',empty:'No recorded analyses match these filters yet.',
@@ -158,6 +158,12 @@ function init(){
    detailsSection(body,t.safety,item.entry_checks);
    exp.append(body);article.append(exp);
   }
+  const chart=el('a','history-chart-link',t.viewChart);
+  chart.href=(item.symbol==='BTCUSD'?'/charts/bitcoin':'/charts/gold')+
+    (Number.isSafeInteger(item.recorded_at)&&item.recorded_at>0?
+      '?at='+encodeURIComponent(item.recorded_at)+'&source='+encodeURIComponent(item.source_type||'REFERENCE'):'');
+  chart.setAttribute('aria-label',t.viewChart+' · '+name);
+  article.append(chart);
   return article;
  }
  function render(){
