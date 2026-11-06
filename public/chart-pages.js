@@ -58,7 +58,8 @@ const copy={
   noCandles:'لم تصل شموع MT5 لهذا الفريم. لا نستخدم شموع منصة أخرى بدلها.',
   staleCandles:'الشموع محفوظة، لكن السعر متأخر؛ لا تعتمد عليها كإشارة جديدة.',
   source:'المصدر',last:'آخر شمعة',unknown:'بانتظار المصدر',referenceNote:'مرجع TradingView الخارجي فقط · سعره قد يختلف عن وسيط MT5',
-  currency:'دولار',referenceStatus:'مقارنة خارجية',frames:'الفريمات',unconfirmed:'لم تتوفر قراءة تحليل حديثة'
+  currency:'دولار',referenceStatus:'مقارنة خارجية',frames:'الفريمات',unconfirmed:'لم تتوفر قراءة تحليل حديثة',
+  historySeen:'علامة التحليل المؤرشف ظاهرة على شمعة MT5',historyMissing:'وقت التحليل المؤرشف خارج الشموع المعروضة من الوسيط',historyReference:'التحليل المؤرشف كان من مصدر مرجعي، ولا نعرضه كشمعة MT5'
  },
  en:{
   skip:'Skip to chart',gold:'Gold',bitcoin:'Bitcoin',dashboard:'NABD Dashboard',
@@ -70,7 +71,8 @@ const copy={
   noCandles:'No MT5 candles for this timeframe. Other exchange candles are not substituted.',
   staleCandles:'Previous candles are retained, but prices are stale; this is not a new signal.',
   source:'Source',last:'Last candle',unknown:'Waiting for source',referenceNote:'External TradingView comparison only · prices may differ from the MT5 broker',
-  currency:'USD',referenceStatus:'External comparison',frames:'Timeframes',unconfirmed:'No fresh analysis available'
+  currency:'USD',referenceStatus:'External comparison',frames:'Timeframes',unconfirmed:'No fresh analysis available',
+  historySeen:'Archived analysis marker shown on a closed MT5 candle',historyMissing:'Archived analysis time is outside the available MT5 candles',historyReference:'This archived analysis used a reference feed and is not represented as an MT5 candle'
  }
 };
 function initChartPage(){
@@ -80,6 +82,11 @@ function initChartPage(){
  const tfButtons=[...document.querySelectorAll('[data-chart-tf]')];
  const modeButtons=[...document.querySelectorAll('[data-chart-mode]')];
  const title=$('chart-title'),frame=$('chart-reference-frame'),canvas=$('chart-canvas'),overlay=$('chart-overlay'),overlayText=$('chart-overlay-text');
+ const historyParams=new URL(location.href).searchParams;
+ const archiveTimestamp=Number(historyParams.get('at'));
+ const markedAt=Number.isSafeInteger(archiveTimestamp)&&archiveTimestamp>0&&
+   archiveTimestamp<=Date.now()/1000+300?archiveTimestamp:null;
+ const archivedSource=historyParams.get('source')==='MT5'?'MT5':'REFERENCE';
  let tf='M15',mode='mt5',request=0,lastBroker=null,lastMarket=null,lastUpdated=0,previousReferenceKey='';
  const lang=()=>document.documentElement.lang==='en'?'en':'ar';
  const t=()=>copy[lang()];
@@ -121,6 +128,7 @@ function initChartPage(){
   text('chart-source',mode==='reference'?'TradingView · '+(symbol==='BTCUSD'?'COINBASE:BTCUSD':'OANDA:XAUUSD'):chart?.source||market?.source||'—');
   text('chart-quote-age',mode==='reference'?labels.referenceNote:chart?.quote?.time?labels.source+' · '+date(chart.quote.time):labels.unknown);
   if(mode==='reference'){
+   if(markedAt!==null){$('chart-history-note').hidden=false;text('chart-history-note',labels.historyReference);}
    $('chart-candle-note').textContent=labels.referenceNote;
    text('chart-last-candle','');
   }else{
@@ -129,9 +137,16 @@ function initChartPage(){
    if(chart?.candles?.length){
     // Historical closed candles remain visible but stale Bid/Ask must not imply live quotes.
     const input=fresh?chart:{...chart,quote:{bid:null,ask:null}};
-    drawBrokerCandles(canvas,input,[]);
+    const marked=drawBrokerCandles(canvas,input,[],archivedSource==='MT5'?markedAt:null);
+    if(markedAt!==null){
+      $('chart-history-note').hidden=false;
+      text('chart-history-note',archivedSource!=='MT5'?labels.historyReference:marked?labels.historySeen:labels.historyMissing);
+    }
     setOverlay(fresh?'':labels.staleCandles);
-   }else setOverlay(labels.noCandles);
+   }else {
+    setOverlay(labels.noCandles);
+    if(markedAt!==null){$('chart-history-note').hidden=false;text('chart-history-note',labels.historyMissing);}
+   }
   }
   const rows=chart?.candles||[];
   text('chart-close',rows.length?num(rows.at(-1).close,chart?.digits??2):'—');
