@@ -2,12 +2,14 @@
    Consumes the existing /api/news stream via live.js. Never fetches broker data,
    generates trading signals, or claims articles are real-time prices. */
 const TOPICS=new Set(['GOLD','BTC']);
-const MAX_AGE=7*24*60*60;
+const MAX_AGE=3*24*60*60; // Only fresh, recent headlines, not week-old cached stories
 export function tickerItems(feed,filter='ALL',at=Date.now()/1000,limit=12){
  if(!Array.isArray(feed?.items))return [];
  const seen=new Set(),out=[];
  for(const x of feed.items){
   if(!x||!TOPICS.has(x.category)||(filter!=='ALL'&&x.category!==filter))continue;
+  // Keep this ribbon strictly about Bitcoin, not unrelated Ethereum/altcoin stories.
+  if(x.category==='BTC'&&x.source!=='cointelegraph-btc'&&!/\b(?:bitcoin|btc)\b|بيتكوين/i.test(x.title||''))continue;
   if(typeof x.title!=='string'||!x.title.trim()||typeof x.url!=='string')continue;
   if(!Number.isFinite(x.published_at)||x.published_at>at+300||x.published_at<at-MAX_AGE)continue;
   let target;try{target=new URL(x.url);}catch{continue;}
@@ -87,16 +89,28 @@ export function initNewsTicker(root=typeof document!=='undefined'?document.getEl
     }
     fallback.hidden=true;
     viewport.dataset.hasNews='true';
-    const nextSignature=locale+'|'+items.map(x=>x.id||x.url+'|'+x.title).join('~');
+    const nextSignature=locale+'|'+items.map(x=>[x.id||x.url,x.title,x.published_at].join(':')).join('~');
     if(signature===nextSignature)return;
     signature=nextSignature;
-    const group=buildGroup(items,locale),duplicate=group.cloneNode(true);
+    const group=buildGroup(items,locale);
+    track.replaceChildren(group);
+    // A short feed (even one headline) must not leave an empty gap in the crawl.
+    // Fill a whole viewport before creating the matching second half.
+    if(viewport.clientWidth>0 && group.scrollWidth>0){
+      const originals=[...group.children].map(node=>node.cloneNode(true));
+      for(let n=0;n<10 && group.scrollWidth<viewport.clientWidth+48;n++){
+        group.append(...originals.map(node=>node.cloneNode(true)));
+      }
+    }
+    const duplicate=group.cloneNode(true);
     duplicate.setAttribute('aria-hidden','true');
     duplicate.classList.add('nabd-ticker-copy');
     duplicate.querySelectorAll('a').forEach(a=>{a.tabIndex=-1;});
     track.replaceChildren(group,duplicate);
+    // Keep approximately constant reading speed as feeds gain or lose stories.
     const chars=items.reduce((count,x)=>count+x.title.length+22,0);
-    track.style.setProperty('--nabd-ticker-duration',Math.max(26,Math.min(140,Math.round(chars*0.17)))+'s');
+    const distance=group.scrollWidth||chars*7;
+    track.style.setProperty('--nabd-ticker-duration',Math.max(20,Math.min(180,Math.round(distance/42)))+'s');
   }
   const onLocale=()=>{signature='';render();};
   document.addEventListener('nabd:language-change',onLocale);
