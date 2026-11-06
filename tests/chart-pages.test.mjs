@@ -88,6 +88,9 @@ test('chart UI distinguishes real broker candles from opt-in external reference 
  assert.match(js,/brokerChartPath\(symbol,requestedTf\)/);
  assert.match(js,/drawBrokerCandles\(canvas,input,\[\]\)/);
  assert.match(js,/summarizeAnalysisMarket/);
+ assert.match(js,/m\.candle_kind!=='BROKER_OHLC'/);
+ assert.match(js,/m\.source_id!==lastBroker\.source_id/);
+ assert.match(js,/brokerChartFresh\(lastBroker,now,m\.quoteTtl\)/);
  assert.match(js,/chart\?\.quote/);
  assert.match(js,/TradingView/);
  assert.match(js,/source/i);
