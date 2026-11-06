@@ -134,16 +134,18 @@ export function buildPerformanceCenter({sources=[],filters={},now=Date.now()/100
  }
  const selected=included.filter(t=>(symbol==='ALL'||symbol===t.symbol)&&(mode==='ALL'||mode===t.mode));
  const currencies=[...new Set(selected.map(t=>t.currency))];
- const mixedCurrency=currencies.length>1;
+ const accountModes=[...new Set(selected.map(t=>t.mode))];
+ const mixedCurrency=currencies.length>1,mixedMode=accountModes.length>1;
  const bySymbol=Object.fromEntries(['XAUUSD','BTCUSD'].map(x=>{
-  const rows=selected.filter(t=>t.symbol===x);
-  return [x,{currency:rows[0]?.currency||null,mode:[...new Set(rows.map(t=>t.mode))],
-   ...summarize(rows,false)}];
+  const rows=selected.filter(t=>t.symbol===x),modes=[...new Set(rows.map(t=>t.mode))];
+  const differentCurrencies=new Set(rows.map(t=>t.currency)).size>1;
+  return [x,{currency:differentCurrencies||modes.length>1?null:rows[0]?.currency||null,mode:modes,
+   ...summarize(rows,differentCurrencies||modes.length>1)}];
  }));
  return {
   kind:'MT5_FULLY_CLOSED_POSITIONS_ONLY',privacy:'OPERATOR_ONLY',verified:true,
-  filters:{symbol,mode,period},currency:mixedCurrency?null:currencies[0]||null,
-  mixedCurrency,evidence,excluded,summary:summarize(selected,mixedCurrency),
+  filters:{symbol,mode,period},currency:mixedCurrency||mixedMode?null:currencies[0]||null,
+  mixedCurrency,mixedMode,evidence,excluded,summary:summarize(selected,mixedCurrency||mixedMode),
   bySymbol,generatedAt:Math.floor(now),
   incompleteHistory:true,realAccountEquityAvailable:false,
   disclaimer:'Past performance does not guarantee future returns. No hypothetical signal wins, subscriptions or unverified broker orders are included. The available broker record may be incomplete.'
