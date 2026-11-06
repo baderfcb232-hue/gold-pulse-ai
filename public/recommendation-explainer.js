@@ -15,10 +15,11 @@ const T={
   pending:'قيد التحقق',frames:'اتجاه الفريمات',score:'توافق مؤشرات، وليس نسبة ربح',
   waiting:'لا توجد توصية جديدة مؤكدة من هذه القراءة.',active:'ظهرت توصية حالية في بيانات نبض.',
   noSignalHistory:'لا يوجد سجل توصية يمكن التحقق من تنفيذها هنا.',pendingHistory:'سجل التوصيات غير متاح أو لم تُؤكد صلاحية عرضه.',
+  referenceSignal:'هذه توصية مرجعية، وليست دليلًا على صفقة منفذة في MT5.',
   lastSignal:'آخر توصية مسجلة',notExecution:'صدور التوصية أو إرسالها إلى MT5 لا يعني فتح صفقة.',
   filled:'تم توثيق فتح الصفقة بتذكرة من سجل الوسيط',submitted:'أُرسل الأمر، ولا توجد صفقة مؤكدة من الوسيط',
   dispatched:'وصل الأمر إلى الجسر، ولم يثبت تنفيذه بعد',rejected:'رفض MT5 الأمر',
-  blocked:'مُنع إرسال الأمر',missing:'لا يوجد أمر تنفيذ مؤكد',deal:'تذكرة الوسيط',
+  blocked:'مُنع إرسال الأمر',missing:'لا تتوفر بيانات تنفيذ مؤكدة في هذا العرض؛ قد يلزم دخول المشغّل للتحقق.',deal:'تذكرة الوسيط',
   noteCurrent:'الشرح يعكس حالة السوق الحالية، وليس إعادة بناء لتحليل وقت التوصية.',
   chart:'فتح الشارت',history:'سجل التحليلات',
   staleSignals:'حالة تنفيذ التوصية لا تُستنتج من تغير السعر.'
@@ -33,10 +34,11 @@ const T={
   pending:'Awaiting checks',frames:'Timeframe directions',score:'Indicator alignment, not profit probability',
   waiting:'No confirmed new published signal from this snapshot.',active:'A current signal is published in NABD.',
   noSignalHistory:'No recommendation history is available to verify execution.',pendingHistory:'Recommendation history unavailable or access not confirmed.',
+  referenceSignal:'This is a reference signal, not proof of an MT5 broker trade.',
   lastSignal:'Most recent recorded signal',notExecution:'Publishing or sending an MT5 order does not prove a broker fill.',
   filled:'Broker fill confirmed by deal ticket',submitted:'Order submitted, broker fill not confirmed',
   dispatched:'Order reached bridge; fill not confirmed',rejected:'MT5 rejected the order',
-  blocked:'Dispatch blocked',missing:'No confirmed execution record',deal:'Broker deal ticket',
+  blocked:'Dispatch blocked',missing:'No confirmed execution record accessible here; operator verification may be required',deal:'Broker deal ticket',
   noteCurrent:'This explanation reflects current market conditions, not a replay of the original decision.',
   chart:'Open chart',history:'Analysis history',staleSignals:'Execution cannot be inferred from price movements.'
  }
@@ -44,10 +46,15 @@ const T={
 const short=v=>typeof v==='string'?v.replace(/[\u0000-\u001F\u007F]/g,' ').trim().slice(0,220):'';
 export function safeExecutionStatus(signal,locale='ar'){
  const t=T[locale==='en'?'en':'ar'],tr=signal?.execution_trace;
- const validTicket=typeof tr?.broker_deal_ticket==='string'&&/^[1-9][0-9]{0,19}$/.test(tr.broker_deal_ticket);
+ // MT5 deal tickets may arrive as a JSON string or a safe JSON integer.
+ // Never coerce an unsafe IEEE-754 number into a seemingly verified ticket.
+ const rawTicket=tr?.broker_deal_ticket;
+ const ticket=typeof rawTicket==='string'?rawTicket:
+  typeof rawTicket==='number'&&Number.isSafeInteger(rawTicket)&&rawTicket>0?String(rawTicket):null;
+ const validTicket=typeof ticket==='string'&&/^[1-9][0-9]{0,19}$/.test(ticket);
  if(!tr)return {kind:'UNVERIFIED',message:t.missing,confirmed:false};
  if(tr.status==='FILLED'&&tr.broker_fill_confirmed===true&&validTicket)
-  return {kind:'FILLED',message:t.filled+' · '+t.deal+' #'+tr.broker_deal_ticket,confirmed:true};
+  return {kind:'FILLED',message:t.filled+' · '+t.deal+' #'+ticket,confirmed:true};
  const key=tr.status==='REJECTED'?'rejected':tr.status==='SUBMITTED'?'submitted':
    tr.status==='DISPATCHED'?'dispatched':tr.status==='BLOCKED'?'blocked':'missing';
  return {kind:tr.status||'UNVERIFIED',message:t[key]+
@@ -69,8 +76,11 @@ export function explainNabdRecommendation({symbol='XAUUSD',question='WHY',market
   if(!Array.isArray(signals))lines.push(t.pendingHistory);
   else if(!last)lines.push(t.noSignalHistory);
   else{
-   lines.push(t.lastSignal+': #'+(last.recommendation_code||'—')+' · '+(last.side||'—'));
-   lines.push(safeExecutionStatus(last,l).message);
+   const code=[last.execution_trace?.signal_code,last.recommendation_code]
+    .find(value=>typeof value==='string'&&/^[A-F0-9]{12}$/.test(value));
+   lines.push(t.lastSignal+': #'+(code||'—')+' · '+(last.side||'—'));
+   lines.push(typeof last.source==='string'&&last.source&&!last.source.startsWith('MT5')?
+     t.referenceSignal:safeExecutionStatus(last,l).message);
    lines.push(t.notExecution);
   }
  }else if(!market)lines.push(t.loading);
