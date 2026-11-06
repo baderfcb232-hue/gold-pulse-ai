@@ -70,3 +70,18 @@ test('phase 2 marketing sections are bilingual, transparent and accessible',()=>
   assert.match(css,/\.phase2-market-grid/);
   assert.match(css,/@media\(max-width:700px\)/);
 });
+
+
+test('landing market strip provides source-labelled prices and accessible preview switching',async()=>{
+ for(const name of ['landing.html','landing-en.html']){
+  const content=readFileSync(new URL('../public/'+name,import.meta.url),'utf8');
+  for(const symbol of ['XAUUSD','BTCUSD']) assert.ok(content.includes('data-landing-market="'+symbol+'"'));
+  assert.match(content,/data-preview-symbol="BTCUSD"/);
+  assert.match(content,/landing-live\.js/);
+ }
+ const client=readFileSync(new URL('../public/landing-live.js',import.meta.url),'utf8');
+ assert.match(client,/\/api\/market/);
+ assert.match(client,/connection==='LIVE'/);
+ assert.match(client,/data-market-source/);
+ assert.doesNotMatch(client,/\/api\/commands|\/api\/bridge\/next/);
+});
