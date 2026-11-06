@@ -86,7 +86,7 @@ test('routes and assets respond from NABD server without enabling trading or fab
 test('chart UI distinguishes real broker candles from opt-in external reference without execution changes',()=>{
  const js=read('public/chart-pages.js'),html=read('public/index.html'),live=read('public/live.js');
  assert.match(js,/brokerChartPath\(symbol,requestedTf\)/);
- assert.match(js,/drawBrokerCandles\(canvas,input,\[\]\)/);
+ assert.match(js,/drawBrokerCandles\(canvas,input,\[\],archivedSource==='MT5'\?markedAt:null\)/);
  assert.match(js,/summarizeAnalysisMarket/);
  assert.match(js,/m\.candle_kind!=='BROKER_OHLC'/);
  assert.match(js,/m\.source_id!==lastBroker\.source_id/);
