@@ -13,6 +13,9 @@ import time
 import urllib.error
 import urllib.request
 
+from nabd_mt5_instance_guard import (InstanceLease, IsolationError,
+    expected_identity, terminal_profile_matches)
+
 try:
     import MetaTrader5 as mt5
 except ImportError:
@@ -40,8 +43,20 @@ TERMINAL_PATH = env("NABD_MONITOR_TERMINAL_PATH")
 if not os.path.isfile(TERMINAL_PATH) or not TERMINAL_PATH.lower().endswith("terminal64.exe"):
     sys.exit("Expected a dedicated Windows MetaTrader 5 terminal64.exe path.")
 
-# Avoid a worker accidentally initializing the default MT5 terminal/profile.
+# Fail closed before MT5 initialization if another member already owns this
+# portable directory, or a duplicate worker is already running against it.
+try:
+    identity = expected_identity(
+        ACCOUNT_ID, "JustMarkets", ACCOUNT_SERVER, ACCOUNT_LOGIN, "demo", TERMINAL_PATH
+    )
+    lease = InstanceLease(TERMINAL_PATH, identity)
+except IsolationError as exc:
+    sys.exit("NABD isolated MT5 worker refused to start: " + str(exc))
+
+# Always use the explicit isolated installation. No Python login/password
+# arguments; the operator logs into this Demo account locally on Windows.
 if not mt5.initialize(path=TERMINAL_PATH, portable=True, timeout=15000):
+    lease.release()
     sys.exit("Dedicated MT5 terminal failed to initialize; check Windows session.")
 
 
@@ -52,6 +67,7 @@ def actual_demo_is_connected():
         account is not None
         and terminal is not None
         and terminal.connected
+        and terminal_profile_matches(terminal, TERMINAL_PATH)
         and str(account.login) == ACCOUNT_LOGIN
         and account.server == ACCOUNT_SERVER
         and account.trade_mode == mt5.ACCOUNT_TRADE_MODE_DEMO
@@ -82,9 +98,18 @@ def report():
             result = json.loads(response.read(2048))
             if not result.get("monitoringOnly") or result.get("tradeAllowed") is not False:
                 raise RuntimeError("Unsafe unexpected server response")
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
-        # Never print request headers or token.
-        print("NABD monitoring report failed; verify registration, approval, or network.",
+    except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403, 409):
+            # Revoked token, unapproved account or incorrect MT5 identity:
+            # stop instead of endlessly reporting a false ONLINE state.
+            raise RuntimeError(
+                "Windows monitoring authorization or account identity rejected"
+            ) from None
+        print("NABD monitoring endpoint temporarily unavailable.",
+              type(exc).__name__, flush=True)
+    except (urllib.error.URLError, TimeoutError) as exc:
+        # Never print request, headers, token or trading credentials.
+        print("NABD monitoring transport unavailable.",
               type(exc).__name__, flush=True)
 
 
@@ -97,3 +122,4 @@ except KeyboardInterrupt:
     pass
 finally:
     mt5.shutdown()
+    lease.release()
