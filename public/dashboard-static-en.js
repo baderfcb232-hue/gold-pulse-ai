@@ -1,5 +1,6 @@
 /* Exact static dashboard copy, keyed by the original Arabic phrase. */
 export const dashboardStaticEnglish = Object.freeze({
+  "سجل التحليلات": "Analysis history",
   "NABD | نبض الذهب": "NABD | Gold & Bitcoin",
   "انتقل للمحتوى": "Skip to content",
   "الرئيسية": "Overview",
