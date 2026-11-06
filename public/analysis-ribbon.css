@@ -1,0 +1,59 @@
+/* NABD phase 6: compact, read-only Gold/Bitcoin analysis ribbon. */
+.nabd-analysis-ribbon{
+ display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;
+ width:100%;min-width:0;margin:0 0 15px;box-sizing:border-box;
+}
+.nabd-analysis-market{
+ display:flex;align-items:center;gap:7px;min-width:0;min-height:45px;
+ box-sizing:border-box;padding:7px 11px;border:1px solid var(--border);
+ border-radius:11px;background:var(--card);color:var(--ink);
+}
+.nabd-analysis-symbol{
+ display:inline-flex;flex:0 0 auto;align-items:center;gap:6px;
+ padding-inline-end:9px;border-inline-end:1px solid var(--border);
+ font-weight:750;font-size:11px;letter-spacing:.15px;color:var(--ink);
+}
+.nabd-analysis-symbol::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.nabd-analysis-market[data-analysis-state="signal"] .nabd-analysis-symbol::before{background:var(--green)}
+.nabd-analysis-market[data-analysis-state="ready"] .nabd-analysis-symbol::before{background:var(--green)}
+.nabd-analysis-market[data-analysis-state="news"] .nabd-analysis-symbol::before,
+.nabd-analysis-market[data-analysis-state="blocked"] .nabd-analysis-symbol::before,
+.nabd-analysis-market[data-analysis-state="watch"] .nabd-analysis-symbol::before{background:var(--amber)}
+.nabd-analysis-market [data-analysis-status]{
+ flex:0 1 auto;white-space:nowrap;font-size:11px;font-weight:700;
+}
+.nabd-analysis-market [data-analysis-frames]{
+ flex:0 0 auto;white-space:nowrap;font-size:10px;
+ color:var(--muted);direction:ltr;unicode-bidi:isolate;
+}
+.nabd-analysis-market [data-analysis-score]{
+ flex:0 0 auto;white-space:nowrap;font-size:10px;color:var(--green);
+}
+.nabd-analysis-market [data-analysis-score]:is(:empty){display:none}
+.nabd-analysis-market [data-analysis-reason]{
+ min-width:0;flex:1 1 auto;white-space:nowrap;overflow:hidden;
+ text-overflow:ellipsis;color:var(--muted);font-size:10px;
+}
+@media(max-width:1000px){
+ .nabd-analysis-market{display:grid;grid-template-columns:minmax(0,1fr) auto;
+   grid-template-areas:"symbol status" "frames score" "reason reason";gap:4px 7px;min-height:66px}
+ .nabd-analysis-symbol{grid-area:symbol;justify-self:start}
+ .nabd-analysis-market [data-analysis-status]{grid-area:status;justify-self:end}
+ .nabd-analysis-market [data-analysis-frames]{grid-area:frames;justify-self:start}
+ .nabd-analysis-market [data-analysis-score]{grid-area:score;justify-self:end}
+ .nabd-analysis-market [data-analysis-reason]{grid-area:reason;justify-self:stretch}
+}
+@media(max-width:650px){
+ .nabd-analysis-ribbon{gap:6px;margin-bottom:11px}
+ .nabd-analysis-market{padding:7px 8px;min-height:68px;gap:3px}
+ .nabd-analysis-symbol{font-size:10px;padding-inline-end:0;border:0}
+ .nabd-analysis-market [data-analysis-status]{font-size:10px;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+ .nabd-analysis-market [data-analysis-frames],.nabd-analysis-market [data-analysis-score]{font-size:9px}
+ .nabd-analysis-market [data-analysis-reason]{font-size:9px}
+}
+@media(max-width:350px){
+ .nabd-analysis-ribbon{gap:4px}
+ .nabd-analysis-market{padding:6px}
+ .nabd-analysis-symbol{font-size:9px}
+ .nabd-analysis-market [data-analysis-status]{font-size:9px}
+}
