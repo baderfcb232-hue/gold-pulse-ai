@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {tickerItems,tickerFeedStatus} from '../public/news-ticker.js';
+import {tickerItems,tickerFeedStatus,conciseHeadline} from '../public/news-ticker.js';
 
 const NOW=1793980800;
 const row=(category,title,url,seconds=120)=>({id:url,category,title,url,published_at:NOW-seconds,source_name:'Verified RSS'});
@@ -81,7 +81,7 @@ test('marquee keeps moving after touch and refreshes RSS even with active market
   const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
   const js=read('public/news-ticker.js'),css=read('public/news-ticker.css'),live=read('public/live.js');
   assert.match(css,/animation:nabd-news-crawl/);
-  assert.match(css,/@media\(hover:hover\) and \(pointer:fine\)/);
+  assert.doesNotMatch(css,/animation-play-state:paused/);
   assert.doesNotMatch(css,/:focus-within \.nabd-ticker-track/);
   assert.match(js,/viewport\.clientWidth/);
   assert.match(js,/group\.scrollWidth/);
@@ -91,4 +91,33 @@ test('marquee keeps moving after touch and refreshes RSS even with active market
   assert.match(live,/setInterval\(\(\) => \{if\(!document\.hidden\)refreshHeadlines\(\);\},45000\)/);
   assert.match(live,/updateNewsTicker\(next\)/);
   assert.doesNotMatch(js,/\/api\/commands|OrderSend/);
+});
+
+test('iPhone ticker continues on reduced-motion settings and trims long publisher titles without changing facts',()=>{
+  const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
+  const css=read('public/news-ticker.css'),js=read('public/news-ticker.js'),html=read('public/index.html');
+  assert.match(js,/track\.animate\(/);
+  assert.match(js,/iterations:Infinity/);
+  assert.match(js,/prefers-reduced-motion: reduce/);
+  assert.match(css,/\.nabd-ticker-track\.nabd-ticker-waapi\{animation:none!important\}/);
+  assert.doesNotMatch(css,/\.nabd-ticker-track\{animation:none!important/);
+  assert.doesNotMatch(css,/transform:none!important/);
+  assert.match(html,/news-ticker\.css\?v=short-iphone-20261106/);
+  assert.match(js,/words\.textContent=conciseHeadline\(item\.title\)/);
+  assert.match(js,/anchor\.title=\[item\.title/);
+  const long='United States inflation report puts interest rates under fresh market scrutiny after a detailed economic review';
+  const clipped=conciseHeadline(long);
+  assert.ok(clipped.length<long.length);
+  assert.ok(clipped.endsWith('…'));
+  assert.ok(long.startsWith(clipped.slice(0,-1)));
+  assert.equal(conciseHeadline('Gold jumps after inflation data'),'Gold jumps after inflation data');
+  assert.ok(conciseHeadline('أسعار الذهب ترتفع مع ترقب قرار الفائدة بعد صدور تقرير جديد ومفصل عن الأسواق').length<70);
+});
+test('the compact ticker excludes generic banking reports and retains real gold and bitcoin news',()=>{
+  const values=tickerItems({items:[
+   row('GOLD','Consolidated banking statistics for end-June 2026','https://example.org/banking'),
+   row('GOLD','Gold prices rise after US inflation data','https://example.org/gold2'),
+   row('BTC','Bitcoin exchange update','https://example.org/btc2')
+  ]},'ALL',NOW);
+  assert.deepEqual(values.map(x=>x.url),['https://example.org/gold2','https://example.org/btc2'].reverse());
 });
