@@ -77,3 +77,8 @@
  #history-export{flex:1 1 calc(50% - 6px)}
  #history-refresh{flex:1 1 calc(50% - 6px)}
 }
+
+.history-chart-link{display:inline-flex;align-items:center;gap:5px;margin-top:11px;
+ border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:11px;
+ font-weight:750;color:var(--accent);background:var(--card)}
+.history-chart-link:hover{background:var(--accent-bg)}
