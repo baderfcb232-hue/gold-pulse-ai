@@ -1,5 +1,5 @@
 import {positionSize, ema, botHeartbeatFresh, BOT_CONTROL_TTL} from '/engine.mjs';
-import {initLiveWorkspace} from '/live.js?v=short-iphone-20261106';
+import {initLiveWorkspace} from '/live.js?v=short-iphone-20261106&analysis=phase6-1';
 import {inSignalDateRange} from '/signal-date-filter.js';
 import {createStateConnection} from '/state-connection.js';
 import {requestJson} from '/http.js';
