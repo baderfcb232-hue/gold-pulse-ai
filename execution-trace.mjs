@@ -44,12 +44,20 @@ export const eaRejectReasonDescriptions = Object.freeze({
 export const describeEaRejection = code => Number.isInteger(code) && eaRejectReasonDescriptions[code]
   ? 'رفض MT5: ' + eaRejectReasonDescriptions[code] : 'EA_REJECTED';
 
+// MT5 tickets are ulong IDs; JSON bridges may encode them as decimal strings
+// or safe integers. Never coerce a rounded/unsafe JS number into a ticket.
+export function canonicalBrokerTicket(value) {
+  const ticket = typeof value==='string' ? value :
+    typeof value==='number' && Number.isSafeInteger(value) && value>0 ? String(value) : null;
+  return ticket && /^[1-9][0-9]{0,19}$/.test(ticket) ? ticket : null;
+}
 export function verifiedBrokerDeal(record, snapshot) {
-  if (record?.status!=='SUBMITTED' || !/^[1-9][0-9]{0,19}$/.test(record.deal_ticket||'') ||
+  const ticket=canonicalBrokerTicket(record?.deal_ticket);
+  if (record?.status!=='SUBMITTED' || !ticket ||
       !snapshot?.execution?.demo || !/just.?markets/i.test(snapshot.broker||'') ||
       snapshot.symbol !== record.plan?.broker_symbol ||
       !Array.isArray(snapshot.deals)) return null;
-  return snapshot.deals.find(d => d.ticket === record.deal_ticket &&
+  return snapshot.deals.find(d => canonicalBrokerTicket(d.ticket)===ticket &&
     d.entry_type === 'IN' && d.side === record.plan.side &&
     d.volume > 0 && d.time >= Number(record.time)-5) || null;
 }

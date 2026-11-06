@@ -1,7 +1,7 @@
 import {positionSize, ema, botHeartbeatFresh, BOT_CONTROL_TTL} from '/engine.mjs';
 import {initLiveWorkspace} from '/live.js?v=short-iphone-20261106&analysis=phase6-1';
 import {inSignalDateRange} from '/signal-date-filter.js';
-import {initRecommendationExplainer,safeExecutionStatus} from '/recommendation-explainer.js?v=phase9-1';
+import {initRecommendationExplainer,safeExecutionStatus} from '/recommendation-explainer.js?v=phase9-2';
 import {createStateConnection} from '/state-connection.js';
 import {requestJson} from '/http.js';
 import {translateUiText,currentLocale,setLocalizedText} from '/i18n-dom.js?v=v2-i18n-5';
