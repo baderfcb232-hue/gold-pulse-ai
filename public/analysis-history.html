@@ -10,8 +10,8 @@
  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
  <script src="/theme-init.js?v=phase8-1"></script>
  <script src="/nabd-locale-init.js?v=v2-1"></script>
- <link rel="stylesheet" href="/analysis-history.css?v=phase8-1">
- <script src="/analysis-history.js?v=phase8-1" type="module"></script>
+ <link rel="stylesheet" href="/analysis-history.css?v=phase8-2">
+ <script src="/analysis-history.js?v=phase8-2" type="module"></script>
 </head>
 <body>
  <a class="history-skip" href="#history-main" data-i18n="skip">تجاوز إلى السجل</a>
@@ -66,7 +66,11 @@
      <option value="ALL" data-i18n="allPeriod">كل السجل المتاح</option>
     </select>
    </label>
+   <label class="history-search-label"><span data-i18n="search">بحث في الأسباب والشروط</span>
+    <input type="search" id="history-search" maxlength="100" autocomplete="off" placeholder="ابحث عن سبب الانتظار أو المؤشر">
+   </label>
    <button type="button" id="history-refresh" data-i18n="refresh">تحديث</button>
+   <button type="button" id="history-export" data-i18n="exportCsv">تصدير CSV</button>
   </section>
   <section class="history-details" aria-label="History provenance">
    <span id="history-count" aria-live="polite">—</span>
