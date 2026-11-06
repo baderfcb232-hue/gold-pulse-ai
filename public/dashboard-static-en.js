@@ -1,5 +1,14 @@
 /* Exact static dashboard copy, keyed by the original Arabic phrase. */
 export const dashboardStaticEnglish = Object.freeze({
+  "كل أدواتك من مكان واحد": "All your tools in one place",
+  "اختصارات للأقسام المتاحة حاليًا. الصفحات المستقبلية لا تظهر كأنها مفعّلة.": "Shortcuts to available sections. Future features are not shown as active.",
+  "إعدادات حسابي": "My account settings",
+  "التوصيات والسجل": "Signals and history",
+  "الصفقات وMT5": "Trades and MT5",
+  "الأداء والنتائج": "Performance and results",
+  "الربط والمخاطرة": "Connection and risk",
+  "حالة الأسعار والاتصال ظاهرة أعلى اللوحة؛ بيانات الحساب والرصيد لا تُعرض قبل تسجيل الدخول والصلاحية.": "Price and connection status are shown above; account balances require sign-in and permission.",
+  "فتح ملف المشترك": "Open member profile",
   "NABD | نبض الذهب": "NABD | Gold & Bitcoin",
   "انتقل للمحتوى": "Skip to content",
   "الرئيسية": "Overview",
