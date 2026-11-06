@@ -8,6 +8,9 @@ export function tickerItems(feed,filter='ALL',at=Date.now()/1000,limit=12){
  const seen=new Set(),out=[];
  for(const x of feed.items){
   if(!x||!TOPICS.has(x.category)||(filter!=='ALL'&&x.category!==filter))continue;
+  // An ECB/Fed general notice may be categorized as GOLD server-side. The
+  // compact ribbon only shows headlines that actually mention a market driver.
+  if(x.category==='GOLD'&&!/\b(?:gold|bullion|xauusd|precious metals?|federal reserve|\bfed\b|interest rates?|rate cut|rate hike|inflation|\bcpi\b|\busd\b|dollar|unemployment|payroll|\bnfp\b|monetary policy|powell)\b|ذهب|فائدة|تضخم|دولار|الفيدرالي|بطالة/i.test(x.title||''))continue;
   // Keep this ribbon strictly about Bitcoin, not unrelated Ethereum/altcoin stories.
   if(x.category==='BTC'&&x.source!=='cointelegraph-btc'&&!/\b(?:bitcoin|btc)\b|بيتكوين/i.test(x.title||''))continue;
   if(typeof x.title!=='string'||!x.title.trim()||typeof x.url!=='string')continue;
