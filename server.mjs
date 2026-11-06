@@ -137,7 +137,12 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     enabledSymbols: cfg.goldOnly ? ['XAUUSD'] : undefined,
     brokerSnapshot: () => snapshot, brokerSnapshotBTC: () => cfg.goldOnly ? null : latestBtcSnapshot(),
     goldSignalStrategy: cfg.goldSignalStrategy, btcSignalStrategy: cfg.btcSignalStrategy,
-    onChange: () => {researchWorker.reviewCandidates(); emit('market', marketState);}});
+    onChange: () => {
+      // Capture independently of SSE subscribers; no visitors are needed for history.
+      analysisHistory.capture(marketFeed.publicState());
+      researchWorker.reviewCandidates();
+      emit('market', marketState);
+    }});
   const newsFeed = createNewsFeed({db, clock, ...feedOptions, onChange: () => emit('news', newsFeed.publicState)});
   const telegram = createTelegramPublisher({db, clock, ...telegramOptions, enabled: cfg.publicationEnabled,
     health: () => [...(!snapshot?.received_at || clock()-snapshot.received_at>90 ? ['BRIDGE'] : []),
@@ -303,9 +308,6 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   }
   function marketState() {
     const raw = marketFeed.publicState();
-    // Observe raw market diagnostics only. The read API remains members-only;
-    // capture does not change publication, recommendations, or trading decisions.
-    analysisHistory.capture(raw);
     const state = researchMarketState(raw), plan = snapshot?.execution.website_recommendations ? null : publicationReview().plan;
     if (snapshot?.execution.website_recommendations && raw.markets.XAUUSD?.source_id?.startsWith('MT5:'))
       state.markets.XAUUSD = {...raw.markets.XAUUSD,execution_mode:'DEMO_WEBSITE',execution: (()=>{const {plan,...status}=websiteExecutionReview(snapshot);return status;})()};
