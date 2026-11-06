@@ -36,7 +36,10 @@
 .nabd-news-ticker[data-feed-status="live"] .nabd-ticker-dot{background:var(--green)}
 .nabd-ticker-viewport{position:relative;display:flex;align-items:center;flex:1 1 auto;min-width:0;height:100%;overflow:hidden;direction:ltr}
 .nabd-ticker-track{display:flex;align-items:center;flex:0 0 auto;width:max-content;height:100%;direction:ltr;animation:nabd-news-crawl var(--nabd-ticker-duration,65s) linear infinite;will-change:transform}
-.nabd-ticker-viewport:hover .nabd-ticker-track,.nabd-ticker-viewport:focus-within .nabd-ticker-track{animation-play-state:paused}
+/* Touch focus must not freeze the banner. On devices with a mouse, hover pauses
+   for reading; accessibility settings still take precedence below. */
+@media(hover:hover) and (pointer:fine){.nabd-ticker-viewport:hover .nabd-ticker-track{animation-play-state:paused}}
+.nabd-ticker-viewport:has(.nabd-ticker-story:focus-visible) .nabd-ticker-track{animation-play-state:paused}
 .nabd-ticker-group{display:flex;flex:0 0 auto;align-items:center;gap:24px;padding-inline-end:24px;height:100%;white-space:nowrap;direction:ltr}
 .nabd-ticker-story{display:inline-flex;align-items:center;gap:7px;flex:0 0 auto;max-width:none;min-width:0;color:var(--ink);font-size:12px;line-height:1.35;font-weight:550;text-decoration:none;white-space:nowrap}
 .nabd-ticker-story:hover{color:var(--green);text-decoration:underline}
