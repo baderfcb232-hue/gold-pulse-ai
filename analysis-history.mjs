@@ -168,5 +168,9 @@ export function createAnalysisHistory({db,clock=()=>Date.now()/1000,storagePersi
   }
   return analysisHistoryCsv(rows.slice(0,1000));
  }
- return {capture,list,exportCsv,prune};
+ function get(id){
+  if(!Number.isSafeInteger(id)||id<1)throw new RangeError('Invalid observation id');
+  return readRow(db.prepare('SELECT id,data FROM analysis_history WHERE id=?').get(id));
+ }
+ return {capture,list,exportCsv,get,prune};
 }
