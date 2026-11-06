@@ -8,6 +8,9 @@ export function tickerItems(feed,filter='ALL',at=Date.now()/1000,limit=12){
  const seen=new Set(),out=[];
  for(const x of feed.items){
   if(!x||!TOPICS.has(x.category)||(filter!=='ALL'&&x.category!==filter))continue;
+  // An ECB/Fed general notice may be categorized as GOLD server-side. The
+  // compact ribbon only shows headlines that actually mention a market driver.
+  if(x.category==='GOLD'&&!/\b(?:gold|bullion|xauusd|precious metals?|federal reserve|\bfed\b|interest rates?|rate cut|rate hike|inflation|\bcpi\b|\busd\b|dollar|unemployment|payroll|\bnfp\b|monetary policy|powell)\b|ذهب|فائدة|تضخم|دولار|الفيدرالي|بطالة/i.test(x.title||''))continue;
   // Keep this ribbon strictly about Bitcoin, not unrelated Ethereum/altcoin stories.
   if(x.category==='BTC'&&x.source!=='cointelegraph-btc'&&!/\b(?:bitcoin|btc)\b|بيتكوين/i.test(x.title||''))continue;
   if(typeof x.title!=='string'||!x.title.trim()||typeof x.url!=='string')continue;
@@ -19,6 +22,17 @@ export function tickerItems(feed,filter='ALL',at=Date.now()/1000,limit=12){
   seen.add(key);out.push(x);
  }
  return out.sort((a,b)=>b.published_at-a.published_at).slice(0,limit);
+}
+// Shorten only the publisher's own headline; no invented summary or market impact.
+export function conciseHeadline(title){
+  if(typeof title!=='string')return '';
+  const plain=title.replace(/\s+/g,' ').trim().replace(/\s+[|—–-]\s+(?:BBC(?: News)?|Reuters|CoinDesk|Cointelegraph)\s*$/i,'');
+  const limit=/[\u0600-\u06ff]/.test(plain)?48:62;
+  if(Array.from(plain).length<=limit)return plain;
+  const chars=Array.from(plain),prefix=chars.slice(0,limit+1).join('');
+  const space=prefix.lastIndexOf(' ');
+  const short=space>limit*0.65?prefix.slice(0,space):chars.slice(0,limit).join('');
+  return short.replace(/[\s,;:–—-]+$/,'')+'…';
 }
 export function tickerFeedStatus(feed,at=Date.now()/1000){
  if(!Array.isArray(feed?.sources)||!feed.sources.length)return 'UNAVAILABLE';
@@ -38,7 +52,7 @@ export function initNewsTicker(root=typeof document!=='undefined'?document.getEl
   const track=root.querySelector('[data-ticker-track]');
   const fallback=root.querySelector('[data-ticker-placeholder]');
   if(!title||!viewport||!track||!fallback)return()=>{};
-  let feed=null,failed=false,signature='';
+  let feed=null,failed=false,signature='',motion=null;
   const language=()=>document.documentElement.lang==='en'?'en':'ar';
   const shownTime=(stamp,locale)=>{
     try{return new Intl.DateTimeFormat(locale==='ar'?'ar':'en-US',{timeZone:'Asia/Gaza',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date(stamp*1000));}
@@ -59,10 +73,11 @@ export function initNewsTicker(root=typeof document!=='undefined'?document.getEl
       const words=document.createElement('span');
       words.className='nabd-ticker-headline';
       words.dir='auto';
-      words.textContent=item.title;
+      words.textContent=conciseHeadline(item.title);
       anchor.append(topic,words);
       const source=typeof item.source_name==='string'?item.source_name.slice(0,75):'';
-      anchor.title=[source,t.published+': '+shownTime(item.published_at,locale)].filter(Boolean).join(' · ');
+      anchor.title=[item.title,source,t.published+': '+shownTime(item.published_at,locale)].filter(Boolean).join(' · ');
+      anchor.setAttribute('aria-label',item.title);
       group.append(anchor);
       const divider=document.createElement('span');
       divider.className='nabd-ticker-divider';
@@ -80,6 +95,7 @@ export function initNewsTicker(root=typeof document!=='undefined'?document.getEl
     root.title=state==='LIVE'?t.live:state==='STALE'?t.stale:state==='UNAVAILABLE'?t.offline:t.loading;
     title.textContent=t.name;
     if(!items.length){
+      motion?.cancel();motion=null;track.classList?.remove('nabd-ticker-waapi');
       signature='';
       track.replaceChildren();
       viewport.dataset.hasNews='false';
@@ -112,16 +128,30 @@ export function initNewsTicker(root=typeof document!=='undefined'?document.getEl
     duplicate.classList.add('nabd-ticker-copy');
     duplicate.querySelectorAll('a').forEach(a=>{a.tabIndex=-1;});
     track.replaceChildren(group,duplicate);
-    // Keep approximately constant reading speed as feeds gain or lose stories.
-    const chars=items.reduce((count,x)=>count+x.title.length+22,0);
-    const distance=group.scrollWidth||chars*7;
-    track.style.setProperty('--nabd-ticker-duration',Math.max(20,Math.min(180,Math.round(distance/42)))+'s');
+    // Match the distance of exactly one of the two identical groups.
+    // Web Animations keeps running on iOS even if the system has Reduce Motion
+    // enabled. It moves more slowly in that mode, as explicitly requested here.
+    const chars=items.reduce((count,x)=>count+conciseHeadline(x.title).length+15,0);
+    const distance=Math.ceil(group.scrollWidth)||chars*7;
+    const slow=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const duration=Math.max(12,Math.min(180,Math.round(distance/(slow?25:48))));
+    track.style.setProperty('--nabd-ticker-duration',duration+'s');
+    motion?.cancel();motion=null;
+    if(typeof track.animate==='function'&&distance>0){
+      track.classList.add('nabd-ticker-waapi');
+      motion=track.animate([
+        {transform:'translate3d(0px,0px,0px)'},
+        {transform:'translate3d(-'+distance+'px,0px,0px)'}
+      ],{duration:duration*1000,iterations:Infinity,easing:'linear'});
+    }else{
+      track.classList.remove('nabd-ticker-waapi');
+    }
   }
   const onLocale=()=>{signature='';render();};
   document.addEventListener('nabd:language-change',onLocale);
   const firstLoad=setTimeout(()=>{if(!feed){failed=true;render();}},15000);
   const freshnessTimer=setInterval(()=>{if(!document.hidden)render();},60000);
-  window.addEventListener('pagehide',()=>{clearTimeout(firstLoad);clearInterval(freshnessTimer);document.removeEventListener('nabd:language-change',onLocale);},{once:true});
+  window.addEventListener('pagehide',()=>{clearTimeout(firstLoad);clearInterval(freshnessTimer);motion?.cancel();document.removeEventListener('nabd:language-change',onLocale);},{once:true});
   render();
   return payload=>{
     if(!payload||!Array.isArray(payload.items)||!Array.isArray(payload.sources))return;

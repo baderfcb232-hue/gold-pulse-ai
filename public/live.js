@@ -1,5 +1,5 @@
 import {drawBrokerCandles} from './broker-chart.js';
-import {initNewsTicker} from './news-ticker.js?v=continuous-20261106';
+import {initNewsTicker} from './news-ticker.js?v=short-iphone-20261106';
 import {initMiniSparkline} from './mini-spark.js?v=touch-2';
 import {createMarketLoaders} from './market-loaders.js?v=v2-loader-2';
 import {inSignalDateRange} from './signal-date-filter.js';
