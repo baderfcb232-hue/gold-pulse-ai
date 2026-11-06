@@ -23,20 +23,20 @@ const htmlCopy=p=>[...new Set(read(p)
 
 test('exact English translations cover every static dashboard and account phrase',()=>{
   for(const [page,translations,expected]of [
-    ['index.html',dashboardStaticEnglish,238],
+    ['index.html',dashboardStaticEnglish,239],
     ['accounts.html',accountStaticEnglish,139]
   ]){
     const source=htmlCopy(page);
     assert.equal(source.length,expected,'source count changed: '+page);
     const catalogue={...dashboardStaticEnglish,...accountStaticEnglish,...attributeStaticEnglish};
     assert.deepEqual(source.filter(v=>!Object.hasOwn(catalogue,v)),[],'missing translations in '+page);
-    assert.equal(Object.keys(translations).length,page==='accounts.html'?137:238);
+    assert.equal(Object.keys(translations).length,page==='accounts.html'?137:239);
     for(const translated of Object.values(translations)){
       assert.ok(typeof translated==='string'&&translated.length>0);
       assert.doesNotMatch(translated,/[\u0600-\u06FF]/,'no Arabic in English static content');
     }
   }
-  assert.equal(staticTranslationCoverage.dashboard,238);
+  assert.equal(staticTranslationCoverage.dashboard,239);
   assert.equal(staticTranslationCoverage.account,137);
   assert.equal(staticTranslationCoverage.attributes,22);
   assert.ok(Object.keys(appExtraEnglish).length>=160);
