@@ -539,7 +539,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       btcSnapshot = next; lastSourceBTC = sourceBTC; revision++;
       db.prepare('INSERT INTO btc_snapshot(id,data) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data')
         .run(JSON.stringify(next));
-      marketFeed.recalculate(); researchWorker.acceptBrokerDaily(next); researchWorker.reviewCandidates(); broadcast();
+      marketFeed.recalculate(); analysisHistory.capture(marketFeed.publicState()); researchWorker.acceptBrokerDaily(next); researchWorker.reviewCandidates(); broadcast();
       return;
     }
     const source = `${next.account_ref}|${next.broker}|${next.symbol}|${next.execution.managed_magic}`;
@@ -562,7 +562,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       if (saved.changes) audit('SIGNAL_ISSUED', {id, side: plan.side});
     }
     researchWorker.acceptBrokerDaily(next);
-    marketFeed.recalculate(); researchWorker.reviewCandidates(); broadcast();
+    marketFeed.recalculate(); analysisHistory.capture(marketFeed.publicState()); researchWorker.reviewCandidates(); broadcast();
   }
   const server = http.createServer(async (req, res) => {
     try {
@@ -722,7 +722,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         if (q.quote_at<Math.max(btcSnapshot.quote_at,btcFastQuote?.quote_at||0))
           return send(req,res,200,{ok:true,ignored:true});
         btcFastQuote={bid:q.bid,ask:q.ask,quote_at:q.quote_at,received_at:now};
-        marketFeed.recalculate();
+        marketFeed.recalculate(); analysisHistory.capture(marketFeed.publicState());
         return send(req,res,200,{ok:true});
       }
       if (['/api/mt5', '/api/update'].includes(path) && req.method === 'POST') {
