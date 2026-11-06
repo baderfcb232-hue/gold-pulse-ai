@@ -68,8 +68,10 @@ test('onboarding progress always distinguishes request, approval, monitoring and
 
 test('phase 11 page, assets and links have separate routes and no password form',async t=>{
  const dir=mkdtempSync(join(tmpdir(),'nabd-onboarding-'));
- const app=createApplication({dataDir:dir,accountOptions:{store:sqliteAuthStore(),env:{},
-  encryptionKey:randomBytes(32),mailer:async()=>{}}});
+ const app=createApplication({dataDir:dir,publicBase:'https://nabd.example',
+  accountOptions:{store:sqliteAuthStore(),env:{},adminEmail:'owner@example.test',
+   encryptionKey:randomBytes(32),mailer:async()=>{},
+   backup:{key:randomBytes(32),storage:async()=>{}}}});
  await app.accounts.ready;
  await new Promise(done=>app.server.listen(0,'127.0.0.1',done));
  t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
@@ -99,8 +101,8 @@ test('existing user-owned registration/hosting endpoints remain CSRF-scoped and 
  const dataDir=mkdtempSync(join(tmpdir(),'nabd-onboard-auth-'));
  const mail=[],backup={key:randomBytes(32),storage:async()=>{}};
  const app=createApplication({dataDir,publicBase:'https://nabd.example',
-  accountOptions:{store:sqliteAuthStore(),env:{},encryptionKey:randomBytes(32),
-   mailer:async x=>mail.push(x),backup}});
+  accountOptions:{store:sqliteAuthStore(),env:{},adminEmail:'owner@example.test',
+   encryptionKey:randomBytes(32),mailer:async x=>mail.push(x),backup}});
  await app.accounts.ready;
  await new Promise(done=>app.server.listen(0,'127.0.0.1',done));
  t.after(async()=>{await app.close();rmSync(dataDir,{recursive:true,force:true});});
