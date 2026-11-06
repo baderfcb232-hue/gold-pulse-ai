@@ -101,17 +101,20 @@ export function createAnalysisHistory({db,clock=()=>Date.now()/1000,storagePersi
   if(writes>=80){prune();writes=0;}
   return written;
  }
- function list({symbol='ALL',status='ALL',since=null,before=null,limit=40}={}){
+ function list({symbol='ALL',status='ALL',since=null,before=null,limit=40,query=''}={}){
   if(symbol!=='ALL'&&!VALID_SYMBOL.has(symbol))throw new RangeError('Invalid symbol');
   if(status!=='ALL'&&!VALID_STATUS.has(status))throw new RangeError('Invalid analysis status');
   if(since!=null&&(!Number.isSafeInteger(since)||since<0))throw new RangeError('Invalid time window');
   if(before!=null&&(!Number.isSafeInteger(before)||before<1))throw new RangeError('Invalid cursor');
   if(!Number.isSafeInteger(limit)||limit<1||limit>100)throw new RangeError('Invalid page size');
+  if(typeof query!=='string'||query.length>80)throw new RangeError('Invalid search query');
+  const search=query.trim();
   const clauses=['1=1'],args=[];
   if(symbol!=='ALL'){clauses.push('symbol=?');args.push(symbol);}
   if(status!=='ALL'){clauses.push('status=?');args.push(status);}
   if(since!=null){clauses.push('recorded_at>=?');args.push(since);}
   if(before!=null){clauses.push('id<?');args.push(before);}
+  if(search){clauses.push("(instr(lower(json_extract(data,'$.reason')),lower(?))>0 OR instr(lower(json_extract(data,'$.strategy')),lower(?))>0)");args.push(search,search);}
   const results=db.prepare('SELECT id,recorded_at,data FROM analysis_history WHERE '+clauses.join(' AND ')+
     ' ORDER BY id DESC LIMIT ?').all(...args,limit+1);
   const hasMore=results.length>limit;
