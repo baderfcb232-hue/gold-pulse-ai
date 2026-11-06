@@ -40,6 +40,10 @@ const i18n={
   source:'المصدر',mt5:'MT5',reference:'مرجعي',reason:'سبب الحالة',checks:'تفاصيل الشروط',
   indicators:'المؤشرات',readiness:'الجاهزية',safety:'الأمان',unknown:'غير محدد',unknownCheck:'بانتظار',
   score:'توافق',noneScore:'لا توجد درجة مؤكدة',buy:'شراء',sell:'بيع',wait:'انتظار',
+  publication:'توصية مرتبطة برمز',verifyExecution:'فحص نتيجة MT5 (للمشغّل)',
+  operatorOnly:'نتائج التنفيذ متاحة للمشغّل فقط.',linkUnavailable:'لا يوجد ربط مؤكد لهذه التوصية.',
+  fillConfirmed:'تم تأكيد الدخول في سجل الوسيط',notFilled:'لم تتوفر صفقة مؤكدة في سجل الوسيط',
+  ticket:'تذكرة الصفقة',checking:'جاري التحقق من سجل التنفيذ…',
   statuses:{READY:'شروط متوافقة',SCANNING:'مراقبة الشروط',WATCH:'فرصة مشروطة',
    BLOCKED:'شروط تمنع الدخول',NEWS_BLOCK:'فلتر الأخبار',STALE:'بيانات متأخرة',
    GAP:'فجوة في الشموع',WARMING:'تجهيز الشموع',NO_DATA:'لا توجد بيانات',
@@ -66,6 +70,10 @@ const i18n={
   source:'Source',mt5:'MT5',reference:'Reference',reason:'Reason',checks:'Condition details',
   indicators:'Indicators',readiness:'Readiness',safety:'Safety',unknown:'Unavailable',unknownCheck:'Pending',
   score:'Alignment',noneScore:'No verified score',buy:'Buy',sell:'Sell',wait:'Waiting',
+  publication:'Linked recommendation code',verifyExecution:'Verify MT5 execution (operator)',
+  operatorOnly:'Execution evidence is operator-only.',linkUnavailable:'No exact link can be verified.',
+  fillConfirmed:'Broker entry confirmed in the deal history',notFilled:'No broker-confirmed fill',
+  ticket:'Broker deal ticket',checking:'Checking the execution evidence…',
   statuses:{READY:'Conditions aligned',SCANNING:'Checking conditions',WATCH:'Conditional setup',
    BLOCKED:'Entry gates incomplete',NEWS_BLOCK:'News filter',STALE:'Market data delayed',
    GAP:'Candle gap',WARMING:'Warming candles',NO_DATA:'No data',
@@ -160,6 +168,33 @@ function init(){
   if(url){const link=el('a','history-chart-link',t.chart);link.href=url;
    link.title=t.chart+' · '+fmtDate(item.recorded_at);
    article.append(link);}
+  if(typeof item.recommendation_code==='string'&&/^[A-F0-9]{12}$/.test(item.recommendation_code)){
+    const section=el('div','history-recommendation');
+    section.append(el('small','',t.publication+': '+item.recommendation_code));
+    const btn=el('button','history-verify-execution',t.verifyExecution);
+    btn.type='button';
+    const result=el('span','history-execution-result','');
+    btn.addEventListener('click',async()=>{
+      if(btn.disabled)return;
+      btn.disabled=true;
+      result.textContent=loc().checking;
+      try{
+        const response=await fetch('/api/analysis-history/link?id='+encodeURIComponent(item.id),{
+          credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}
+        });
+        if(response.status===403){result.textContent=loc().operatorOnly;return;}
+        if(!response.ok)throw new Error('Unverified');
+        const data=await response.json();
+        result.textContent=!data.linked?loc().linkUnavailable:
+          data.broker_fill_confirmed===true?loc().fillConfirmed+
+            (data.broker_deal_ticket?' · '+loc().ticket+': '+data.broker_deal_ticket:''):
+            loc().notFilled+' · '+(data.execution_state||'UNKNOWN');
+      }catch{result.textContent=loc().linkUnavailable;}
+      finally{btn.disabled=false;}
+    });
+    section.append(btn,result);
+    article.append(section);
+  }
   const checkCount=['indicator_checks','readiness_checks','entry_checks']
     .reduce((n,k)=>n+(Array.isArray(item[k])?item[k].length:0),0);
   if(checkCount){
