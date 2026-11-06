@@ -12,7 +12,7 @@ export function validateDemoRegistration({broker,server,login,environment,acknow
  return {broker,server,login,environment,acknowledge:true};
 }
 export function deriveOnboardingStatus(user,record){
- const first=Array.isArray(record?.accounts)?record.accounts[0]:null;
+ const first=user&&Array.isArray(record?.accounts)?record.accounts[0]:null;
  const registered=Boolean(first);
  const hosting=HOSTING_STATUSES.has(first?.hosting_status)?first.hosting_status:'NOT_REQUESTED';
  const monitor=MONITORING_STATUSES.includes(first?.monitoring_status)?first.monitoring_status:'NOT_ISSUED';
