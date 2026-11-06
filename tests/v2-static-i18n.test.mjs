@@ -38,7 +38,7 @@ test('exact English translations cover every static dashboard and account phrase
   }
   assert.equal(staticTranslationCoverage.dashboard,247);
   assert.equal(staticTranslationCoverage.account,137);
-  assert.equal(staticTranslationCoverage.attributes,22);
+  assert.equal(staticTranslationCoverage.attributes,24);
   assert.ok(Object.keys(appExtraEnglish).length>=160);
   for(const translated of Object.values({...appExtraEnglish,...liveStatusEnglish}))assert.doesNotMatch(translated,/[\u0600-\u06FF]/);
   assert.ok(Object.keys(runtimeStatusEnglish).length>=240);
