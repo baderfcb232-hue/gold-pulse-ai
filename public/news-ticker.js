@@ -29,7 +29,7 @@ const labels={
  en:{title:'Gold & Bitcoin news',all:'All',gold:'Gold',btc:'Bitcoin',loading:'Fetching headlines from sources…',empty:'No recent matching headlines from available sources.',unavailable:'News sources could not be refreshed.',live:'Sources updated',pending:'Fetching feeds…',stale:'News feeds delayed',source:'Source',published:'Published',checked:'Last fetched',pause:'Pause rotation',resume:'Resume rotation',previous:'Previous headline',next:'Next headline',note:'Headlines in source language · topic tags are not trading advice'}
 };
 export function initNewsTicker(root=document.getElementById('nabd-news-ticker')){
- if(!root)return()=>{};
+ if(!root||typeof root.querySelector!=='function'||typeof root.querySelectorAll!=='function')return()=>{};
  const find=q=>root.querySelector(q),title=find('[data-ticker-title]'),status=find('[data-ticker-status]'),headline=find('[data-ticker-link]'),placeholder=find('[data-ticker-placeholder]'),meta=find('[data-ticker-meta]'),topic=find('[data-ticker-topic]'),note=find('[data-ticker-note]'),previous=find('[data-ticker-prev]'),next=find('[data-ticker-next]'),pause=find('[data-ticker-pause]'),filters=[...root.querySelectorAll('[data-ticker-filter]')];
  let feed=null,filter='ALL',index=0,paused=false,initialFailed=false;
  const reduced=typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
