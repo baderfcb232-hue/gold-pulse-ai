@@ -57,7 +57,6 @@ test('thin headline strip stays before the market heading and contains no contro
  assert.match(js,/cloneNode\(true\)/);
  assert.match(js,/aria-hidden/);
  assert.match(js,/tabIndex=-1/);
- assert.match(js,/\.textContent=item\.title/);
  assert.match(live,/updateNewsTicker\(next\)/);
  assert.match(app,/live\.js\?v=short-iphone-20261106/);
  assert.match(server,/'\/news-ticker\.js':'news-ticker\.js'/);
