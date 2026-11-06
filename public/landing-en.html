@@ -89,16 +89,16 @@
           </div>
           <div class="preview-footer"><span>Each analysis includes source, price and time</span><span class="preview-status"><i aria-hidden="true"></i> Connected when data is available</span></div>
         </div>
-        <div class="phone-preview" aria-hidden="true">
+        <div class="phone-preview" aria-label="Interactive illustrative phone preview">
           <div class="phone-notch"></div><div class="phone-label"><span>NABD</span><b>NABD</b></div>
-          <small>Markets overview</small><div class="phone-value">XAUUSD <i></i></div><div class="phone-pill">Source-linked insights</div>
+          <small>Markets overview</small><div class="phone-value">XAUUSD <i></i></div><div class="phase2-phone-switch" role="group" aria-label="Choose market for preview"><button type="button" data-preview-symbol="XAUUSD" aria-pressed="true">Au</button><button type="button" data-preview-symbol="BTCUSD" aria-pressed="false">₿</button></div><div class="phone-pill">Source-linked insights</div>
           <svg viewBox="0 0 170 78" preserveAspectRatio="none"><path d="M0 62L24 53L42 59L64 38L84 45L108 26L128 36L150 12L170 22" stroke="#b88d46" fill="none" stroke-width="3" stroke-linecap="round"/><path d="M0 62L24 53L42 59L64 38L84 45L108 26L128 36L150 12L170 22V78H0Z" fill="#b88d46" opacity=".09"/></svg>
           <span class="phone-bottom">Illustrative view — not a live quote</span>
         </div>
         <p class="visual-disclaimer">This illustration shows neither real prices nor actual profits.</p>
       </div>
     </section>
-    <section class="phase2-market container" aria-labelledby="market-strip-title"><div class="phase2-heading"><div><p class="eyebrow">MARKET WATCH</p><h2 id="market-strip-title">Gold and Bitcoin, source-aware</h2></div><p>Actual prices, source and freshness appear in the dashboard when feeds are available. Static figures are never presented as live quotes here.</p></div><div class="phase2-market-grid"><a class="phase2-market-item" href="/dashboard"><span class="phase2-symbol">Au</span><span><strong>Gold XAUUSD</strong><small>View the price, source and update time</small></span><span class="phase2-arrow" aria-hidden="true">→</span></a><a class="phase2-market-item" href="/dashboard"><span class="phase2-symbol btc">₿</span><span><strong>Bitcoin BTCUSD</strong><small>View the price, source and update time</small></span><span class="phase2-arrow" aria-hidden="true">→</span></a></div></section>
+    <section class="phase2-market container" aria-labelledby="market-strip-title"><div class="phase2-heading"><div><p class="eyebrow">MARKET WATCH</p><h2 id="market-strip-title">Gold and Bitcoin, source-aware</h2></div><p>Actual prices, source and freshness appear in the dashboard when feeds are available. Static figures are never presented as live quotes here.</p></div><div class="phase2-market-grid"><a class="phase2-market-item" href="/dashboard"><span class="phase2-symbol">Au</span><span><strong>Gold XAUUSD</strong><small>View the price, source and update time</small></span><span class="phase2-arrow" aria-hidden="true">→</span><div class="phase2-live-quote" data-landing-market="XAUUSD" data-status="loading"><strong data-market-price>—</strong><span data-market-status>Loading market data</span><small data-market-source></small><small data-market-updated></small></div></a><a class="phase2-market-item" href="/dashboard"><span class="phase2-symbol btc">₿</span><span><strong>Bitcoin BTCUSD</strong><small>View the price, source and update time</small></span><span class="phase2-arrow" aria-hidden="true">→</span><div class="phase2-live-quote" data-landing-market="BTCUSD" data-status="loading"><strong data-market-price>—</strong><span data-market-status>Loading market data</span><small data-market-source></small><small data-market-updated></small></div></a></div></section>
     <section class="trust-strip" aria-label="NABD principles">
       <div class="container trust-items"><span>MT5 <i aria-hidden="true">↔</i> NABD</span><span>Source-linked market prices</span><span>Traceable recommendations</span><span>Separate monitoring and controls</span></div>
     </section>
@@ -127,5 +127,6 @@
     <section class="cta-section container"><div class="cta-panel"><div><p class="eyebrow">Get started with NABD</p><h2>See the markets<br>more clearly.</h2><p>Open the dashboard to track data sources, analysis and the execution status of trade ideas in one place.</p></div><div class="cta-actions"><a class="btn btn-light btn-large" href="/dashboard">Open the dashboard <span aria-hidden="true">←</span></a><a class="cta-subtle" href="/account">Account and registration</a></div></div></section>
   </main>
   <footer class="site-footer"><div class="container footer-layout"><a class="footer-brand" href="/">NABD <strong>NABD</strong></a><span>Gold and Bitcoin insights · Trading involves risk</span><div><a href="/dashboard">Dashboard</a><a href="/privacy">Privacy</a><a href="#contact">Contact</a><a href="/account">Account</a></div></div></footer>
+<script src="/landing-live.js?v=phase2-2" defer></script>
 </body>
 </html>
