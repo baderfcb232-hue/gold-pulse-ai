@@ -42,6 +42,8 @@ export function initNewsTicker(root=document.getElementById('nabd-news-ticker'))
  function draw(){
   const l=locale(),t=labels[l],data=tickerItems(feed,filter),state=tickerFeedStatus(feed);
   root.setAttribute('aria-label',t.title);
+  find('[data-ticker-filters]').setAttribute('aria-label',l==='ar'?'تصفية أخبار الأسواق':'News topic filter');
+  find('[data-ticker-controls]').setAttribute('aria-label',l==='ar'?'التنقل بين الأخبار':'Headline navigation');
   title.textContent=t.title;note.textContent=t.note;
   for(const b of filters){
    b.textContent=b.dataset.tickerFilter==='ALL'?t.all:b.dataset.tickerFilter==='GOLD'?t.gold:t.btc;
@@ -52,7 +54,8 @@ export function initNewsTicker(root=document.getElementById('nabd-news-ticker'))
   status.title=checked?t.checked+': '+formatTime(checked,l):t.pending;
   root.dataset.feedStatus=state.toLowerCase();
   pause.setAttribute('aria-pressed',String(paused));pause.setAttribute('aria-label',paused?t.resume:t.pause);
-  pause.textContent=paused?'▶':'Ⅱ';previous.setAttribute('aria-label',t.previous);next.setAttribute('aria-label',t.next);
+  pause.textContent=paused?'▶':'Ⅱ';pause.title=paused?t.resume:t.pause;
+  previous.setAttribute('aria-label',t.previous);previous.title=t.previous;next.setAttribute('aria-label',t.next);next.title=t.next;
   if(!data.length){
    headline.hidden=true;placeholder.hidden=false;
    placeholder.textContent=state==='PENDING'||!feed?t.loading:state==='UNAVAILABLE'?t.unavailable:t.empty;
@@ -73,7 +76,8 @@ export function initNewsTicker(root=document.getElementById('nabd-news-ticker'))
  pause.addEventListener('click',()=>{paused=!paused;draw();});
  const language=()=>draw();document.addEventListener('nabd:language-change',language);
  const interval=setInterval(()=>{if(!paused&&!reduced&&!document.hidden&&!root.matches(':hover')&&!root.contains(document.activeElement)){const count=tickerItems(feed,filter).length;if(count>1){index++;draw();}}},9000);
- window.addEventListener('pagehide',()=>{clearInterval(interval);document.removeEventListener('nabd:language-change',language);},{once:true});
+ const freshnessInterval=setInterval(()=>{if(!document.hidden)draw();},60000);
+ window.addEventListener('pagehide',()=>{clearInterval(interval);clearInterval(freshnessInterval);document.removeEventListener('nabd:language-change',language);},{once:true});
  draw();
  return data=>{if(data&&Array.isArray(data.items)&&Array.isArray(data.sources)){feed=data;index=0;draw();}};
 }
