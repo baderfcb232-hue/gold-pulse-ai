@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f8fafc">
+  <meta name="description" content="NABD | Gold and Bitcoin dedicated MT5 chart with verified broker candles">
+  <title>NABD | Charts</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="/theme-init.js?v=phase7-1"></script>
+  <script src="/nabd-locale-init.js?v=v2-1"></script>
+  <link rel="stylesheet" href="/chart-pages.css?v=phase7-1">
+  <script src="/chart-pages.js?v=phase7-1" type="module"></script>
+</head>
+<body data-chart-symbol="BTCUSD">
+  <a class="chart-skip" href="#chart-main" data-i18n="skip">تجاوز إلى الشارت</a>
+  <header class="chart-header">
+    <a class="chart-brand" href="/dashboard" aria-label="NABD dashboard">
+      <img id="chart-brand-image" src="/nabd-logo.svg" width="124" height="43" alt="NABD">
+    </a>
+    <nav class="chart-primary-nav" aria-label="Markets">
+      <a href="/charts/gold" data-chart-nav="XAUUSD"><span data-i18n="gold">الذهب</span> <small>XAUUSD</small></a>
+      <a href="/charts/bitcoin" data-chart-nav="BTCUSD"><span data-i18n="bitcoin">بيتكوين</span> <small>BTCUSD</small></a>
+    </nav>
+    <div class="chart-header-end">
+      <button type="button" id="chart-language" class="chart-mini-button" aria-label="Switch language">EN</button>
+      <button type="button" id="chart-theme" class="chart-mini-button" aria-label="Switch theme">☾</button>
+      <a class="chart-back" href="/dashboard" data-i18n="dashboard">لوحة نبض</a>
+    </div>
+  </header>
+  <main class="chart-main" id="chart-main">
+    <div class="chart-intro">
+      <div>
+        <span class="chart-eyebrow" data-i18n="eyebrow">NABD · LIVE CHARTS</span>
+        <h1 id="chart-title">—</h1>
+        <p data-i18n="description">شموع مغلقة من وسيط MT5، مع فريمات متعددة وتحليل مرجعي واضح المصدر.</p>
+      </div>
+      <div class="chart-source-box" aria-live="polite">
+        <span id="chart-connection" class="chart-status" data-connection="unknown">—</span>
+        <small id="chart-source" dir="auto">—</small>
+        <small id="chart-quote-age">—</small>
+      </div>
+    </div>
+    <section class="chart-terminal" aria-label="Chart panel">
+      <div class="chart-toolbar">
+        <div class="chart-segments" role="group" aria-label="Timeframe">
+          <button type="button" data-chart-tf="M5" aria-pressed="false">M5</button>
+          <button type="button" data-chart-tf="M15" aria-pressed="true">M15</button>
+          <button type="button" data-chart-tf="H1" aria-pressed="false">H1</button>
+          <button type="button" data-chart-tf="H4" aria-pressed="false">H4</button>
+        </div>
+        <div class="chart-segments chart-mode-buttons" role="group" aria-label="Chart source">
+          <button type="button" data-chart-mode="mt5" aria-pressed="true" data-i18n="mt5">شموع MT5</button>
+          <button type="button" data-chart-mode="reference" aria-pressed="false" data-i18n="reference">شارت مرجعي</button>
+        </div>
+      </div>
+      <div class="chart-display">
+        <div id="chart-mt5-wrap" class="chart-canvas-wrap">
+          <canvas id="chart-canvas" role="img" aria-label="Closed broker candles"></canvas>
+          <div id="chart-overlay" class="chart-overlay" role="status" aria-live="polite">
+            <span id="chart-overlay-text" data-i18n="loading">جاري جلب شموع MT5...</span>
+          </div>
+        </div>
+        <div id="chart-reference-wrap" class="chart-reference-wrap" hidden>
+          <iframe id="chart-reference-frame" title="External reference chart not used for MT5 trading" loading="lazy" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+        </div>
+      </div>
+      <div class="chart-chartfoot">
+        <span id="chart-candle-note" data-i18n="closed">شموع وسيط مغلقة · EMA 8 / 21 / 200</span>
+        <span id="chart-last-candle">—</span>
+      </div>
+    </section>
+    <section class="chart-data-grid" aria-label="Broker chart context">
+      <article class="chart-metric"><small data-i18n="latest">آخر إغلاق</small><strong id="chart-close">—</strong></article>
+      <article class="chart-metric"><small data-i18n="rsi">RSI 14</small><strong id="chart-rsi">—</strong></article>
+      <article class="chart-metric"><small data-i18n="atr">ATR 14</small><strong id="chart-atr">—</strong></article>
+      <article class="chart-metric"><small data-i18n="alignment">توافق المؤشرات</small><strong id="chart-alignment">—</strong></article>
+    </section>
+    <section class="chart-detail-grid">
+      <article class="chart-detail">
+        <h2 data-i18n="analysis">حالة التحليل</h2>
+        <p id="chart-analysis-status">—</p>
+        <small id="chart-frames">—</small>
+        <p id="chart-reason">—</p>
+      </article>
+      <article class="chart-detail">
+        <h2 data-i18n="transparency">المصدر والشفافية</h2>
+        <p id="chart-transparency" data-i18n="transparencyText">شارت MT5 يعتمد على شموع مغلقة من الوسيط. الشارت الخارجي للمقارنة فقط، وقد تختلف الأسعار.</p>
+        <p class="chart-small" data-i18n="warning">هذه البيانات للمتابعة ولا تؤكد تنفيذ صفقة أو تضمن ربحًا.</p>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
