@@ -65,3 +65,30 @@ test('thin headline strip stays before the market heading and contains no contro
   assert.doesNotMatch(source,/\/api\/commands|OrderSend|\/api\/bridge\/next/);
  }
 });
+
+
+test('continuous ticker uses recent gold and Bitcoin news only, supports new headlines automatically',()=>{
+  const newest={id:'new-btc',source:'cointelegraph-btc',category:'BTC',title:'A tagged digital asset story',url:'https://cointelegraph.com/news/new',published_at:NOW-10};
+  const older={id:'old-btc',source:'coindesk',category:'BTC',title:'Bitcoin market update',url:'https://coindesk.com/news/old',published_at:NOW-1000};
+  const aged={id:'stale',source:'coindesk',category:'BTC',title:'Bitcoin stale update',url:'https://coindesk.com/news/aged',published_at:NOW-4*24*3600};
+  const unrelated={id:'alt',source:'coindesk',category:'BTC',title:'Ethereum upgrade',url:'https://coindesk.com/news/ethereum',published_at:NOW-50};
+  const rows=tickerItems({items:[older,unrelated,aged,newest]},'ALL',NOW);
+  assert.deepEqual(rows.map(x=>x.id),['new-btc','old-btc']);
+  const after=tickerItems({items:[{...newest,id:'newer',published_at:NOW-1},older]},'ALL',NOW);
+  assert.equal(after[0].id,'newer');
+});
+test('marquee keeps moving after touch and refreshes RSS even with active market stream',()=>{
+  const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
+  const js=read('public/news-ticker.js'),css=read('public/news-ticker.css'),live=read('public/live.js');
+  assert.match(css,/animation:nabd-news-crawl/);
+  assert.match(css,/@media\(hover:hover\) and \(pointer:fine\)/);
+  assert.doesNotMatch(css,/:focus-within \.nabd-ticker-track/);
+  assert.match(js,/viewport\.clientWidth/);
+  assert.match(js,/group\.scrollWidth/);
+  assert.match(js,/copy\.tabIndex=-1/);
+  assert.match(js,/x\.title,x\.published_at/);
+  assert.match(live,/async function refreshHeadlines\(\)/);
+  assert.match(live,/setInterval\(\(\) => \{if\(!document\.hidden\)refreshHeadlines\(\);\},45000\)/);
+  assert.match(live,/updateNewsTicker\(next\)/);
+  assert.doesNotMatch(js,/\/api\/commands|OrderSend/);
+});
