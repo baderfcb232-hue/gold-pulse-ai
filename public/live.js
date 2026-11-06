@@ -1,5 +1,6 @@
 import {drawBrokerCandles} from './broker-chart.js';
 import {initNewsTicker} from './news-ticker.js?v=short-iphone-20261106';
+import {initAnalysisRibbon} from './analysis-ribbon.js?v=phase6-1';
 import {initMiniSparkline} from './mini-spark.js?v=touch-2';
 import {createMarketLoaders} from './market-loaders.js?v=v2-loader-2';
 import {inSignalDateRange} from './signal-date-filter.js';
@@ -19,6 +20,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, priceFee
   const tfButtons = {M1: '1د', M5: '5د', M15: '15د', H1: '1س', H4: '4س'};
   let data = null, news = null, symbol = 'XAUUSD', tf = 'M15', chartKey = '';
   const updateNewsTicker=initNewsTicker();
+  const updateAnalysisRibbon=initAnalysisRibbon();
   let lastServerSeen = 0, lastNewsSeen = 0, fetched = false, historyFetched = false, historyRows = [], historyStamp = '', newsStamp = '';
   let initialized = false;
   let chartSourceKey = '', referenceChart = false, brokerChartData = null, brokerChartKey = '', brokerChartLoading = false;
@@ -33,6 +35,7 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, priceFee
     if (data && next.serverTime < data.serverTime) return;
     const prior=data;
     data = next; lastServerSeen = Date.now();
+    updateAnalysisRibbon(next);
     loaders.ready('market');
     if (!data.markets[symbol]) symbol = 'XAUUSD';
     $('market-symbols').querySelectorAll('button').forEach(b => {
