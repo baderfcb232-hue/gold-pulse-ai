@@ -199,3 +199,20 @@ test('healthz exposes FUSION Demo configured state and blockers without claiming
   assert.notEqual(health.goldFusion.executionReason,'WEBSITE_READY');
   assert.equal(health.goldFusion.strategy,'FUSION');
 });
+
+
+test('excessive stop distance is shown as a failed final gate without changing indicator score',()=>{
+ const x=raw();x.candles.M5.at(-8).low-=4;
+ const a=analyzeGoldFusion(cleanSnapshot(x,NOW),NOW);
+ assert.deepEqual(a.reasons,['EXCESSIVE_ATR_STOP']);
+ assert.equal(a.plan,null);
+ assert.equal(a.score,a.checks.reduce((sum,c)=>sum+(c.pass?c.weight:0),0));
+ assert.equal(a.entrySafetyChecks[0].pass,true);
+ assert.equal(a.entrySafetyChecks[1].pass,true);
+ const stop=a.entrySafetyChecks[2];assert.equal(stop.pass,false);
+ assert.ok(stop.value>stop.limit);
+ assert.equal(a.entrySafetyChecks[3].pass,null);
+ const visible=brokerGoldMarket(cleanSnapshot(x,NOW),NOW,{goldStrategy:'FUSION'}).analysis;
+ assert.deepEqual(visible.entrySafetyChecks,a.entrySafetyChecks);
+ assert.match(visible.reason_label,/وقف الخسارة/);
+});

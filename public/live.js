@@ -134,22 +134,26 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, priceFee
       : m ? `${m.symbol === 'XAUUSD' ? 'الذهب المرجعي يُجلب كل نحو 30 ثانية؛ الشموع من عينات السعر المتاحة.' : (m.transport === 'WebSocket' ? 'بث Coinbase المباشر؛' : 'جلب Coinbase الاحتياطي كل ثانية؛') + ' سعر BTC-USD على المنصة.'} مستقل عن سعر تنفيذ بروكرك.` : 'ننتظر بيانات المصدر؛ لن نعرض أسعارًا تجريبية.');
     const states = {NO_DATA: 'انتظار المصدر', WARMING: 'تحميل الشموع', SCANNING: 'البحث عن فرصة', WATCH: 'فرصة مشروطة', READY: 'تحققت شروط السعر', GAP: 'فجوة بيانات', NEWS_BLOCK: 'فلتر الأخبار', BLOCKED: 'شروط الدخول تمنع الإشارة', STALE: 'تحديث متأخر'};
     const state = !live && m?.quote ? 'STALE' : a?.status || 'NO_DATA';
+    const failedGate=live && [...(a?.readinessChecks||[]),...(a?.entrySafetyChecks||[])].some(ch=>ch.pass===false);
+    const displayState=!p && failedGate && !['STALE','NEWS_BLOCK','GAP','WARMING'].includes(state) ? 'BLOCKED' : state;
     const alignmentWait = broker && live && !p && a?.status === 'SCANNING' &&
       (a?.reason || '').startsWith('انتظار توافق الاتجاه:');
     put('scalp-decision', p ? side(p.side) + (broker ? ' · MT5' : ' · مرجعي') :
-      alignmentWait ? 'انتظار توافق الفريمات' : states[state]);
+      alignmentWait ? 'انتظار توافق الفريمات' : states[displayState]);
     $('scalp-decision').className = p ? (p.side === 'BUY' ? 'buy' : 'sell') : '';
-    put('scalp-status', p ? 'متابعة إشارة محفوظة' : alignmentWait ? 'مراقبة آمنة' : states[state]);
+    put('scalp-status', p ? 'متابعة إشارة محفوظة' : alignmentWait ? 'مراقبة آمنة' : states[displayState]);
     $('scalp-status').className = 'pill ' + (p ? 'good' : alignmentWait || state === 'WATCH' ? 'warn' : 'neutral');
     put('scalp-reason', data.membersOnly ? 'سجّل الدخول بحساب مؤكد ومخوّل لمشاهدة التوصيات.' : !live && m?.quote ? 'إصدار فرص جديدة متوقف. نحتفظ بالشارت والتحليل السابق حتى يعود مصدر حديث.'
       : p ? `الإشارة صدرت ${time(p.issued_at)} ومستوياتها ثابتة. الشروط الحالية لفرصة جديدة: ${a?.reason_label || a?.reason || 'تجري المتابعة.'}` : a?.reason_label || a?.reason || 'يجري الاتصال بمصدر السوق.');
     const score = live && a?.checks?.length && Number.isFinite(a.score) && a.score >= 0 && a.score <= 100 ? a.score : null;
-    put('scalp-score', score === null ? '— / 100' : `${score} / 100`);
+    put('scalp-score', score === null ? '— / 100' : `${score} / 100${!p && failedGate ? ' · الدخول غير جاهز' : ''}`);
     $('scalp-score').title = score === null ? 'تقييم توافق الشروط غير متاح حاليًا.' : 'توافق الشروط، وليس احتمال نجاح الصفقة.';
     $('scalp-score-fill').style.width = `${score ?? 0}%`;
     const entryChecks=a?.checks || [], readinessOnly=!entryChecks.length && a?.readinessChecks?.length;
-    const shownChecks=entryChecks.length?entryChecks:a?.readinessChecks || [];
-    const checks = shownChecks.map(ch => {const row = node('div', 'check'); row.append(node('span', ch.pass === true ? 'pass' : ch.pass === false ? 'fail' : 'subtle', ch.pass === true ? '✓' : ch.pass === false ? '○' : '…'), node('span', '', ch.name+(ch.pass==null?' · لم يُفحص بعد':''))); return row;});
+    const shownChecks=[...entryChecks,...(a?.entrySafetyChecks||[]),...(a?.readinessChecks||[])];
+    const checks = shownChecks.map(ch => {const row = node('div', 'check');
+      const values=Number.isFinite(ch.value)&&Number.isFinite(ch.limit)?` · ${num(ch.value,2)} / ${num(ch.limit,2)} USD`:'';
+      row.append(node('span', ch.pass === true ? 'pass' : ch.pass === false ? 'fail' : 'subtle', ch.pass === true ? '✓' : ch.pass === false ? '✕' : '…'), node('span', '', ch.name+values+(ch.pass==null?' · لم يُفحص بعد':''))); return row;});
     if(readinessOnly)checks.unshift(empty('جاهزية التحليل: هذه المتطلبات لا تُحسب كنقاط دخول. تظهر شروط الصفقة بعد تحديد حالة السوق واجتياز المتطلبات.'));
     if (m && state === 'WARMING') checks.push(empty(broker
       ? `ننتظر تحميل ${a.required_bars} شمعة مغلقة لكل إطار من البروكر؛ لا يلزم تجميعها من الصفر.`

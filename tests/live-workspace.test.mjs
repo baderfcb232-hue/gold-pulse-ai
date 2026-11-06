@@ -70,15 +70,15 @@ test('waiting FUSION displays prerequisite results and Arabic reason without an 
  assert.equal(rows.length,4);
  assert.match(rows[0].textContent,/لا تُحسب كنقاط دخول/);
  assert.equal(rows[1].children[0].textContent,'✓');
- assert.equal(rows[2].children[0].textContent,'○');
+ assert.equal(rows[2].children[0].textContent,'✕');
  assert.equal(rows[3].children[0].textContent,'…');
  assert.match(rows[3].children[1].textContent,/لم يُفحص بعد/);
- // Real entry conditions take precedence; prerequisites cannot inflate score.
+ // Entry indicators and prerequisite results remain visible together; no score inflation.
  m.analysis.checks=[{name:'شرط دخول',pass:false}];m.analysis.score=0;
  h.market(data);
- assert.equal(h.get('scalp-checks').children.length,1);
+ assert.equal(h.get('scalp-checks').children.length,4);
  assert.equal(h.get('scalp-checks').children[0].children[1].textContent,'شرط دخول');
- assert.equal(h.get('scalp-score').textContent,'0 / 100');
+ assert.equal(h.get('scalp-score').textContent,'0 / 100 · الدخول غير جاهز');
 });
 
 test('silent news events recover over HTTP without interrupting an active market stream', async t => {
@@ -127,4 +127,26 @@ test('stale BTC data does not produce a live recommendation notification', async
     recentSignals:[],currentSignal:{id:'expired-btc',side:'BUY',entry:70000,expires_at:ts+90}
   }}});
   assert.equal(h.notifications.length,0);
+});
+
+
+test('100 percent indicator alignment still shows a failed stop gate and pending later checks',async t=>{
+ const h=workspace(t,now=>headline(now,'Test'));await flush();
+ const data=h.marketData(),m=data.markets.XAUUSD;
+ m.analysis={...m.analysis,status:'SCANNING',score:100,calendar_available:true,
+  reason:'EXCESSIVE_ATR_STOP',reason_label:'مسافة وقف الخسارة تتجاوز 3 أضعاف ATR؛ ننتظر فرصة بوقف مناسب.',
+  checks:[{name:'M15 EMA trend',pass:true}],
+  entrySafetyChecks:[{name:'مسافة وقف الخسارة ضمن 3 أضعاف ATR',pass:false,value:20,limit:15},
+   {name:'صلاحية مستوى وقف الخسارة',pass:null}],
+  readinessChecks:[{name:'وصول سعر ذهب حديث من MT5',pass:true}]};
+ h.market(data);
+ assert.equal(h.get('scalp-score').textContent,'100 / 100 · الدخول غير جاهز');
+ assert.equal(h.get('scalp-decision').textContent,'شروط الدخول تمنع الإشارة');
+ assert.match(h.get('scalp-reason').textContent,/مسافة وقف الخسارة/);
+ const rows=h.get('scalp-checks').children;
+ assert.equal(rows.length,4);
+ assert.equal(rows[1].children[0].textContent,'✕');
+ assert.match(rows[1].children[1].textContent,/20 \/ 15 USD/);
+ assert.equal(rows[2].children[0].textContent,'…');
+ assert.equal(h.notifications.length,0);
 });

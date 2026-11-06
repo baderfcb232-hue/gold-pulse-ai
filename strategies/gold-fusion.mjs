@@ -159,8 +159,17 @@ export function analyzeGoldFusion(snapshot,now=Date.now()/1000,settings=defaults
     'تحديد حالة سوق مناسبة لتقييم الدخول'
   ].map(name=>({name,pass:null}));
   const gate=(index,pass)=>(readinessChecks[index].pass=Boolean(pass));
+  // Display these final gates separately from the weighted indicator score.
+  // Pending gates remain pending; they never authorize an entry or add points.
+  const entrySafetyChecks=[
+    'اكتمال الحد الأدنى لتأكيدات الدخول',
+    'اتجاه M15 يسمح بالدخول',
+    'مسافة وقف الخسارة ضمن 3 أضعاف ATR',
+    'صلاحية مستوى وقف الخسارة'
+  ].map(name=>({name,pass:null}));
+  const safe=(index,pass)=>(entrySafetyChecks[index].pass=Boolean(pass));
   const empty={...base,strategy:GOLD_FUSION_STRATEGY,decision:'WAIT',
-    plan:null,score:null,checks:[],readinessChecks,risk:'CAUTION',regime:'WAIT',reasons:[]};
+    plan:null,score:null,checks:[],readinessChecks,entrySafetyChecks,risk:'CAUTION',regime:'WAIT',reasons:[]};
   const wait=(code,risk='CAUTION',extra={})=>({...empty,risk,reasons:[code],...extra});
   if(!/^XAUUSD(?:[._#][A-Za-z0-9._#-]+)?$/i.test(snapshot?.symbol||''))
     return wait('GOLD_ONLY', 'BLOCKED');
@@ -259,22 +268,23 @@ export function analyzeGoldFusion(snapshot,now=Date.now()/1000,settings=defaults
     reasons:checks.filter(x=>!x.pass).map(x=>x.name)};
   // Lower-ADX early TRENDS need more confirmation; normal BREAKOUT gates stay unchanged.
   const strictEarlyTrend=earlyTrend && regime==='TREND';
-  if(side==='WAIT' || score<(strictEarlyTrend?85:75) ||
-      checks.filter(x=>x.pass).length<(strictEarlyTrend?5:4))
+  if(!safe(0,!(side==='WAIT' || score<(strictEarlyTrend?85:75) ||
+      checks.filter(x=>x.pass).length<(strictEarlyTrend?5:4))))
     return {...partial,risk:'CAUTION',reasons:side==='WAIT'?['NO_REGIME_ENTRY_SETUP']:
       ['INSUFFICIENT_INDEPENDENT_CONFIRMATION']};
   const buy=side==='BUY';
-  if(m15Side!=='WAIT' && m15Side!==side && regime!=='RANGE')
+  if(!safe(1,!(m15Side!=='WAIT' && m15Side!==side && regime!=='RANGE')))
     return {...partial,risk:'CAUTION',reasons:['OPPOSING_M15_DIRECTION']};
   const entry=round(buy?snapshot.ask:snapshot.bid,spec);
   const swing=buy?ext(m5.slice(-8),'low'):ext(m5.slice(-8),'high');
   const distance=Math.max(atr5*(regime==='RANGE'?.9:1.1),
     buy?entry-swing+atr5*.12:swing-entry+atr5*.12,
     spec.stops_points*spec.point+spec.tick_size*2+spread);
-  if(distance>atr5*3)return {...partial,risk:'CAUTION',reasons:['EXCESSIVE_ATR_STOP']};
+  Object.assign(entrySafetyChecks[2],{value:distance,limit:atr5*3});
+  if(!safe(2,!(distance>atr5*3)))return {...partial,risk:'CAUTION',reasons:['EXCESSIVE_ATR_STOP']};
   const sl=round(entry+(buy?-distance:distance),spec,buy?'down':'up'),
     riskDistance=Math.abs(entry-sl),sign=buy?1:-1;
-  if(!(sl>0&&riskDistance>spec.tick_size))
+  if(!safe(3,sl>0&&riskDistance>spec.tick_size))
     return {...partial,risk:'BLOCKED',reasons:['INVALID_SL_LEVEL']};
   const tp1=round(entry+sign*riskDistance,spec),
     tp2=round(entry+sign*riskDistance*(regime==='RANGE'?1.25:1.5),spec);

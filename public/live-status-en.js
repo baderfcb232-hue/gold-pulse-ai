@@ -1,5 +1,17 @@
 /* Remaining live-market and interactive-card status translations. */
 export const liveStatusEnglish=Object.freeze({
+  "الدخول غير جاهز":"Entry not ready",
+  "لم يُفحص بعد":"Not evaluated yet",
+  "اكتمال الحد الأدنى لتأكيدات الدخول":"Minimum entry confirmations met",
+  "اتجاه M15 يسمح بالدخول":"M15 direction permits entry",
+  "مسافة وقف الخسارة ضمن 3 أضعاف ATR":"Stop distance within 3 ATR",
+  "صلاحية مستوى وقف الخسارة":"Valid stop-loss level",
+  "مسافة وقف الخسارة تتجاوز 3 أضعاف ATR؛ ننتظر فرصة بوقف مناسب.":"Stop distance exceeds 3 ATR; waiting for a suitable stop.",
+  "السعر ابتعد عن آخر شمعة مغلقة؛ بانتظار فرصة دخول مناسبة.":"Price moved away from the last closed candle; waiting for a suitable entry.",
+  "تأكيدات المؤشرات لم تبلغ الحد المطلوب لإصدار توصية.":"Indicator confirmations have not reached the signal threshold.",
+  "اتجاه M15 يعاكس اتجاه الدخول؛ ننتظر التوافق.":"M15 opposes the entry direction; waiting for alignment.",
+  "مستوى وقف الخسارة غير صالح؛ لن تصدر توصية.":"Invalid stop-loss level; no signal will be issued.",
+  "لا توجد فرصة دخول مكتملة ضمن حالة السوق الحالية.":"No complete entry setup in the current market regime.",
   "أسعار وسياق السوق وأخبار، ومتابعة جاهزية التوصيات.": "Market prices, context, news and signal-readiness monitoring.",
   "فرص المضاربة وخطط البوت، كل خطة بوقتها ومصدرها.": "Scalping opportunities and bot plans, each with its own timestamp and source.",
   "حسابك وصفقات البوت وأوامر الإدارة.": "Your account, bot positions and management commands.",

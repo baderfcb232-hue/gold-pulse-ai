@@ -5,6 +5,15 @@ import {analyzeGoldFusion} from './strategies/gold-fusion.mjs';
 import {analyzeBtcScalp,btcScalpBarFreshness} from './strategies/btc-scalping.mjs';
 import {analyzeBtcFusion} from './strategies/btc-fusion-scalper.mjs';
 
+const goldEntryReasonLabels=Object.freeze({
+  EXCESSIVE_ATR_STOP:'مسافة وقف الخسارة تتجاوز 3 أضعاف ATR؛ ننتظر فرصة بوقف مناسب.',
+  GOLD_PRICE_MOVED_FROM_CLOSED_BAR:'السعر ابتعد عن آخر شمعة مغلقة؛ بانتظار فرصة دخول مناسبة.',
+  INSUFFICIENT_INDEPENDENT_CONFIRMATION:'تأكيدات المؤشرات لم تبلغ الحد المطلوب لإصدار توصية.',
+  OPPOSING_M15_DIRECTION:'اتجاه M15 يعاكس اتجاه الدخول؛ ننتظر التوافق.',
+  INVALID_SL_LEVEL:'مستوى وقف الخسارة غير صالح؛ لن تصدر توصية.',
+  NO_REGIME_ENTRY_SETUP:'لا توجد فرصة دخول مكتملة ضمن حالة السوق الحالية.'
+});
+
 // Reuse the existing website strategy with the broker's closed OHLC bars.
 // Account data and the EA's execution controls never enter the public market.
 export function brokerInstrumentMarket(snapshot, now, {goldStrategy = 'EMA_LEGACY', btcStrategy = 'EMA_LEGACY'} = {}) {
@@ -56,8 +65,8 @@ export function brokerInstrumentMarket(snapshot, now, {goldStrategy = 'EMA_LEGAC
       gold_research: gold && goldStrategy === 'FUSION' ? {regime: a.regime || 'WAIT',
         indicators: a.indicators || null, news_shadow: a.news_shadow || null,
         status: a.risk === 'BLOCKED' ? 'ENTRY_BLOCKED' : 'OBSERVATION_ONLY'} : null,
-      checks: a.checks, readinessChecks: a.readinessChecks || [],
-      reason_label: a.reason_label || null, score: a.score, setup: null, plan,
+      checks: a.checks, readinessChecks: a.readinessChecks || [], entrySafetyChecks:a.entrySafetyChecks || [],
+      reason_label: a.reason_label || (gold && goldStrategy==='FUSION' ? goldEntryReasonLabels[a.reasons[0]] : null) || null, score: a.score, setup: null, plan,
       reason: a.reasons.join(' ') || 'نبحث عن اكتمال شروط الدخول على شموع البروكر.',
       reference_only: true, calendar_available: calendarAvailable,
       required_bars: 220, observed_bars: snapshot.candles.M5.length,

@@ -39,7 +39,7 @@ export const dashboardStaticEnglish = Object.freeze({
   "تحليل المضاربة": "Scalping analysis",
   "جلب البيانات": "Loading data",
   "سنفحص الاتجاه والزخم بعد وصول شموع حقيقية.": "Trend and momentum will be checked after real candle data arrives.",
-  "توافق الشروط · ليس احتمال نجاح": "Conditions met · not a win probability",
+  "توافق المؤشرات · جاهزية الدخول تُفحص منفصلة": "Indicator alignment · entry readiness is checked separately",
   "شروط فرصة المضاربة": "Scalping opportunity conditions",
   "شارت MT5 للذهب": "Gold MT5 chart",
   "شموع JustMarkets · المصدر الرئيسي للتوصيات": "JustMarkets candles · primary signal source",
