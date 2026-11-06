@@ -388,6 +388,16 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, priceFee
     if (fetched) return; fetched = true;
     await Promise.allSettled([api('/api/market').then(applyMarket), api('/api/news').then(applyNews)]); fetched = false;
   }
+  // Refresh headlines independently of the market stream, including when SSE
+  // appears connected but news events are delayed. Reuses the same /api/news
+  // endpoint/cache; does not request or execute any broker command.
+  let newsRefreshInFlight=false;
+  async function refreshHeadlines(){
+    if(newsRefreshInFlight||document.hidden)return;
+    newsRefreshInFlight=true;
+    try{applyNews(await api('/api/news'));}catch{/* Keep cached headlines and retry. */}
+    finally{newsRefreshInFlight=false;}
+  }
   $('market-symbols').querySelectorAll('button').forEach(b => b.onclick = () => {symbol = b.dataset.symbol; configureChart(); $('market-symbols').querySelectorAll('button').forEach(x => {x.classList.toggle('active', x === b); x.setAttribute('aria-pressed', String(x === b));}); render(); loadChart();});
   $('chart-reference-toggle').onclick = () => {referenceChart = !referenceChart; chartKey=''; brokerChartKey=''; loadChart();};
   $('live-chart-tfs').onclick = event => {
@@ -406,8 +416,9 @@ export function initLiveWorkspace({stream, api, time, num, now, notify, priceFee
   $('scalp-history-date').onchange = renderHistory; $('headline-filter').onchange = () => {newsStamp = ''; renderNews();};
   stream.addEventListener('market', event => {try {applyMarket(JSON.parse(event.data));} catch {}});
   stream.addEventListener('news', event => {try {applyNews(JSON.parse(event.data));} catch {}});
-  document.addEventListener('visibilitychange', () => {if (!document.hidden) {fetchLive(); loadHistory(); refreshBrokerQuotes();}});
+  document.addEventListener('visibilitychange', () => {if (!document.hidden) {fetchLive(); refreshHeadlines(); loadHistory(); refreshBrokerQuotes();}});
   setInterval(() => {render(); renderNews(); refreshBrokerQuotes();}, 1000);
+  setInterval(() => {if(!document.hidden)refreshHeadlines();},45000);
   setInterval(() => {if (Date.now() - lastServerSeen > 4500 || !news || Date.now() - lastNewsSeen > 75000) fetchLive();}, 5000);
   configureChart(); loadChart(); fetchLive(); loadHistory();
 }
