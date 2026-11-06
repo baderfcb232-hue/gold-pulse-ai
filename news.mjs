@@ -5,7 +5,9 @@ export const NEWS_SOURCES = Object.freeze([
   {id: 'bbc-business', name: 'BBC · اقتصاد', url: 'https://feeds.bbci.co.uk/news/business/rss.xml', interval: 30},
   {id: 'bbc-arabic', name: 'BBC عربي', url: 'https://feeds.bbci.co.uk/arabic/rss.xml', interval: 30},
   {id: 'ecb', name: 'البنك المركزي الأوروبي', url: 'https://www.ecb.europa.eu/rss/press.html', interval: 60},
-  {id: 'fed', name: 'الاحتياطي الفيدرالي', url: 'https://www.federalreserve.gov/feeds/press_all.xml', interval: 60}
+  {id: 'fed', name: 'الاحتياطي الفيدرالي', url: 'https://www.federalreserve.gov/feeds/press_all.xml', interval: 60},
+  {id: 'cointelegraph-btc', name: 'Cointelegraph · Bitcoin', url: 'https://cointelegraph.com/rss/tag/bitcoin', interval: 60},
+  {id: 'coindesk', name: 'CoinDesk', url: 'https://www.coindesk.com/arc/outboundfeeds/rss/', interval: 90}
 ]);
 
 function decode(value) {
@@ -37,6 +39,7 @@ export function parseNewsFeed(xml, source, now) {
     if (seen.has(id)) continue; seen.add(id);
     items.push({id, source: source.id, source_name: source.name, title, url: url.href,
       published_at: published, category: ['fed', 'ecb'].includes(source.id) ? 'GOLD'
+        : source.id === 'cointelegraph-btc' ? 'BTC'
         : source.id === 'bbc-arabic' && newsCategory(title) === 'ECON' ? 'WORLD' : newsCategory(title)});
   }
   return items.sort((a, b) => b.published_at - a.published_at);
