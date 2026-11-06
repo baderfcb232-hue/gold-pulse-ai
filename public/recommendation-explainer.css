@@ -4,7 +4,7 @@
 .recommendation-assistant-heading h3{margin:0;font-size:15px;font-weight:750;color:var(--ink)}
 .recommendation-assistant-heading small{font-size:11px;color:var(--muted);line-height:1.5}
 .recommendation-assistant-selection,.recommendation-assistant-topics{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
-.recommendation-assistant-button{font:650 11px/1.35 inherit;cursor:pointer;min-height:31px;padding:5px 12px;border:1px solid var(--border);border-radius:8px;background:var(--elevated);color:var(--muted);max-width:100%}
+.recommendation-assistant-button{font-family:inherit;font-size:11px;font-weight:650;line-height:1.35;cursor:pointer;min-height:31px;padding:5px 12px;border:1px solid var(--border);border-radius:8px;background:var(--elevated);color:var(--muted);max-width:100%}
 .recommendation-assistant-button[data-selected="true"]{background:var(--card);border-color:var(--green);color:var(--green)}
 .recommendation-assistant-button:focus-visible,.recommendation-chart-link:focus-visible,.signal-context-link:focus-visible{outline:2px solid var(--green);outline-offset:2px}
 .recommendation-assistant-result{display:grid;gap:5px;background:var(--elevated);border:1px solid var(--border);border-radius:9px;padding:11px 13px;min-height:57px}
