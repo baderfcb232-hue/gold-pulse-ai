@@ -1,5 +1,6 @@
 /* Exact additional operator-control, Demo execution, storage and broker-status English labels. */
 export const appExtraEnglish=Object.freeze({
+  "بيتكوين / دولار": "Bitcoin / US Dollar",
   "الأخبار الاقتصادية": "Economic news",
   "الإعدادات والربط": "Settings and connectivity",
   "بانتظار البيانات": "Waiting for data",

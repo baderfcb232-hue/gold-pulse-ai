@@ -24,5 +24,14 @@ option?.addEventListener('change',()=>{
   try{localStorage.setItem(key,lang);localStorage.setItem(marketing,lang)}catch{}
   apply();
 });
+window.addEventListener('storage',event=>{
+  if(event.key!==key&&event.key!==marketing)return;
+  let chosen=event.key===key?event.newValue:null;
+  if(event.key===marketing){try{chosen=localStorage.getItem(key)||event.newValue;}catch{chosen=event.newValue;}}
+  const next=chosen==='en'?'en':'ar';
+  if(next===lang)return;
+  lang=next;
+  apply();
+});
 apply();
 observeLocaleUi(document.body);

@@ -9,6 +9,9 @@
   const apply=value=>{
     document.documentElement.setAttribute('data-nabd-theme',value==='system'?system():value);
     document.documentElement.setAttribute('data-nabd-theme-choice',value);
+    const meta=document.querySelector('meta[name="theme-color"]');
+    if(meta)meta.setAttribute('content',document.documentElement.getAttribute('data-nabd-theme')==='dark'?'#0b1015':'#f8fafc');
+    if(typeof CustomEvent==='function')document.dispatchEvent(new CustomEvent('nabd:theme-change',{detail:{choice:value,resolved:document.documentElement.getAttribute('data-nabd-theme')}}));
   };
   apply(stored);
   document.addEventListener('DOMContentLoaded',()=>{
@@ -19,6 +22,12 @@
       if(!allowed.includes(select.value)) return;
       stored=select.value;
       try{localStorage.setItem(key,stored);}catch{}
+      apply(stored);
+    });
+    window.addEventListener('storage',event=>{
+      if(event.key!==key)return;
+      stored=allowed.includes(event.newValue)?event.newValue:'light';
+      select.value=stored;
       apply(stored);
     });
     if(typeof matchMedia==='function'){
