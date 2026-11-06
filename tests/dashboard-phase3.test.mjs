@@ -47,13 +47,16 @@ test('terminal style only loads on /dashboard; homepage and API stay intact',asy
 test('sidebar-only update removes redundant workspace panels without changing trading controls',()=>{
  const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
  const css=readFileSync(new URL('../public/dashboard-sidebar-fix.css',import.meta.url),'utf8');
- assert.doesNotMatch(html,/phase3-(?:member-card|workspace|shortcuts)/);
- assert.doesNotMatch(html,/dashboard-member\\.js/);
- assert.match(html,/dashboard-sidebar-fix\\.css/);
- for(const view of ['overview','signals','positions','news','results','settings']) assert.match(html,new RegExp('data-view="'+view+'"'));
+ assert.equal(html.includes('phase3-member-card'),false);
+ assert.equal(html.includes('phase3-workspace'),false);
+ assert.equal(html.includes('dashboard-member.js'),false);
+ assert.equal(html.includes('dashboard-sidebar-fix.css'),true);
+ for(const view of ['overview','signals','positions','news','results','settings']) assert.ok(html.includes('data-view="'+view+'"'));
  for(const id of ['market-symbols','pause-bot','live-chart-card']) assert.ok(html.includes('id="'+id+'"'));
- assert.match(css,/position:fixed/);
- assert.match(css,/position:static/);
- assert.match(css,/min-width:1181px/);
- assert.doesNotMatch(css,/fetch\\(|\/api\/|OrderSend/);
+ assert.ok(css.includes('position:fixed'));
+ assert.ok(css.includes('position:static'));
+ assert.ok(css.includes('min-width:1181px'));
+ assert.equal(css.includes('fetch('),false);
+ assert.equal(css.includes('/api/'),false);
+ assert.equal(css.includes('OrderSend'),false);
 });
