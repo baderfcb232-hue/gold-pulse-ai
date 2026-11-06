@@ -59,7 +59,7 @@ test('thin headline strip stays before the market heading and contains no contro
  assert.match(js,/tabIndex=-1/);
  assert.match(js,/\.textContent=item\.title/);
  assert.match(live,/updateNewsTicker\(next\)/);
- assert.match(app,/live\.js\?v=thin-20261106/);
+ assert.match(app,/live\.js\?v=continuous-20261106/);
  assert.match(server,/'\/news-ticker\.js':'news-ticker\.js'/);
  for(const source of [js,css]){
   assert.doesNotMatch(source,/\/api\/commands|OrderSend|\/api\/bridge\/next/);
