@@ -60,3 +60,20 @@ test('sidebar-only update removes redundant workspace panels without changing tr
  assert.equal(css.includes('/api/'),false);
  assert.equal(css.includes('OrderSend'),false);
 });
+
+test('compact appearance and language buttons follow both sidebar login actions',()=>{
+ const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
+ const css=readFileSync(new URL('../public/dashboard-sidebar-fix.css',import.meta.url),'utf8');
+ const login=html.indexOf('id="login-open"');
+ const footer=html.indexOf('class="nav-footer"');
+ const headerEnd=html.indexOf('</header>');
+ assert.ok(login>=0 && footer>login && footer<headerEnd);
+ assert.equal((html.match(/class="nav-footer"/g)||[]).length,1);
+ assert.ok(html.includes('id="nabd-theme-quick"'));
+ assert.ok(html.includes('id="nabd-language-quick"'));
+ assert.ok(html.includes('id="dashboard-theme-choice"'));
+ assert.ok(html.includes('id="dashboard-language-choice"'));
+ assert.match(css,/#nabd-language-quick/);
+ assert.match(css,/#nabd-theme-quick/);
+ assert.match(css,/min-width:1181px/);
+});
