@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
-import {parseNewsFeed, createNewsFeed, newsCategory} from '../news.mjs';
+import {parseNewsFeed, createNewsFeed, newsCategory, NEWS_SOURCES} from '../news.mjs';
 const NOW = 1791806400;
 const source = {id: 'test-only', name: 'TEST SOURCE', url: 'https://news.example/rss', interval: 30};
 const rss = (title = 'Gold &amp; dollar') => `<rss><channel><item><title><![CDATA[${title}]]></title><link>https://news.example/story</link><pubDate>${new Date((NOW - 60) * 1000).toUTCString()}</pubDate></item></channel></rss>`;
@@ -54,4 +54,17 @@ test('RSS TTL keeps a cached source healthy until its scheduled check', async ()
   now += 400; assert.equal(feed.publicState().sources[0].status, 'LIVE');
   now += 600; assert.equal(feed.publicState().sources[0].status, 'STALE');
   await feed.close(); db.close();
+});
+
+
+test('new Bitcoin publishers are genuine RSS sources and tag-feed stories keep BTC topic',()=>{
+  const byId=Object.fromEntries(NEWS_SOURCES.map(source=>[source.id,source]));
+  assert.equal(byId['coindesk'].url,'https://www.coindesk.com/arc/outboundfeeds/rss/');
+  assert.equal(byId['cointelegraph-btc'].url,'https://cointelegraph.com/rss/tag/bitcoin');
+  assert.ok(byId['coindesk'].interval>=60);
+  assert.ok(byId['cointelegraph-btc'].interval>=60);
+  const tagged='<rss><channel><item><title>Institutional demand returns</title><link>https://cointelegraph.com/news/demand</link><pubDate>'+new Date((NOW-60)*1000).toUTCString()+'</pubDate></item></channel></rss>';
+  const [item]=parseNewsFeed(tagged,byId['cointelegraph-btc'],NOW);
+  assert.equal(item.category,'BTC');
+  assert.equal(item.source_name,byId['cointelegraph-btc'].name);
 });
