@@ -1,5 +1,7 @@
 /* Accessibility/field hints, translated without mutating values. */
 export const attributeStaticEnglish = Object.freeze({
+  "اختصارات منصة نبض": "NABD platform shortcuts",
+  "التنقل السريع": "Quick navigation",
   "أقسام الموقع": "Site sections",
   "اختيار مظهر لوحة التداول": "Select dashboard appearance",
   "لغة واجهة نبض": "NABD interface language",

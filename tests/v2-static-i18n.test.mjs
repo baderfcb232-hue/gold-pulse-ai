@@ -23,22 +23,22 @@ const htmlCopy=p=>[...new Set(read(p)
 
 test('exact English translations cover every static dashboard and account phrase',()=>{
   for(const [page,translations,expected]of [
-    ['index.html',dashboardStaticEnglish,238],
+    ['index.html',dashboardStaticEnglish,247],
     ['accounts.html',accountStaticEnglish,139]
   ]){
     const source=htmlCopy(page);
     assert.equal(source.length,expected,'source count changed: '+page);
     const catalogue={...dashboardStaticEnglish,...accountStaticEnglish,...attributeStaticEnglish};
     assert.deepEqual(source.filter(v=>!Object.hasOwn(catalogue,v)),[],'missing translations in '+page);
-    assert.equal(Object.keys(translations).length,page==='accounts.html'?137:238);
+    assert.equal(Object.keys(translations).length,page==='accounts.html'?137:247);
     for(const translated of Object.values(translations)){
       assert.ok(typeof translated==='string'&&translated.length>0);
       assert.doesNotMatch(translated,/[\u0600-\u06FF]/,'no Arabic in English static content');
     }
   }
-  assert.equal(staticTranslationCoverage.dashboard,238);
+  assert.equal(staticTranslationCoverage.dashboard,247);
   assert.equal(staticTranslationCoverage.account,137);
-  assert.equal(staticTranslationCoverage.attributes,22);
+  assert.equal(staticTranslationCoverage.attributes,24);
   assert.ok(Object.keys(appExtraEnglish).length>=160);
   for(const translated of Object.values({...appExtraEnglish,...liveStatusEnglish}))assert.doesNotMatch(translated,/[\u0600-\u06FF]/);
   assert.ok(Object.keys(runtimeStatusEnglish).length>=240);
