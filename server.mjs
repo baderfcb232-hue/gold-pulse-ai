@@ -632,7 +632,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
             status:url.searchParams.get('status')||'ALL',
             since:parseIntParam('since'),
             before:parseIntParam('before'),
-            limit:parseIntParam('limit',40)
+            limit:parseIntParam('limit',40),
+            query:url.searchParams.get('q')||''
           }));
         }catch(e){
           if(e instanceof RangeError)return send(req,res,400,{error:e.message});
@@ -640,6 +641,27 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         }
       }
 
+      // Verified-member export of *observations only* (no account data or MT5 fills).
+      if (path === '/api/analysis-history.csv' && req.method === 'GET') {
+        if (!await canReadSignals(req)) return send(req,res,401,{error:'Verified member or operator sign-in required'});
+        const rawSince=url.searchParams.get('since');
+        if(rawSince!==null&&!/^\d{1,12}$/.test(rawSince))
+          return send(req,res,400,{error:'Invalid time filter'});
+        try {
+          const csv=analysisHistory.exportCsv({
+            symbol:url.searchParams.get('symbol')||'ALL',
+            status:url.searchParams.get('status')||'ALL',
+            since:rawSince===null?null:Number(rawSince),
+            query:url.searchParams.get('q')||''
+          });
+          return send(req,res,200,csv,'text/csv; charset=utf-8',{
+            'Content-Disposition':'attachment; filename="nabd-analysis-history.csv"'
+          });
+        } catch (e) {
+          if(e instanceof RangeError)return send(req,res,400,{error:'Invalid history filter'});
+          throw e;
+        }
+      }
       if (path === '/api/news' && req.method === 'GET') return send(req, res, 200, newsFeed.publicState());
       // Lightweight, read-only broker quote snapshots for one-second UI polling.
       // The EA remains authoritative; never synthesize a quote or alter execution.
