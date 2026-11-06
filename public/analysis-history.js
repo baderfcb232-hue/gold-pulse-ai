@@ -259,7 +259,7 @@ function init(){
   }else if(e.key==='nabd:dashboard:theme')theme();
  });
  const refresh=setInterval(()=>{if(!document.hidden&&!pending&&items.length<=30)load(true);},60000);
- window.addEventListener('pagehide',()=>clearInterval(refresh);clearTimeout(searchDelay),{once:true});
+ window.addEventListener('pagehide',()=>{clearInterval(refresh);clearTimeout(searchDelay);},{once:true});
  translate();
  load(true);
 }
