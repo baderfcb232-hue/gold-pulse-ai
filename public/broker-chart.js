@@ -1,5 +1,5 @@
 // Read-only chart for MT5 closed OHLC. Never submits trades or creates quotes.
-export function drawBrokerCandles(canvas, payload, levels = []) {
+export function drawBrokerCandles(canvas, payload, levels = [], highlightTime = null) {
   const rect=canvas.getBoundingClientRect(), W=Math.max(300,Math.floor(rect.width)), H=Math.max(300,Math.floor(rect.height));
   if (!canvas.getContext || !rect.width) return;
   const dpr=Math.min(2,window.devicePixelRatio||1);
@@ -36,5 +36,21 @@ export function drawBrokerCandles(canvas, payload, levels = []) {
   for(const line of labels){if(!Number.isFinite(line.value))continue;const yy=y(line.value);ctx.strokeStyle=line.color||'#b89bff';ctx.setLineDash([5,4]);ctx.beginPath();ctx.moveTo(left,yy);ctx.lineTo(right,yy);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle=ctx.strokeStyle;ctx.font='bold 11px sans-serif';ctx.fillText(line.name,left+7,Math.max(top+10,Math.min(bottom-4,yy-4)));}
   ctx.fillStyle='#9a91a8';ctx.font='11px sans-serif';
   [0,Math.floor((rows.length-1)/2),rows.length-1].forEach(i=>{const x=left+(i+.5)*step;ctx.fillText(new Date(rows[i].time*1000).toISOString().slice(11,16),Math.min(right-40,x),H-9);});
-  canvas.onpointermove=e=>{const i=Math.max(0,Math.min(rows.length-1,Math.floor((e.offsetX-left)/step)));const c=rows[i];canvas.title=`MT5 ${payload.broker_symbol} · ${new Date(c.time*1000).toISOString()}\nO ${c.open} H ${c.high} L ${c.low} C ${c.close}`;};
+  // The timestamp marker is drawn only if this closed broker candle is present
+  // in the visible MT5 history. No synthetic or TradingView candle is inferred.
+  let markerFound=false;
+  const seconds={M5:300,M15:900,H1:3600,H4:14400}[payload?.tf]||0;
+  if(Number.isFinite(highlightTime)&&seconds>0){
+    const matched=rows.findIndex(c=>highlightTime>=c.time&&highlightTime<c.time+seconds);
+    if(matched>=0){
+      markerFound=true;
+      const xx=left+step*(matched+.5);
+      ctx.strokeStyle='#e7bd6b';ctx.lineWidth=1.6;ctx.setLineDash([3,4]);
+      ctx.beginPath();ctx.moveTo(xx,top);ctx.lineTo(xx,bottom);ctx.stroke();ctx.setLineDash([]);
+      ctx.fillStyle='#e7bd6b';ctx.font='bold 11px sans-serif';
+      ctx.fillText('HISTORY',Math.max(left+4,Math.min(right-66,xx+4)),top+11);
+    }
+  }
+    canvas.onpointermove=e=>{const i=Math.max(0,Math.min(rows.length-1,Math.floor((e.offsetX-left)/step)));const c=rows[i];canvas.title=`MT5 ${payload.broker_symbol} · ${new Date(c.time*1000).toISOString()}\nO ${c.open} H ${c.high} L ${c.low} C ${c.close}`;};
+  return markerFound;
 }
