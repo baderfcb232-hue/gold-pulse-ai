@@ -7,6 +7,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {analyze, previewFlexibleAnalysis, sourceAnalysis, cleanSnapshot, trackPlan, positionSize, text, defaults, botHeartbeatFresh, BOT_CONTROL_TTL} from './engine.mjs';
 import {mt5Archive} from './archive.mjs';
 import {summarizeGoldPerformance} from './performance.mjs';
+import {buildPerformanceCenter,validatePerformanceFilters} from './performance-center.mjs';
 import {createMarketFeed} from './market.mjs';
 import {createAnalysisHistory,analysisHistoryCsv} from './analysis-history.mjs';
 import {createPgAnalysisArchive} from './analysis-history-pg.mjs';
@@ -867,6 +868,29 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
           commands: commandJournal ? await commandJournal.list(clock()) : db.prepare('SELECT * FROM commands ORDER BY id DESC LIMIT 100').all(),
           lastUpdate: snapshot?.received_at ?? null});
       }
+      // Account-bound performance stays operator-only until subscriber MT5
+      // data is genuinely isolated per authenticated account. Never publish
+      // these numbers on the marketing page or member signal endpoint.
+      if(path==='/api/performance-center'&&req.method==='GET'){
+        if(!operator(req))return send(req,res,403,{error:'Operator login required for broker account performance'});
+        try{
+          const filters=validatePerformanceFilters({
+            symbol:url.searchParams.get('symbol')||'ALL',
+            mode:url.searchParams.get('mode')||'ALL',
+            period:url.searchParams.get('period')||'ALL'
+          });
+          const goldDeals=db.prepare('SELECT data FROM deals ORDER BY time DESC LIMIT 5000').all()
+            .map(row=>JSON.parse(row.data));
+          const sourceRows=[
+            snapshot&&{...snapshot,symbol:'XAUUSD',deals:goldDeals},
+            btcSnapshot&&{...btcSnapshot,symbol:'BTCUSD',deals:btcSnapshot.deals||[]}
+          ].filter(Boolean);
+          return send(req,res,200,buildPerformanceCenter({sources:sourceRows,filters,now:clock()}));
+        }catch(e){
+          if(e instanceof RangeError)return send(req,res,400,{error:'Invalid performance filter'});
+          throw e;
+        }
+      }
       if (path === '/api/mt5.zip' && req.method === 'GET') {
         if (!operator(req)) return send(req, res, 401, {error: 'تسجيل دخول المشغّل مطلوب لتنزيل ملفات الربط.'});
         return send(req, res, 200, mt5Archive(ROOT), 'application/zip', {'Content-Disposition':'attachment; filename="NABD_MT5_Link.zip"'});
@@ -1033,8 +1057,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         audit('COMMAND_RESULT', {id: c.id, status: b.status, message: text(b.message, 500)});
         return send(req, res, 200, {ok: true});
       }
-      const files = {'/':'landing.html','/index.html':'index.html','/dashboard':'index.html','/charts/gold':'chart-gold.html','/charts/bitcoin':'chart-bitcoin.html','/analysis-history':'analysis-history.html',
-        '/welcome':'landing.html','/en':'landing-en.html','/landing.css':'landing.css','/landing-live.js':'landing-live.js','/premium-fintech.css':'premium-fintech.css','/marketing-i18n.css':'marketing-i18n.css','/market-motion.css':'market-motion.css','/language-pref.js':'language-pref.js','/dashboard-terminal.css':'dashboard-terminal.css','/dashboard-sidebar-fix.css':'dashboard-sidebar-fix.css','/news-ticker.js':'news-ticker.js','/news-ticker.css':'news-ticker.css','/analysis-ribbon.js':'analysis-ribbon.js','/analysis-ribbon.css':'analysis-ribbon.css','/recommendation-explainer.js':'recommendation-explainer.js','/recommendation-explainer.css':'recommendation-explainer.css','/dashboard-member.js':'dashboard-member.js','/dashboard-themes.css':'dashboard-themes.css','/dashboard-fixes.css':'dashboard-fixes.css','/dashboard-contrast-v2.css':'dashboard-contrast-v2.css','/market-loaders.css':'market-loaders.css','/market-loaders.js':'market-loaders.js','/toast-ui.js':'toast-ui.js','/price-feedback.js':'price-feedback.js','/live-feedback.css':'live-feedback.css','/dashboard-locale.js':'dashboard-locale.js','/mini-spark.js':'mini-spark.js','/signal-date-filter.js':'signal-date-filter.js','/theme-init.js':'theme-init.js','/app.js':'app.js','/http.js':'http.js','/live.js':'live.js','/broker-chart.js':'broker-chart.js','/chart-pages.js':'chart-pages.js','/chart-pages.css':'chart-pages.css','/analysis-history.js':'analysis-history.js','/analysis-history.css':'analysis-history.css','/state-connection.js':'state-connection.js','/control-readiness.js':'control-readiness.js','/command-feedback.js':'command-feedback.js','/styles.css':'styles.css','/manifest.webmanifest':'manifest.webmanifest','/sw.js':'sw.js','/pwa-register.js':'pwa-register.js','/offline.html':'offline.html','/nabd-apple-touch-180.png':'nabd-apple-touch-180.png','/nabd-app-icon-192.png':'nabd-app-icon-192.png','/nabd-app-icon-512.png':'nabd-app-icon-512.png','/icon.svg':'icon.svg','/nabd-mark.svg':'nabd-mark.svg','/nabd-logo.svg':'nabd-logo.svg','/nabd-logo-en.svg':'nabd-logo-en.svg','/nabd-ltr-brand.css':'nabd-ltr-brand.css','/mobile-polish.css':'mobile-polish.css','/nabd-locale-init.js':'nabd-locale-init.js','/i18n-core.js':'i18n-core.js','/dashboard-static-en.js':'dashboard-static-en.js','/account-static-en.js':'account-static-en.js','/attribute-static-en.js':'attribute-static-en.js','/runtime-status-en.js':'runtime-status-en.js','/live-status-en.js':'live-status-en.js','/app-extra-en.js':'app-extra-en.js','/safety-status-en.js':'safety-status-en.js','/server-status-en.js':'server-status-en.js','/i18n-dom.js':'i18n-dom.js','/account-language.js':'account-language.js','/brand-logo.png':'brand-logo.png',
+      const files = {'/':'landing.html','/index.html':'index.html','/dashboard':'index.html','/charts/gold':'chart-gold.html','/charts/bitcoin':'chart-bitcoin.html','/performance-center':'performance-center.html','/analysis-history':'analysis-history.html',
+        '/welcome':'landing.html','/en':'landing-en.html','/landing.css':'landing.css','/landing-live.js':'landing-live.js','/premium-fintech.css':'premium-fintech.css','/marketing-i18n.css':'marketing-i18n.css','/market-motion.css':'market-motion.css','/language-pref.js':'language-pref.js','/dashboard-terminal.css':'dashboard-terminal.css','/dashboard-sidebar-fix.css':'dashboard-sidebar-fix.css','/news-ticker.js':'news-ticker.js','/news-ticker.css':'news-ticker.css','/analysis-ribbon.js':'analysis-ribbon.js','/analysis-ribbon.css':'analysis-ribbon.css','/recommendation-explainer.js':'recommendation-explainer.js','/recommendation-explainer.css':'recommendation-explainer.css','/dashboard-member.js':'dashboard-member.js','/dashboard-themes.css':'dashboard-themes.css','/dashboard-fixes.css':'dashboard-fixes.css','/dashboard-contrast-v2.css':'dashboard-contrast-v2.css','/market-loaders.css':'market-loaders.css','/market-loaders.js':'market-loaders.js','/toast-ui.js':'toast-ui.js','/price-feedback.js':'price-feedback.js','/live-feedback.css':'live-feedback.css','/dashboard-locale.js':'dashboard-locale.js','/mini-spark.js':'mini-spark.js','/signal-date-filter.js':'signal-date-filter.js','/theme-init.js':'theme-init.js','/app.js':'app.js','/http.js':'http.js','/live.js':'live.js','/broker-chart.js':'broker-chart.js','/chart-pages.js':'chart-pages.js','/chart-pages.css':'chart-pages.css','/performance-center.js':'performance-center.js','/performance-center.css':'performance-center.css','/analysis-history.js':'analysis-history.js','/analysis-history.css':'analysis-history.css','/state-connection.js':'state-connection.js','/control-readiness.js':'control-readiness.js','/command-feedback.js':'command-feedback.js','/styles.css':'styles.css','/manifest.webmanifest':'manifest.webmanifest','/sw.js':'sw.js','/pwa-register.js':'pwa-register.js','/offline.html':'offline.html','/nabd-apple-touch-180.png':'nabd-apple-touch-180.png','/nabd-app-icon-192.png':'nabd-app-icon-192.png','/nabd-app-icon-512.png':'nabd-app-icon-512.png','/icon.svg':'icon.svg','/nabd-mark.svg':'nabd-mark.svg','/nabd-logo.svg':'nabd-logo.svg','/nabd-logo-en.svg':'nabd-logo-en.svg','/nabd-ltr-brand.css':'nabd-ltr-brand.css','/mobile-polish.css':'mobile-polish.css','/nabd-locale-init.js':'nabd-locale-init.js','/i18n-core.js':'i18n-core.js','/dashboard-static-en.js':'dashboard-static-en.js','/account-static-en.js':'account-static-en.js','/attribute-static-en.js':'attribute-static-en.js','/runtime-status-en.js':'runtime-status-en.js','/live-status-en.js':'live-status-en.js','/app-extra-en.js':'app-extra-en.js','/safety-status-en.js':'safety-status-en.js','/server-status-en.js':'server-status-en.js','/i18n-dom.js':'i18n-dom.js','/account-language.js':'account-language.js','/brand-logo.png':'brand-logo.png',
         '/auth':'accounts.html','/account':'accounts.html','/admin':'accounts.html','/privacy':'accounts.html','/accounts.js':'accounts.js','/accounts.css':'accounts.css','/portal-premium.css':'portal-premium.css'};
       if (req.method === 'GET' && files[path]) {
         const type = path.endsWith('.js') ? 'text/javascript; charset=utf-8' : path.endsWith('.css') ? 'text/css; charset=utf-8'
