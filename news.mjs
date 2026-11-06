@@ -39,6 +39,7 @@ export function parseNewsFeed(xml, source, now) {
     if (seen.has(id)) continue; seen.add(id);
     items.push({id, source: source.id, source_name: source.name, title, url: url.href,
       published_at: published, category: ['fed', 'ecb'].includes(source.id) ? 'GOLD'
+        : source.id === 'cointelegraph-btc' ? 'BTC'
         : source.id === 'bbc-arabic' && newsCategory(title) === 'ECON' ? 'WORLD' : newsCategory(title)});
   }
   return items.sort((a, b) => b.published_at - a.published_at);
