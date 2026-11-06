@@ -75,3 +75,11 @@
  #history-export{flex:1}
  .history-chart-link{font-size:11px}
 }
+
+/* Verified recommendation linkage: never shown as an executed trade by default. */
+.history-recommendation{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;padding-top:9px;border-top:1px dashed var(--border);color:var(--muted);font-size:11px}
+.history-recommendation small{font-family:ui-monospace,monospace;font-size:11px;direction:ltr;unicode-bidi:isolate}
+.history-verify-execution{padding:6px 9px;border:1px solid var(--border);border-radius:8px;color:var(--accent);background:var(--card);font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.history-verify-execution:disabled{opacity:.5;cursor:progress}
+.history-execution-result{font-size:11px;line-height:1.4}
+@media(max-width:650px){.history-recommendation{align-items:flex-start;gap:6px}.history-verify-execution{width:100%}}
