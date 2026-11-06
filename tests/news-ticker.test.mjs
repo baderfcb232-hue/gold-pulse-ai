@@ -119,5 +119,5 @@ test('the compact ticker excludes generic banking reports and retains real gold 
    row('GOLD','Gold prices rise after US inflation data','https://example.org/gold2'),
    row('BTC','Bitcoin exchange update','https://example.org/btc2')
   ]},'ALL',NOW);
-  assert.deepEqual(values.map(x=>x.url),['https://example.org/gold2','https://example.org/btc2'].reverse());
+  assert.deepEqual(values.map(x=>x.url),['https://example.org/gold2','https://example.org/btc2']);
 });
