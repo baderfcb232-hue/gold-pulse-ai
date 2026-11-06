@@ -159,7 +159,7 @@ test('front end has only text-safe rendering, server-side scoped history and no 
  assert.match(html,/id="history-period"/);
  assert.match(dashboard,/href="\/analysis-history"/);
  assert.match(server,/await canReadSignals\(req\)/);
- assert.match(server,/analysisHistory\.capture\(raw\)/);
+ assert.match(server,/analysisHistory\.capture\(marketFeed\.publicState\(\)\)/);
  assert.match(server,/analysis-history\.js/);
  assert.match(js,/textContent/);
  assert.match(html,/aria-live/);
