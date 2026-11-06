@@ -44,6 +44,7 @@ export async function createPgAnalysisArchive({connectionString,pool:externalPoo
  }
  async function bootstrapFromSqlite(sqlite){
   if(!sqlite)return;
+  try{
   const rows=sqlite.prepare('SELECT data FROM analysis_history ORDER BY id ASC LIMIT ?').all(MAX_ROWS);
   for(let i=0;i<rows.length;i+=100){
    const batch=[];
@@ -58,7 +59,8 @@ export async function createPgAnalysisArchive({connectionString,pool:externalPoo
     "SELECT (x->>'recorded_at')::BIGINT,x->>'symbol',x->>'status',x->>'unique_key',x->'data' "+
     "FROM jsonb_array_elements($1::jsonb) x ON CONFLICT(unique_key) DO NOTHING",[JSON.stringify(batch)]);
   }
-  await prune();
+  await prune();state='READY';
+  }catch(e){state='ERROR';throw e;}
  }
  async function list({symbol='ALL',status='ALL',since=null,before=null,limit=40,query=''}={}){
   if(symbol!=='ALL'&&!validSymbols.has(symbol))throw new RangeError('Invalid symbol');
