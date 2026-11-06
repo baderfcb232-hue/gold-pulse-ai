@@ -5,9 +5,14 @@ import {createHash} from 'node:crypto';
 import {HISTORY_SYMBOLS,HISTORY_STATUSES} from './analysis-history.mjs';
 const validSymbols=new Set(HISTORY_SYMBOLS),validStatuses=new Set(HISTORY_STATUSES);
 const RETENTION_DAYS=90,MAX_ROWS=12000;
-export const analysisArchiveKey=row=>createHash('sha256').update(JSON.stringify([
- row.recorded_at,row.symbol,row.status,row.source_type,row.reason,row.frames,row.indicator_checks,
- row.readiness_checks,row.entry_checks,row.score,row.strategy,row.recommendation_code||null])).digest('hex');
+export const analysisArchiveKey=row=>{
+ const fields=[row.recorded_at,row.symbol,row.status,row.source_type,row.reason,row.frames,
+  row.indicator_checks,row.readiness_checks,row.entry_checks,row.score,row.strategy];
+ // Preserve hashes of already archived rows during migration. Append the new
+ // exact publication key only if an actual link was captured.
+ if(row.recommendation_code)fields.push(row.recommendation_code);
+ return createHash('sha256').update(JSON.stringify(fields)).digest('hex');
+};
 export async function createPgAnalysisArchive({connectionString,pool:externalPool}={}){
  if(!connectionString&&!externalPool)return null;
  let pool=externalPool,owned=false;
