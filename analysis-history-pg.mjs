@@ -7,7 +7,7 @@ const validSymbols=new Set(HISTORY_SYMBOLS),validStatuses=new Set(HISTORY_STATUS
 const RETENTION_DAYS=90,MAX_ROWS=12000;
 export const analysisArchiveKey=row=>createHash('sha256').update(JSON.stringify([
  row.recorded_at,row.symbol,row.status,row.source_type,row.reason,row.frames,row.indicator_checks,
- row.readiness_checks,row.entry_checks,row.score,row.strategy])).digest('hex');
+ row.readiness_checks,row.entry_checks,row.score,row.strategy,row.recommendation_code||null])).digest('hex');
 export async function createPgAnalysisArchive({connectionString,pool:externalPool}={}){
  if(!connectionString&&!externalPool)return null;
  let pool=externalPool,owned=false;
@@ -92,6 +92,13 @@ export async function createPgAnalysisArchive({connectionString,pool:externalPoo
    first_recorded_at:first==null?null:Number(first),retention_days:RETENTION_DAYS,
    storage_persistent:true,kind:'ANALYSIS_OBSERVATIONS_NOT_TRADES',scope:'GLOBAL_MARKET',backfilled:false};
  }
- return {enqueue,flush,bootstrapFromSqlite,list,prune,status:()=>({state,pending:waiting}),
+ async function get(id){
+  if(!Number.isSafeInteger(id)||id<1)throw new RangeError('Invalid archive id');
+  await flush();
+  const response=await pool.query('SELECT id,data FROM nabd_analysis_observations WHERE id=$1',[id]);
+  const record=response.rows[0];
+  return record?{id:Number(record.id),...(typeof record.data==='string'?JSON.parse(record.data):record.data)}:null;
+ }
+ return {enqueue,flush,bootstrapFromSqlite,list,get,prune,status:()=>({state,pending:waiting}),
   async close(){await flush();if(owned)await pool.end();}};
 }
