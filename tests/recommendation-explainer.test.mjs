@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {explainNabdRecommendation,safeExecutionStatus,EXPLAINER_SYMBOLS,EXPLAINER_QUESTIONS} from '../public/recommendation-explainer.js';
+import {linkExecutionTrace,describeEaRejection,recommendationCode} from '../execution-trace.mjs';
 
 const NOW=1793980800;
 const m=(symbol='XAUUSD',overrides={})=>({
@@ -88,4 +89,46 @@ test('phase 9 UI reuses market SSE and existing member-gated signals without new
  assert.match(css,/@media\(max-width:680px\)/);
  assert.match(js,/nabd:language-change/);
  assert.doesNotMatch(js,/\/api\/commands|OrderSend|\/api\/bridge\/next|\/api\/risk-settings|eval\(/);
+});
+
+test('actual logged MT5 rejection code 109 is reported as daily-loss guard, never as a fill',()=>{
+ const plan={id:'example-plan-id',symbol:'XAUUSD',source:'MT5 · JustMarkets',side:'BUY',
+  issued_at:NOW-20,expires_at:NOW+60,status:'TRACKING'};
+ const record={plan_id:plan.id,symbol:plan.symbol,status:'REJECTED',reason_code:109,time:NOW-1};
+ const [traced]=linkExecutionTrace([plan],[record],[],{});
+ assert.equal(traced.execution_trace.status,'REJECTED');
+ assert.equal(traced.execution_trace.broker_fill_confirmed,false);
+ assert.equal(traced.execution_trace.broker_deal_ticket,null);
+ assert.match(describeEaRejection(109),/بلوغ حد الخسارة اليومية/);
+ const shown=safeExecutionStatus(traced,'ar');
+ assert.equal(shown.confirmed,false);
+ assert.match(shown.message,/بلوغ حد الخسارة اليومية/);
+ const display=explainNabdRecommendation({symbol:'XAUUSD',question:'EXECUTION',signals:[traced],
+  market:null,locale:'ar',now:NOW});
+ assert.ok(display.lines.some(s=>s.includes('بلوغ حد الخسارة اليومية')));
+ assert.ok(display.lines.some(s=>s.includes(recommendationCode(plan.id))));
+});
+test('broker deal ticket can be a verified string or safe number but never a rounded unsafe number',()=>{
+ const make=ticket=>({execution_trace:{
+  status:'FILLED',broker_fill_confirmed:true,broker_deal_ticket:ticket
+ }});
+ const digits=1212470004550;
+ assert.equal(safeExecutionStatus(make(digits),'ar').confirmed,true);
+ assert.match(safeExecutionStatus(make(digits),'en').message,/1212470004550/);
+ assert.equal(safeExecutionStatus(make(String(digits)),'en').confirmed,true);
+ assert.equal(safeExecutionStatus(make(Number.MAX_SAFE_INTEGER+10),'en').confirmed,false);
+ assert.equal(safeExecutionStatus(make('NaN'),'en').confirmed,false);
+ assert.equal(safeExecutionStatus(make(0),'en').confirmed,false);
+ assert.equal(safeExecutionStatus(make(null),'en').confirmed,false);
+});
+test('reference market and access-restricted member data are explicitly not MT5 execution proof',()=>{
+ const plan={id:'btc-sample',symbol:'BTCUSD',issued_at:NOW-8,
+  source:'Coinbase · BTC-USD',side:'BUY',status:'TRACKING'};
+ const display=explainNabdRecommendation({symbol:'BTCUSD',question:'EXECUTION',
+  signals:[plan],locale:'en',now:NOW});
+ assert.ok(display.lines.some(s=>s.includes('reference signal')));
+ assert.ok(display.lines.every(s=>!s.includes('Broker fill confirmed')));
+ const restricted=explainNabdRecommendation({symbol:'BTCUSD',question:'EXECUTION',
+  signals:[{...plan,source:'MT5_EA'}],locale:'en',now:NOW});
+ assert.ok(restricted.lines.some(s=>s.includes('operator verification')));
 });
