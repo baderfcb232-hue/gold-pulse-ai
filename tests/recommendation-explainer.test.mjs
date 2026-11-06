@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {explainNabdRecommendation,safeExecutionStatus,EXPLAINER_SYMBOLS,EXPLAINER_QUESTIONS} from '../public/recommendation-explainer.js';
-import {linkExecutionTrace,describeEaRejection,recommendationCode} from '../execution-trace.mjs';
+import {linkExecutionTrace,describeEaRejection,recommendationCode,verifiedBrokerDeal,canonicalBrokerTicket} from '../execution-trace.mjs';
 
 const NOW=1793980800;
 const m=(symbol='XAUUSD',overrides={})=>({
@@ -131,4 +131,28 @@ test('reference market and access-restricted member data are explicitly not MT5 
  const restricted=explainNabdRecommendation({symbol:'BTCUSD',question:'EXECUTION',
   signals:[{...plan,source:'MT5_EA'}],locale:'en',now:NOW});
  assert.ok(restricted.lines.some(s=>s.includes('operator verification')));
+});
+
+test('real broker fill proof matches equal numeric/string tickets but still requires matching source and side',()=>{
+ const plan={id:'broker-proof-plan',symbol:'XAUUSD',broker_symbol:'XAUUSD',side:'BUY',
+  source:'MT5 · JustMarkets',issued_at:NOW-30,expires_at:NOW+50};
+ const entry={status:'SUBMITTED',plan_id:plan.id,symbol:plan.symbol,deal_ticket:'123456789',
+  time:NOW-3,plan};
+ const snapshot={symbol:'XAUUSD',broker:'JustMarkets-Demo',execution:{demo:true},
+  deals:[{ticket:123456789,entry_type:'IN',side:'BUY',volume:0.2,time:NOW-2}]};
+ assert.equal(canonicalBrokerTicket(123456789),'123456789');
+ assert.equal(canonicalBrokerTicket('123456789'),'123456789');
+ assert.equal(canonicalBrokerTicket(Number.MAX_SAFE_INTEGER+5),null);
+ assert.equal(canonicalBrokerTicket(0),null);
+ assert.equal(verifiedBrokerDeal(entry,snapshot)?.ticket,123456789);
+ const [matched]=linkExecutionTrace([plan],[entry],[],{XAUUSD:snapshot});
+ assert.equal(matched.execution_trace.status,'FILLED');
+ assert.equal(matched.execution_trace.broker_fill_confirmed,true);
+ assert.equal(safeExecutionStatus(matched,'en').confirmed,true);
+ assert.equal(verifiedBrokerDeal(entry,{...snapshot,broker:'AnotherBroker'}),null);
+ assert.equal(verifiedBrokerDeal(entry,{...snapshot,deals:[{...snapshot.deals[0],side:'SELL'}]}),null);
+ assert.equal(verifiedBrokerDeal(entry,{...snapshot,deals:[{...snapshot.deals[0],entry_type:'OUT'}]}),null);
+ assert.equal(verifiedBrokerDeal(entry,{...snapshot,execution:{demo:false}}),null);
+ assert.equal(verifiedBrokerDeal(entry,{...snapshot,deals:[{...snapshot.deals[0],ticket:123456788}]}),null);
+ assert.equal(verifiedBrokerDeal({...entry,deal_ticket:Number.MAX_SAFE_INTEGER+10},snapshot),null);
 });
