@@ -44,31 +44,19 @@ test('terminal style only loads on /dashboard; homepage and API stay intact',asy
 });
 
 
-test('phase 3 workspace shortcuts only target existing panels and keep private account data gated',()=>{
-  const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
-  const css=readFileSync(new URL('../public/dashboard-terminal.css',import.meta.url),'utf8');
-  assert.match(html,/class="phase3-workspace"/);
-  const shortcut=html.match(/<div class="phase3-shortcuts"[\s\S]*?<\/div>/)?.[0];
-  assert.ok(shortcut);
-  const targets=[...shortcut.matchAll(/data-goto="([^"]+)"/g)].map(match=>match[1]);
-  assert.deepEqual(targets,['overview','signals','positions','results','news','settings']);
-  for(const target of targets) assert.ok(html.includes('data-panel="'+target+'"'),'missing panel '+target);
-  assert.match(html,/href="\/account"/);
-  assert.match(css,/\.phase3-shortcuts/);
-  assert.match(css,/@media\(max-width:600px\)/);
-  assert.doesNotMatch(shortcut,/balance|equity|password|account_number/i);
-});
-
-
-test('phase 3 member card uses read-only account and market APIs and never infers a trade fill',()=>{
+test('sidebar-only update removes redundant workspace panels without changing trading controls',()=>{
  const html=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
- const js=readFileSync(new URL('../public/dashboard-member.js',import.meta.url),'utf8');
- for(const id of ['phase3-member-name','phase3-member-access','phase3-mt5-status','phase3-telegram-status','phase3-gold-status','phase3-btc-status','phase3-signal-count','phase3-trade-count'])
-   assert.ok(html.includes('id="'+id+'"'),id);
- assert.match(js,/\/api\/auth\/me/);
- assert.match(js,/\/api\/market/);
- assert.match(js,/\/api\/state/);
- assert.match(js,/notVerified/);
- assert.doesNotMatch(js,/\/api\/commands|\/api\/bridge\/next|\/api\/auth\/mt5-accounts|localStorage|sessionStorage/);
- assert.match(html,/dashboard-member\.js/);
+ const css=readFileSync(new URL('../public/dashboard-sidebar-fix.css',import.meta.url),'utf8');
+ assert.equal(html.includes('phase3-member-card'),false);
+ assert.equal(html.includes('phase3-workspace'),false);
+ assert.equal(html.includes('dashboard-member.js'),false);
+ assert.equal(html.includes('dashboard-sidebar-fix.css'),true);
+ for(const view of ['overview','signals','positions','news','results','settings']) assert.ok(html.includes('data-view="'+view+'"'));
+ for(const id of ['market-symbols','pause-bot','live-chart-card']) assert.ok(html.includes('id="'+id+'"'));
+ assert.ok(css.includes('position:fixed'));
+ assert.ok(css.includes('position:static'));
+ assert.ok(css.includes('min-width:1181px'));
+ assert.equal(css.includes('fetch('),false);
+ assert.equal(css.includes('/api/'),false);
+ assert.equal(css.includes('OrderSend'),false);
 });
