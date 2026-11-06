@@ -3,6 +3,7 @@
  * recommendation identifiers, or broker order/deal details.
  * A READY analysis is NOT proof of publication or execution.
  */
+import {recommendationCode} from './execution-trace.mjs';
 export const HISTORY_SYMBOLS=Object.freeze(['XAUUSD','BTCUSD']);
 export const HISTORY_STATUSES=Object.freeze([
  'NO_DATA','WARMING','SCANNING','WATCH','READY','NEWS_BLOCK','BLOCKED','STALE','GAP','ERROR','UNKNOWN'
@@ -38,11 +39,19 @@ export function captureAnalysisSnapshot(m,recordedAt){
  const score=!isStale&&Number.isFinite(a.score)&&a.score>=0&&a.score<=100
   ?Math.round(a.score*10)/10:null;
  const reason=label(a.reason_label||a.reason||m.feed_error||'',240);
+ // Correlate only an already published, current signal with the exact source.
+ // A similar timestamp/price/strategy is NEVER sufficient for a verified link.
+ const signal=m.currentSignal;
+ const correlated=source_type==='MT5'&&!isStale&&a.status==='READY'&&
+  typeof signal?.id==='string'&&signal.id.length>0&&signal.id.length<=250&&
+  signal.symbol===m.symbol&&Number.isFinite(signal.issued_at)&&signal.issued_at<=recordedAt+5&&
+  signal.issued_at>=recordedAt-86400&&Number.isFinite(signal.expires_at)&&signal.expires_at>recordedAt;
+ const recommendation_code=correlated?recommendationCode(signal.id):null;
  return {
   symbol:m.symbol,recorded_at:Math.floor(recordedAt),quote_at:Math.floor(m.quote.time),
   status,decision:!isStale&&['BUY','SELL','WAIT'].includes(a.decision)?a.decision:'WAIT',
   score,source_type,reason:reason||(isStale?'Quote stale':'No explanation received'),
-  strategy:label(a.strategy,45),frames,
+  strategy:label(a.strategy,45),frames,recommendation_code,
   indicator_checks:isStale?[]:checks(a.checks),
   readiness_checks:isStale?[]:checks(a.readinessChecks),
   entry_checks:isStale?[]:checks(a.entrySafetyChecks),
@@ -50,7 +59,7 @@ export function captureAnalysisSnapshot(m,recordedAt){
  };
 }
 function fingerprint(row){
- return JSON.stringify([row.status,row.decision,row.source_type,row.reason,row.strategy,
+ return JSON.stringify([row.status,row.decision,row.source_type,row.reason,row.strategy,row.recommendation_code,
   row.frames,row.indicator_checks.map(x=>x.pass),row.readiness_checks.map(x=>x.pass),
   row.entry_checks.map(x=>x.pass)]);
 }
@@ -159,5 +168,9 @@ export function createAnalysisHistory({db,clock=()=>Date.now()/1000,storagePersi
   }
   return analysisHistoryCsv(rows.slice(0,1000));
  }
- return {capture,list,exportCsv,prune};
+ function get(id){
+  if(!Number.isSafeInteger(id)||id<1)throw new RangeError('Invalid observation id');
+  return readRow(db.prepare('SELECT id,data FROM analysis_history WHERE id=?').get(id));
+ }
+ return {capture,list,exportCsv,get,prune};
 }
