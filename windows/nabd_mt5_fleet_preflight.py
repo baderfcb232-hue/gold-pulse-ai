@@ -94,7 +94,11 @@ def validate_fleet(document):
         # Reject nested installations too: a shared portable data tree is unsafe.
         for prior in validated:
             old = prior["identity"]["terminal_directory"]
-            if os.path.commonpath([old, directory]) in (old, directory):
+            try:
+                common = os.path.commonpath([old, directory])
+            except ValueError:
+                continue  # Different Windows volumes cannot share a data tree.
+            if common in (old, directory):
                 _fail(f"Slot {index}: overlapping portable terminal folders")
         validated.append({"slot": entry["slot"], "identity": identity,
                           "windows_user": entry["windows_user"]})
