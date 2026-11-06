@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1">
+ <meta name="theme-color" content="#09141d">
+ <meta name="description" content="NABD Performance Center — verified MT5 closed trade results">
+ <title>NABD Performance Center</title>
+ <link rel="icon" type="image/svg+xml" href="/icon.svg">
+ <link rel="manifest" href="/manifest.webmanifest">
+ <link rel="preconnect" href="https://fonts.googleapis.com">
+ <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+ <script src="/theme-init.js?v=phase10-1"></script>
+ <script src="/nabd-locale-init.js?v=v2-1"></script>
+ <link rel="stylesheet" href="/performance-center.css?v=phase10-1">
+ <script type="module" src="/performance-center.js?v=phase10-1"></script>
+</head>
+<body>
+ <a href="#performance-main" class="skip" data-i18n="skip">الانتقال إلى النتائج</a>
+ <header class="topbar">
+  <a href="/dashboard" aria-label="NABD dashboard"><img src="/nabd-logo.svg" id="brand-logo" alt="NABD" width="110" height="42"></a>
+  <nav><a href="/dashboard" data-i18n="dashboard">لوحة نبض</a><a href="/charts/gold" data-i18n="goldChart">شارت الذهب</a><a href="/charts/bitcoin" data-i18n="btcChart">شارت البيتكوين</a></nav>
+  <div class="preferences"><button type="button" id="language" aria-label="Switch language">EN</button><button type="button" id="theme" aria-label="Switch theme">☾</button></div>
+ </header>
+ <main id="performance-main">
+  <header class="intro">
+   <div><span class="eyebrow">NABD / PERFORMANCE CENTER</span><h1 data-i18n="heading">الأداء والنتائج الموثّقة</h1><p data-i18n="intro">النتائج من مراكز MT5 المغلقة فعليًا، ولا تشمل نتائج التوصيات الافتراضية أو أوامر التنفيذ غير المؤكدة.</p></div>
+   <span class="source-badge" data-i18n="operator">بيانات الحساب · للمشغّل فقط</span>
+  </header>
+  <section class="filters" aria-label="Performance filters">
+   <label><span data-i18n="market">السوق</span><select id="market"><option value="ALL" data-i18n="all">الكل</option><option value="XAUUSD" data-i18n="gold">الذهب</option><option value="BTCUSD" data-i18n="bitcoin">البيتكوين</option></select></label>
+   <label><span data-i18n="period">الفترة</span><select id="period"><option value="ALL" data-i18n="allHistory">كل السجل المتاح</option><option value="7D" data-i18n="seven">7 أيام</option><option value="30D" data-i18n="thirty">30 يومًا</option><option value="90D" data-i18n="ninety">90 يومًا</option></select></label>
+   <label><span data-i18n="accountMode">نوع الحساب</span><select id="mode"><option value="ALL" data-i18n="allModes">Demo وLive</option><option value="DEMO">Demo</option><option value="LIVE">Live</option></select></label>
+   <label><span data-i18n="strategy">الاستراتيجية</span><select disabled id="strategy"><option value="ALL" data-i18n="notTagged">غير مصنفة في سجل MT5</option></select></label>
+   <button type="button" id="refresh" data-i18n="refresh">تحديث النتائج</button>
+  </section>
+  <p id="status" role="status" aria-live="polite" class="status">—</p>
+  <section id="restricted" class="restricted" hidden><h2 data-i18n="restricted">تسجيل دخول المشغّل مطلوب</h2><p data-i18n="restrictedText">لن تُعرض بيانات حساب أي مشترك علنًا. سجّل دخول المشغّل من لوحة نبض ثم افتح هذه الصفحة.</p><a href="/dashboard" data-i18n="login">الانتقال إلى لوحة نبض</a></section>
+  <section id="results" hidden>
+   <div id="metrics" class="metrics-grid" aria-label="Verified performance metrics"></div>
+   <p id="scope" class="scope-note"></p>
+   <div class="chart-grid">
+    <section class="panel"><div class="panel-head"><h2 data-i18n="equity">منحنى الربح والخسارة المحقّقة</h2><small data-i18n="notEquity">ليس رصيد الحساب أو Equity الفعلي</small></div><svg id="equity-chart" viewBox="0 0 660 240" role="img" aria-label="Cumulative closed trade PnL"></svg><p id="equity-empty" class="empty" hidden></p></section>
+    <section class="panel"><div class="panel-head"><h2 data-i18n="periodPerformance">أداء الفترات</h2><select id="grouping" aria-label="Chart grouping"><option value="daily" data-i18n="daily">يومي</option><option value="weekly" data-i18n="weekly">أسبوعي</option><option value="monthly" data-i18n="monthly">شهري</option></select></div><svg id="period-chart" viewBox="0 0 660 240" role="img" aria-label="Profit and loss by period"></svg><p id="period-empty" class="empty" hidden></p></section>
+    <section class="panel"><h2 data-i18n="distribution">توزيع الصفقات</h2><div id="distribution" class="distribution"></div></section>
+    <section class="panel"><h2 data-i18n="comparison">مقارنة الذهب والبيتكوين</h2><div id="comparison" class="comparison"></div></section>
+   </div>
+   <section class="panel methodology"><h2 data-i18n="methodology">كيف تُحسب المؤشرات؟</h2><div id="methodology-list"></div></section>
+  </section>
+  <footer><strong data-i18n="disclaimer">النتائج السابقة لا تضمن الأرباح المستقبلية.</strong><span data-i18n="disclaimer2">العينة التاريخية قد تكون ناقصة؛ الربح المحقّق لا يشمل صفقات مفتوحة أو إيداعات وسحوبات الحساب.</span></footer>
+ </main>
+</body>
+</html>
