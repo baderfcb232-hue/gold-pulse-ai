@@ -9,6 +9,7 @@ import {mt5Archive} from './archive.mjs';
 import {summarizeGoldPerformance} from './performance.mjs';
 import {createMarketFeed} from './market.mjs';
 import {createNewsFeed} from './news.mjs';
+import {createAnalysisJournal} from './analysis-history.mjs';
 
 import {createTelegramPublisher} from './telegram.mjs';
 import {researchPolicy, researchMarketState} from './research-policy.mjs';
@@ -56,6 +57,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     CREATE TABLE IF NOT EXISTS deals (ticket TEXT PRIMARY KEY, time REAL NOT NULL, data TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS commands (id INTEGER PRIMARY KEY, time REAL NOT NULL, expires REAL NOT NULL,
       action TEXT NOT NULL, ticket TEXT NOT NULL, fraction REAL NOT NULL, status TEXT NOT NULL, result TEXT);`);
+  const analysisJournal = createAnalysisJournal({db,clock,persistent:storagePersistent});
   let snapshot = null;
   try { const row = db.prepare('SELECT data FROM snapshot WHERE id=1').get(); if (row) snapshot = JSON.parse(row.data); } catch {}
   let btcFastQuote = null; // Quote-only overlay. Never replaces positions, EA heartbeat or broker OHLC.
@@ -609,6 +611,28 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       if (path === '/api/state' && req.method === 'GET') return send(req, res, 200, protectSignals('state', publicState(), await canReadSignals(req)));
       if (path === '/api/market' && req.method === 'GET') return send(req, res, 200, protectSignals('market', marketState(), await canReadSignals(req)));
       if (path === '/api/news' && req.method === 'GET') return send(req, res, 200, newsFeed.publicState());
+      // Public, sanitized analysis observations. Never contains account, signal or execution data.
+      if (path === '/api/market/analysis-history' && req.method === 'GET') {
+        const integer = (name,defaultValue=0) => {
+          const value=url.searchParams.get(name);
+          if(value===null)return defaultValue;
+          if(!/^[0-9]{1,12}$/.test(value))return -1;
+          return Number(value);
+        };
+        try {
+          const result=analysisJournal.list({
+            symbol:url.searchParams.get('symbol')||'ALL',
+            status:url.searchParams.get('status')||'ALL',
+            source:url.searchParams.get('source')||'ALL',
+            since:integer('since'),before:integer('before'),limit:integer('limit',50)
+          });
+          return send(req,res,200,result);
+        } catch (e) {
+          if(e instanceof RangeError)return send(req,res,400,{error:'Invalid history filter'});
+          throw e;
+        }
+      }
+
       // Lightweight, read-only broker quote snapshots for one-second UI polling.
       // The EA remains authoritative; never synthesize a quote or alter execution.
       if (path === '/api/market/broker-quotes' && req.method === 'GET') {
@@ -940,8 +964,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         audit('COMMAND_RESULT', {id: c.id, status: b.status, message: text(b.message, 500)});
         return send(req, res, 200, {ok: true});
       }
-      const files = {'/':'landing.html','/index.html':'index.html','/dashboard':'index.html','/charts/gold':'chart-gold.html','/charts/bitcoin':'chart-bitcoin.html',
-        '/welcome':'landing.html','/en':'landing-en.html','/landing.css':'landing.css','/landing-live.js':'landing-live.js','/premium-fintech.css':'premium-fintech.css','/marketing-i18n.css':'marketing-i18n.css','/market-motion.css':'market-motion.css','/language-pref.js':'language-pref.js','/dashboard-terminal.css':'dashboard-terminal.css','/dashboard-sidebar-fix.css':'dashboard-sidebar-fix.css','/news-ticker.js':'news-ticker.js','/news-ticker.css':'news-ticker.css','/analysis-ribbon.js':'analysis-ribbon.js','/analysis-ribbon.css':'analysis-ribbon.css','/dashboard-member.js':'dashboard-member.js','/dashboard-themes.css':'dashboard-themes.css','/dashboard-fixes.css':'dashboard-fixes.css','/dashboard-contrast-v2.css':'dashboard-contrast-v2.css','/market-loaders.css':'market-loaders.css','/market-loaders.js':'market-loaders.js','/toast-ui.js':'toast-ui.js','/price-feedback.js':'price-feedback.js','/live-feedback.css':'live-feedback.css','/dashboard-locale.js':'dashboard-locale.js','/mini-spark.js':'mini-spark.js','/signal-date-filter.js':'signal-date-filter.js','/theme-init.js':'theme-init.js','/app.js':'app.js','/http.js':'http.js','/live.js':'live.js','/broker-chart.js':'broker-chart.js','/chart-pages.js':'chart-pages.js','/chart-pages.css':'chart-pages.css','/state-connection.js':'state-connection.js','/control-readiness.js':'control-readiness.js','/command-feedback.js':'command-feedback.js','/styles.css':'styles.css','/manifest.webmanifest':'manifest.webmanifest','/sw.js':'sw.js','/pwa-register.js':'pwa-register.js','/offline.html':'offline.html','/nabd-apple-touch-180.png':'nabd-apple-touch-180.png','/nabd-app-icon-192.png':'nabd-app-icon-192.png','/nabd-app-icon-512.png':'nabd-app-icon-512.png','/icon.svg':'icon.svg','/nabd-mark.svg':'nabd-mark.svg','/nabd-logo.svg':'nabd-logo.svg','/nabd-logo-en.svg':'nabd-logo-en.svg','/nabd-ltr-brand.css':'nabd-ltr-brand.css','/mobile-polish.css':'mobile-polish.css','/nabd-locale-init.js':'nabd-locale-init.js','/i18n-core.js':'i18n-core.js','/dashboard-static-en.js':'dashboard-static-en.js','/account-static-en.js':'account-static-en.js','/attribute-static-en.js':'attribute-static-en.js','/runtime-status-en.js':'runtime-status-en.js','/live-status-en.js':'live-status-en.js','/app-extra-en.js':'app-extra-en.js','/safety-status-en.js':'safety-status-en.js','/server-status-en.js':'server-status-en.js','/i18n-dom.js':'i18n-dom.js','/account-language.js':'account-language.js','/brand-logo.png':'brand-logo.png',
+      const files = {'/':'landing.html','/index.html':'index.html','/dashboard':'index.html','/analysis/history':'analysis-history.html','/charts/gold':'chart-gold.html','/charts/bitcoin':'chart-bitcoin.html',
+        '/welcome':'landing.html','/en':'landing-en.html','/landing.css':'landing.css','/landing-live.js':'landing-live.js','/premium-fintech.css':'premium-fintech.css','/marketing-i18n.css':'marketing-i18n.css','/market-motion.css':'market-motion.css','/language-pref.js':'language-pref.js','/dashboard-terminal.css':'dashboard-terminal.css','/dashboard-sidebar-fix.css':'dashboard-sidebar-fix.css','/news-ticker.js':'news-ticker.js','/news-ticker.css':'news-ticker.css','/analysis-ribbon.js':'analysis-ribbon.js','/analysis-ribbon.css':'analysis-ribbon.css','/dashboard-member.js':'dashboard-member.js','/dashboard-themes.css':'dashboard-themes.css','/dashboard-fixes.css':'dashboard-fixes.css','/dashboard-contrast-v2.css':'dashboard-contrast-v2.css','/market-loaders.css':'market-loaders.css','/market-loaders.js':'market-loaders.js','/toast-ui.js':'toast-ui.js','/price-feedback.js':'price-feedback.js','/live-feedback.css':'live-feedback.css','/dashboard-locale.js':'dashboard-locale.js','/mini-spark.js':'mini-spark.js','/signal-date-filter.js':'signal-date-filter.js','/theme-init.js':'theme-init.js','/app.js':'app.js','/http.js':'http.js','/live.js':'live.js','/broker-chart.js':'broker-chart.js','/chart-pages.js':'chart-pages.js','/chart-pages.css':'chart-pages.css','/analysis-history.js':'analysis-history.js','/analysis-history.css':'analysis-history.css','/state-connection.js':'state-connection.js','/control-readiness.js':'control-readiness.js','/command-feedback.js':'command-feedback.js','/styles.css':'styles.css','/manifest.webmanifest':'manifest.webmanifest','/sw.js':'sw.js','/pwa-register.js':'pwa-register.js','/offline.html':'offline.html','/nabd-apple-touch-180.png':'nabd-apple-touch-180.png','/nabd-app-icon-192.png':'nabd-app-icon-192.png','/nabd-app-icon-512.png':'nabd-app-icon-512.png','/icon.svg':'icon.svg','/nabd-mark.svg':'nabd-mark.svg','/nabd-logo.svg':'nabd-logo.svg','/nabd-logo-en.svg':'nabd-logo-en.svg','/nabd-ltr-brand.css':'nabd-ltr-brand.css','/mobile-polish.css':'mobile-polish.css','/nabd-locale-init.js':'nabd-locale-init.js','/i18n-core.js':'i18n-core.js','/dashboard-static-en.js':'dashboard-static-en.js','/account-static-en.js':'account-static-en.js','/attribute-static-en.js':'attribute-static-en.js','/runtime-status-en.js':'runtime-status-en.js','/live-status-en.js':'live-status-en.js','/app-extra-en.js':'app-extra-en.js','/safety-status-en.js':'safety-status-en.js','/server-status-en.js':'server-status-en.js','/i18n-dom.js':'i18n-dom.js','/account-language.js':'account-language.js','/brand-logo.png':'brand-logo.png',
         '/auth':'accounts.html','/account':'accounts.html','/admin':'accounts.html','/privacy':'accounts.html','/accounts.js':'accounts.js','/accounts.css':'accounts.css','/portal-premium.css':'portal-premium.css'};
       if (req.method === 'GET' && files[path]) {
         const type = path.endsWith('.js') ? 'text/javascript; charset=utf-8' : path.endsWith('.css') ? 'text/css; charset=utf-8'
@@ -960,6 +984,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   let lastRecommendationDiagnosticAt = -Infinity;
   const timer = setInterval(() => {
     try {
+      // Read-only analysis journal, sampled from the already-public market snapshot.
+      analysisJournal.capture(marketState());
       // Operational diagnostics only: no credentials, account identifiers, orders or price levels.
       // This does not change publication, risk gates, market snapshots or execution.
       if (clock() - lastRecommendationDiagnosticAt >= 300) {
@@ -1017,7 +1043,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   const close = async () => {clearInterval(timer); for (const c of clients) c.end();
     await Promise.allSettled([telegram.close(), marketFeed.close(), newsFeed.close(), researchWorker.close(), accounts.close()]);
     await new Promise(r => server.close(r)); await runtimeBackup?.close(); await commandJournal?.close(); db.close();};
-  return {server, ingest, publicState, signalRows, db, close, marketFeed, newsFeed, researchWorker, telegram, accounts,
+  return {server, ingest, publicState, signalRows, analysisJournal, db, close, marketFeed, newsFeed, researchWorker, telegram, accounts,
     startFeeds: () => {marketFeed.start(); newsFeed.start(); researchWorker.start();}};
 }
 export async function startServer() {
