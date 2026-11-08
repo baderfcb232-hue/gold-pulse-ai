@@ -12,6 +12,12 @@
   "dir": "rtl",
   "icons": [
     {
+      "src": "/icon.svg?v=n-logo-20261109",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
       "src": "/nabd-app-icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
