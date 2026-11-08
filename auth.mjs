@@ -4,6 +4,7 @@ import {opaque, digest, equal, keyed, parseKey, encrypt, decrypt, hashPassword, 
 import {createAuthMailer} from './auth-mail.mjs';
 import {backupConfig, exportAuthBackup, readAuthBackup, backupTables} from './auth-backup.mjs';
 import {createSubscriberAlerts} from './subscriber-alerts.mjs';
+import {createSubscriberSignalDispatch} from './subscriber-signal-dispatch.mjs';
 
 const fail = (status, message) => {throw Object.assign(Error(message), {status});};
 const result = (data = {ok: true}, status = 200, headers = {}) => ({data, status, headers});
@@ -34,6 +35,18 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
   env = process.env, encryptionKey, adminEmail, backup: injectedBackup, operationalStatus = () => ({}), onError = () => {}, telegramFetch = fetch} = {}) {
   const key = encryptionKey || parseKey(env.AUTH_ENCRYPTION_KEY), owner = (adminEmail || env.AUTH_ADMIN_EMAIL || '').trim().toLowerCase();
   const secure = publicBase?.startsWith('https://'), base = publicBase?.replace(/\/$/, '') || '';
+  let privateSignalDispatch = null;
+  const publishSubscriberSignal = async signal => {
+    await ready;
+    if (!online || !healthy || closed ||
+      env.NABD_SUBSCRIBER_TELEGRAM_AUTO_SIGNALS !== 'true')
+      return {attempted:0,enabled:false};
+    if (!privateSignalDispatch) privateSignalDispatch=createSubscriberSignalDispatch({
+      store,clock,enabled:true,botToken:env.NABD_SUBSCRIBER_TELEGRAM_BOT_TOKEN||'',
+      fetcher:telegramFetch
+    });
+    return privateSignalDispatch.publish(signal);
+  };
   let subscriberAlerts = null;
   const subscriberBot = () => {
     if (!subscriberAlerts) subscriberAlerts = createSubscriberAlerts({
@@ -631,6 +644,6 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
       return result({error: error.status ? error.message : 'تعذّر إكمال الطلب؛ حاول مجددًا بعد قليل.'}, error.status || 503);
     }
   }
-  return {ready, status, handle, session, async canReadSignals(req) {try {const u = await session(req); return Boolean(u?.recommendations);} catch {return false;}},
+  return {ready, status, handle, session, publishSubscriberSignal, async canReadSignals(req) {try {const u = await session(req); return Boolean(u?.recommendations);} catch {return false;}},
     async close() {closed = true; clearInterval(timer); await ready; if (store) await store.close();}};
 }

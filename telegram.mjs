@@ -21,7 +21,7 @@ export function formatSignal(p) {
 export function createTelegramPublisher({db, signals, enabled = false, clock = () => Date.now() / 1000,
   health = () => [], token = process.env.TELEGRAM_BOT_TOKEN || '', chatId = process.env.TELEGRAM_CHAT_ID || '', fetcher = fetch,
   testId = process.env.TELEGRAM_TEST_ID || '', testText = process.env.TELEGRAM_TEST_TEXT || '',
-  testChannel = process.env.TELEGRAM_TEST_CHANNEL || ''}) {
+  testChannel = process.env.TELEGRAM_TEST_CHANNEL || '', onSignalPublished = null}) {
   db.exec(`CREATE TABLE IF NOT EXISTS telegram_delivery
     (id TEXT PRIMARY KEY, state TEXT NOT NULL, updated_at REAL NOT NULL);`);
   db.exec(`CREATE TABLE IF NOT EXISTS telegram_faults
@@ -158,6 +158,11 @@ export function createTelegramPublisher({db, signals, enabled = false, clock = (
           lastError = state === 'SENT' ? null : 'Telegram rejected delivery; check bot permissions and configuration.';
         } catch {lastError = 'Telegram delivery could not be confirmed.';}
         db.prepare('UPDATE telegram_delivery SET state=?,updated_at=? WHERE id=?').run(state, clock(), p.id);
+        // This optional callback is independent of public publication and trading.
+        // Never retry a confirmed public signal only because a private notification failed.
+        if(state==='SENT'&&typeof onSignalPublished==='function')
+          Promise.resolve().then(()=>onSignalPublished(p)).catch(()=>{});
+
       }
     } catch {lastError = 'Signal publishing is temporarily unavailable.';}
     finally {busy = false;}
