@@ -60,3 +60,58 @@ test('uncertain Telegram outcome is retained but never replayed',async t=>{
  assert.equal((await d.publish(sample())).attempted,0);
  assert.equal(calls.length,1);
 });
+
+test('opt-out between recipient lookup and delivery reservation prevents private send',async t=>{
+ const store=await setup(t);let sent=0,mutated=false;
+ const guarded={
+  query:async(sql,params=[])=>{
+   const result=await store.query(sql,params);
+   if(!mutated&&sql.includes('SELECT t.user_id,t.chat_id')){
+    mutated=true;
+    await store.query('UPDATE nabd_users SET notifications=0 WHERE id=?',['a']);
+   }
+   return result;
+  }
+ };
+ const d=createSubscriberSignalDispatch({store:guarded,clock:()=>now,enabled:true,botToken:'TEST',
+  fetcher:async()=>{sent++;return {ok:true,json:async()=>({ok:true,result:{message_id:1}})};}});
+ const outcome=await d.publish(sample('midflight-optout','BTCUSD'));
+ assert.equal(outcome.attempted,0);
+ assert.equal(sent,0);
+ assert.equal((await store.query('SELECT COUNT(*) AS n FROM nabd_member_telegram_deliveries')).rows[0].n,0);
+});
+test('unlink between lookup and reservation prevents send even for previously eligible user',async t=>{
+ const store=await setup(t);let sends=0,mutated=false;
+ const guarded={
+  query:async(sql,params=[])=>{
+   const result=await store.query(sql,params);
+   if(!mutated&&sql.includes('SELECT t.user_id,t.chat_id')){
+    mutated=true;
+    await store.query('DELETE FROM nabd_member_telegram WHERE user_id=?',['a']);
+   }
+   return result;
+  }
+ };
+ const d=createSubscriberSignalDispatch({store:guarded,clock:()=>now,enabled:true,botToken:'TEST',
+  fetcher:async()=>{sends++;throw Error('Must not send');}});
+ const outcome=await d.publish(sample('midflight-unlink','BTCUSD'));
+ assert.equal(outcome.attempted,0);
+ assert.equal(sends,0);
+});
+test('member changing Telegram chat cannot receive through stale preselected chat',async t=>{
+ const store=await setup(t);let sends=0,mutated=false;
+ const guarded={
+  query:async(sql,params=[])=>{
+   const result=await store.query(sql,params);
+   if(!mutated&&sql.includes('SELECT t.user_id,t.chat_id')){
+    mutated=true;
+    await store.query('UPDATE nabd_member_telegram SET chat_id=? WHERE user_id=?',['1200','a']);
+   }
+   return result;
+  }
+ };
+ const d=createSubscriberSignalDispatch({store:guarded,clock:()=>now,enabled:true,botToken:'TEST',
+  fetcher:async()=>{sends++;throw Error('Must not send');}});
+ assert.equal((await d.publish(sample('midflight-chat-change','BTCUSD'))).attempted,0);
+ assert.equal(sends,0);
+});
