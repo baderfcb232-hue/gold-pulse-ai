@@ -289,6 +289,29 @@ $('admin-mt5-hosting-refresh').onclick = () => adminMt5Hosting().catch(error => 
 const events = {REGISTER: 'إنشاء حساب', EMAIL_VERIFIED: 'تأكيد البريد', LOGIN: 'تسجيل دخول', PASSWORD_RESET: 'استعادة كلمة المرور', PASSWORD_CHANGED: 'تغيير كلمة المرور', MFA_ENABLED: 'تفعيل التحقق بخطوتين', DELETION_REQUESTED: 'طلب حذف', USER_UPDATED: 'تحديث مستخدم', RESET_SENT: 'إرسال رابط استعادة', BACKUP_CREATED: 'نسخ خارجي', BACKUP_EXPORTED: 'تصدير نسخة مشفرة', BACKUP_RESTORED: 'استعادة نسخة'};
 async function audit() {const response = await api('/api/admin/audit'); $('admin-audit').replaceChildren(...response.events.map(event => {const row = node('div', 'audit-row'); row.append(node('strong', '', events[event.event] || event.event), node('p', '', date(event.time)), node('p', '', currentLocale()==='en' ? `Performed by: ${event.actor || 'system'}${event.subject ? ' · Account: ' + event.subject : ''}` : `المنفّذ: ${event.actor || 'النظام'}${event.subject ? ' · الحساب: ' + event.subject : ''}`)); return row;}));}
 $('refresh-audit').onclick = () => audit().catch(error => message(error.message, true));
+const subscriberTelegramStates={
+  NOT_CONFIGURED:'إعدادات البوت الخاص غير مكتملة على Render',
+  BOT_IDENTITY_MISMATCH:'اسم البوت لا يطابق بيانات Telegram',
+  WEBHOOK_URL_MISMATCH:'رابط Webhook غير مطابق أو غير مُسجل',
+  WEBHOOK_CUSTOM_CERTIFICATE:'شهادة Webhook مخصصة تحتاج مراجعة',
+  WEBHOOK_BACKLOG:'يوجد تراكم كبير في تحديثات Telegram',
+  WEBHOOK_RECENT_ERROR:'Telegram سجّل خطأ حديثًا عند تسليم Webhook',
+  TELEGRAM_API_UNAVAILABLE:'تعذر الوصول إلى Telegram API',
+  API_READY:'تم التحقق من هوية البوت ورابط Webhook، ولم يُثبت تسليم رسالة خاصة بعد'
+};
+async function checkSubscriberTelegram(){
+ const button=$('admin-subscriber-tg-check'),status=$('admin-subscriber-tg-status');
+ button.disabled=true;status.textContent='جاري فحص Telegram من خادم نبض…';
+ try{
+  const r=await api('/api/admin/subscriber-telegram-readiness');
+  status.textContent=subscriberTelegramStates[r.state]||'حالة غير معروفة';
+  $('admin-subscriber-tg-details').textContent=
+    (r.autoSignalsEnabled?'توزيع التوصيات الشخصية مفعّل في الإعدادات.':'توزيع التوصيات الشخصية معطّل في الإعدادات.')+
+    ' · التحقق من وصول الرسالة الفعلية يحتاج اختبارًا خاصًا من حساب المشترك.';
+ }catch(error){status.textContent='تعذر فحص الخدمة: '+(error?.message||'خطأ اتصال');}
+ finally{button.disabled=false;}
+}
+$('admin-subscriber-tg-check').onclick=checkSubscriberTelegram;
 async function overview() {
   const response = await api('/api/admin/overview'), sum = response.counts.reduce((total, x) => total + Number(x.count), 0), ops = response.operational;
   const labels = {LIVE: 'متصل', NO_DATA: 'بانتظار البيانات', STALE: 'بيانات قديمة', DISCONNECTED: 'منقطع', WAITING_BROKER: 'بانتظار MT5', READY: 'جاهز'};
