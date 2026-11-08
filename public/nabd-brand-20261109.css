@@ -1,26 +1,25 @@
-/* Approved NABD N monogram — transparent, responsive and theme-aware. */
-.header .brand{display:flex;align-items:center;justify-content:center;min-width:0}
-.header .brand .brand-logo{
-  display:block;width:76px;height:72px;max-width:100%;
-  object-fit:contain;object-position:center;
-  flex:0 0 auto;background:transparent;border:0;
-  filter:none;
-}
-html[dir="rtl"] .header .brand .brand-logo-en,
-html[dir="ltr"] .header .brand .brand-logo-ar{display:none}
-:root[data-nabd-theme="dark"] .header .brand .brand-logo{filter:brightness(0) invert(1)}
-:root[data-nabd-theme="light"] .header .brand .brand-logo{filter:none}
+/* Official NABD identity kit v1: horizontal lockup on desktop, app symbol on mobile. */
+.header .brand{display:flex;align-items:center;justify-content:center;min-width:0;overflow:visible}
+.header .brand .brand-logo{display:block;width:164px;height:auto;aspect-ratio:3856/1024;max-width:100%;object-fit:contain;object-position:center;background:transparent;border:0;filter:none!important;flex:0 1 auto}
+html[dir="rtl"] .brand .brand-logo-en,html[dir="ltr"] .brand .brand-logo-ar{display:none}
+html[dir="ltr"] .brand .brand-logo-en,html[dir="rtl"] .brand .brand-logo-ar{display:block}
+:root[data-nabd-theme="dark"] .brand .brand-logo{content:url("/nabd-logo-dark.svg?v=official-kit-1")}
 @media(min-width:1181px){
-  .header .brand .brand-logo{width:94px;height:88px}
-  .header .brand{margin-bottom:8px}
+ .header .brand{width:100%;padding:16px 4px;margin:0 0 4px}
+ .header .brand .brand-logo{width:164px;max-width:100%;height:auto}
 }
 @media(min-width:761px) and (max-width:1180px){
-  .header .brand .brand-logo{width:68px;height:64px}
+ .header .brand .brand-logo{width:160px;max-width:100%;height:auto}
 }
 @media(max-width:760px){
-  .header .brand{justify-content:flex-start;overflow:visible}
-  .header .brand .brand-logo{width:52px;height:49px;max-width:52px}
+ .header .brand{justify-content:flex-start;min-width:44px;flex:0 0 auto;overflow:visible}
+ .header .brand .brand-logo,
+ :root[data-nabd-theme="dark"] .header .brand .brand-logo{
+  content:url("/icon.svg?v=official-kit-1");
+  display:block;width:46px;height:46px;max-width:46px;aspect-ratio:1;object-fit:contain;filter:none!important
+ }
 }
 @media(max-width:360px){
-  .header .brand .brand-logo{width:42px;height:40px;max-width:42px}
+ .header .brand .brand-logo,
+ :root[data-nabd-theme="dark"] .header .brand .brand-logo{width:40px;height:40px;max-width:40px}
 }
