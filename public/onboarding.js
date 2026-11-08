@@ -10,6 +10,9 @@ const T={
   safeTitle:'بدون كلمات مرور MT5',safeText:'المعالج لا يجمع كلمة مرور التداول أو المستثمر ولا يفتح صفقات.',
   statusDisclaimer:'حفظ الحساب أو قبول الطلب لا يعني اتصال MT5 أو تفعيل التداول.',refresh:'تحديث الحالة',progress:'تقدّم الإعداد',
   step1:'تسجيل الدخول',step2:'تسجيل Demo',step3:'طلب الاستضافة',step4:'موافقة الإدارة',step5:'التحقق من المراقبة',
+  alertsTitle:'إعداد التنبيهات',alertsDescription:'شغّل أو أوقف إشعارات التوصيات داخل الموقع. لا يعني هذا ربط Telegram شخصيًا.',
+  alertsSite:'تنبيهات التوصيات داخل الموقع',alertsSave:'حفظ إعداد التنبيهات',
+  alertsSaved:'تم حفظ تفضيلات التنبيهات.',alertsTelegram:'Telegram الحالي قناة نشر عامة؛ ربط حساب Telegram خاص بالمشترك وإرسال رسالة اختبار شخصية غير متاحين بعد.',
   signin:'ابدأ بتسجيل الدخول',signinDescription:'سجّل الدخول إلى حساب نبض الموثّق لعرض طلبات MT5 الخاصة بك فقط.',
   signinAction:'إنشاء حساب أو تسجيل الدخول',register:'معلومات حساب Demo',
   registerDescription:'الوسيط المدعوم حاليًا: JustMarkets Demo فقط. وسطاء آخرون في مراحل لاحقة.',
@@ -37,6 +40,9 @@ const T={
   safeTitle:'No MT5 passwords requested',safeText:'This wizard does not collect trading or investor passwords and cannot place trades.',
   statusDisclaimer:'Saving an account or approving a request does not mean MT5 is connected or auto-trading is enabled.',refresh:'Refresh status',progress:'Setup progress',
   step1:'Sign in',step2:'Register demo',step3:'Hosting request',step4:'Admin approval',step5:'Monitor verification',
+  alertsTitle:'Notification setup',alertsDescription:'Enable or disable on-site recommendation notices. This does not link your personal Telegram account.',
+  alertsSite:'On-site recommendation notices',alertsSave:'Save notification preferences',
+  alertsSaved:'Notification preferences saved.',alertsTelegram:'Current Telegram integration is a public broadcast channel. Personal subscriber linking and test messages are not yet available.',
   signin:'Sign in to start',signinDescription:'Sign in to your verified NABD account to see only your own MT5 requests.',
   signinAction:'Create account or sign in',register:'Demo account details',
   registerDescription:'Currently supported: JustMarkets Demo only. Other brokers are planned but unavailable.',
@@ -98,6 +104,8 @@ function paint(){
   li.dataset.complete=String(values[i]);
   li.dataset.active=String(i===keys.findIndex((_,n)=>!values[n]));
  });
+ $('onboarding-alerts').hidden=!user;
+ if(user){$('onboarding-alerts-form').elements.notifications.checked=user.notifications===true||user.notifications===1;}
  $('onboarding-signin').hidden=s.phase!=='SIGN_IN';
  $('onboarding-register').hidden=!s.mayRegister;
  $('onboarding-hosting').hidden=!s.mayRequestHosting;
@@ -163,6 +171,21 @@ function init(){
   if(event.key==='nabd:dashboard:theme')theme();
  });
  $('onboarding-refresh').addEventListener('click',refresh);
+ $('onboarding-alerts-form').addEventListener('submit',async event=>{
+  event.preventDefault();
+  const form=event.currentTarget,button=$('onboarding-alerts-save');
+  const feedback=$('onboarding-alerts-feedback');
+  const notifications=form.elements.notifications.checked;
+  if(!user||!csrf||typeof user.name!=='string'||!user.name.trim()){
+   feedback.textContent=words().sessionExpired;return;
+  }
+  try{
+   await write('/api/auth/profile',{name:user.name,notifications},button);
+   try{localStorage.setItem('nabd-signal-notices',notifications?'on':'off');}catch{}
+   await refresh();
+   feedback.textContent=words().alertsSaved;
+  }catch(error){feedback.textContent=error?.message||words().loadError;}
+ });
  $('onboarding-registration-form').addEventListener('submit',async event=>{
   event.preventDefault();
   const form=event.currentTarget,button=$('onboarding-register-button');
