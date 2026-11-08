@@ -5,6 +5,7 @@ import {createAuthMailer} from './auth-mail.mjs';
 import {backupConfig, exportAuthBackup, readAuthBackup, backupTables} from './auth-backup.mjs';
 import {createSubscriberAlerts} from './subscriber-alerts.mjs';
 import {createSubscriberSignalDispatch} from './subscriber-signal-dispatch.mjs';
+import {subscriberTelegramReadiness} from './subscriber-telegram-readiness.mjs';
 
 const fail = (status, message) => {throw Object.assign(Error(message), {status});};
 const result = (data = {ok: true}, status = 200, headers = {}) => ({data, status, headers});
@@ -605,6 +606,17 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
           await audit(q,u.id,'MT5_HOSTING_'+statusValue,b.id);
         });
         return result({ok:true,status:statusValue,workerConnected:false,tradingEnabled:false});
+      }
+      if (path === '/api/admin/subscriber-telegram-readiness' && req.method === 'GET') {
+        // The existing /api/admin/ principal requires admin role and session MFA.
+        const probe=await subscriberTelegramReadiness({
+          token:env.NABD_SUBSCRIBER_TELEGRAM_BOT_TOKEN||'',
+          username:env.NABD_SUBSCRIBER_TELEGRAM_BOT_USERNAME||'',
+          webhookSecret:env.NABD_SUBSCRIBER_TELEGRAM_WEBHOOK_SECRET||'',
+          siteUrl:base,fetcher:telegramFetch
+        });
+        return result({...probe,autoSignalsEnabled:
+          env.NABD_SUBSCRIBER_TELEGRAM_AUTO_SIGNALS==='true'});
       }
       if (path === '/api/admin/audit' && req.method === 'GET') return result({events: (await store.query('SELECT * FROM nabd_auth_audit ORDER BY time DESC LIMIT 100')).rows});
       if (path === '/api/admin/backup' && req.method === 'POST') {await runBackup(); await audit(store.query, u.id, 'BACKUP_CREATED'); return result({ok: true, last_success: lastBackup});}
