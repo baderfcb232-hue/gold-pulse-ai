@@ -1,6 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="NABD pulse mark">
-  <title>NABD pulse mark</title>
-  <path d="M5 34h14l8-16 10 29 8-16h14" fill="none" stroke="#0F766E" stroke-width="5.1" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M27 18l10 29 8-16" fill="none" stroke="#D4A24C" stroke-width="4.9" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="54" cy="34" r="3" fill="#D4A24C"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="NABD official symbol"><title>NABD</title><rect width="1024" height="1024" rx="225" fill="#0B0D10"/><g fill="#FFFFFF" stroke="#0B0D10" stroke-width="16" stroke-linejoin="round"><path d="M172 409 L172 345 C172 272 217 223 270 223 C294 223 312 232 335 252 L757 599 C790 626 821 633 852 602 L852 640 C852 701 818 747 776 757 C751 763 730 753 707 735 L251 375 C222 352 195 361 172 409 Z"/><path d="M172 431 C172 390 200 376 225 397 L337 486 L337 699 C337 717 328 729 312 739 L172 823 Z"/><path d="M695 295 C695 278 703 268 718 259 L852 178 L852 594 C838 625 807 629 783 609 L695 537 Z"/></g></svg>
