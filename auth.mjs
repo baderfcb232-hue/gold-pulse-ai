@@ -3,6 +3,7 @@ import {postgresAuthStore} from './auth-store.mjs';
 import {opaque, digest, equal, keyed, parseKey, encrypt, decrypt, hashPassword, checkPassword, newTotpSecret, totpStep} from './auth-crypto.mjs';
 import {createAuthMailer} from './auth-mail.mjs';
 import {backupConfig, exportAuthBackup, readAuthBackup, backupTables} from './auth-backup.mjs';
+import {createSubscriberAlerts} from './subscriber-alerts.mjs';
 
 const fail = (status, message) => {throw Object.assign(Error(message), {status});};
 const result = (data = {ok: true}, status = 200, headers = {}) => ({data, status, headers});
@@ -30,9 +31,19 @@ const userView = u => ({id: u.id, email: u.email, name: u.name, role: u.role, st
   notifications: Boolean(u.notifications), recommendations: Boolean(u.recommendations), mfa: Boolean(u.totp_secret)});
 
 export function createAccounts({publicBase, clock = () => Date.now() / 1000, store: injectedStore, mailer: injectedMailer,
-  env = process.env, encryptionKey, adminEmail, backup: injectedBackup, operationalStatus = () => ({}), onError = () => {}} = {}) {
+  env = process.env, encryptionKey, adminEmail, backup: injectedBackup, operationalStatus = () => ({}), onError = () => {}, telegramFetch = fetch} = {}) {
   const key = encryptionKey || parseKey(env.AUTH_ENCRYPTION_KEY), owner = (adminEmail || env.AUTH_ADMIN_EMAIL || '').trim().toLowerCase();
   const secure = publicBase?.startsWith('https://'), base = publicBase?.replace(/\/$/, '') || '';
+  let subscriberAlerts = null;
+  const subscriberBot = () => {
+    if (!subscriberAlerts) subscriberAlerts = createSubscriberAlerts({
+      store,clock,botToken:env.NABD_SUBSCRIBER_TELEGRAM_BOT_TOKEN||'',
+      botUsername:env.NABD_SUBSCRIBER_TELEGRAM_BOT_USERNAME||'',
+      webhookSecret:env.NABD_SUBSCRIBER_TELEGRAM_WEBHOOK_SECRET||'',
+      fetcher:telegramFetch
+    });
+    return subscriberAlerts;
+  };
   const smtp = env.AUTH_SMTP_HOST && env.AUTH_SMTP_USER && env.AUTH_SMTP_PASSWORD ? {
     host: env.AUTH_SMTP_HOST, port: Number(env.AUTH_SMTP_PORT || 465), secure: env.AUTH_SMTP_SECURE !== 'false',
     auth: {user: env.AUTH_SMTP_USER, pass: env.AUTH_SMTP_PASSWORD}} : null;
@@ -174,7 +185,7 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
   }
 
   async function handle(req, path, url, body) {
-    if (!path.startsWith('/api/auth/') && !path.startsWith('/api/admin/') && path !== '/api/worker/mt5-heartbeat') return null;
+    if (!path.startsWith('/api/auth/') && !path.startsWith('/api/admin/') && path !== '/api/worker/mt5-heartbeat' && path !== '/api/telegram/subscriber-webhook') return null;
     await ready;
     if (path === '/api/auth/status' && req.method === 'GET') {
       if (!online) await ensureOnline();
@@ -185,8 +196,14 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
     if (online && !healthy) await probeDatabase();
     if (!online || !healthy)
       return result({error: 'خدمة الحسابات غير متاحة مؤقتًا؛ جارٍ إعادة الاتصال بقاعدة البيانات.', ...status()}, 503);
-    if (req.method === 'POST' && path !== '/api/worker/mt5-heartbeat' && req.headers.origin !== new URL(base).origin) return result({error: 'Origin rejected'}, 403);
+    if (req.method === 'POST' && path !== '/api/worker/mt5-heartbeat' && path !== '/api/telegram/subscriber-webhook' && req.headers.origin !== new URL(base).origin) return result({error: 'Origin rejected'}, 403);
     try {
+      if (path === '/api/telegram/subscriber-webhook' && req.method === 'POST') {
+        const secret=req.headers['x-telegram-bot-api-secret-token'];
+        const packet=await body(req);
+        await subscriberBot().acceptWebhook(secret,packet);
+        return result({ok:true});
+      }
       if (path === '/api/worker/mt5-heartbeat' && req.method === 'POST') {
         // This endpoint is limited to read-only account presence. A worker token
         // can NEVER call operator trade APIs, poll signals or dispatch orders.
@@ -400,6 +417,30 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
         });
         return result(outcome, 202);
       }
+      if (path === '/api/auth/alerts' && req.method === 'GET') {
+        return result(await subscriberBot().state(u.id));
+      }
+      if (path === '/api/auth/alerts' && req.method === 'POST') {
+        const preferences=await subscriberBot().updatePreferences(u.id,b);
+        await audit(store.query,u.id,'ALERT_PREFERENCES_UPDATED',u.id);
+        return result({preferences});
+      }
+      if (path === '/api/auth/telegram/link' && req.method === 'POST') {
+        await rate(req,'telegram-link',u.email);
+        const response=await subscriberBot().startLink(u.id);
+        await audit(store.query,u.id,'TELEGRAM_LINK_STARTED',u.id);
+        return result(response);
+      }
+      if (path === '/api/auth/telegram/test' && req.method === 'POST') {
+        const response=await subscriberBot().sendTest(u.id);
+        await audit(store.query,u.id,'TELEGRAM_TEST_SENT',u.id);
+        return result(response);
+      }
+      if (path === '/api/auth/telegram/unlink' && req.method === 'POST') {
+        const response=await subscriberBot().unlink(u.id);
+        await audit(store.query,u.id,'TELEGRAM_UNLINKED',u.id);
+        return result(response);
+      }
       if (path === '/api/auth/profile' && req.method === 'POST') {
         const name = clean(b.name, 80); if (name.length < 2 || typeof b.notifications !== 'boolean') fail(400, 'بيانات الملف غير صالحة.');
         await store.query('UPDATE nabd_users SET name=?,notifications=? WHERE id=?', [name, b.notifications ? 1 : 0, u.id]);
@@ -573,7 +614,9 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
             nabd_users: ['id','email','name','password_hash','role','status','verified_at','created_at','last_login','notifications','recommendations','totp_secret','totp_pending','pending_until','totp_last_step'],
             nabd_auth_audit: ['id','time','actor','event','subject'], nabd_auth_settings: ['key','value'],
             nabd_member_mt5_accounts: ['id','user_id','broker','server_name','login','environment','status','created_at'],
-            nabd_mt5_hosting_requests: ['account_id','status','requested_at','reviewed_at','reviewed_by']};
+            nabd_mt5_hosting_requests: ['account_id','status','requested_at','reviewed_at','reviewed_by'],
+            nabd_member_alert_preferences: ['user_id','gold_enabled','btc_enabled','signals_enabled','execution_enabled','system_enabled','updated_at'],
+            nabd_member_telegram: ['user_id','chat_id','linked_at','last_test_at']};
           for (const table of backupTables) for (const row of data.tables[table]) {
             const columns = allowed[table];
             await q(`INSERT INTO ${table}(${columns.join(',')}) VALUES(${columns.map(() => '?').join(',')})`, columns.map(name => row[name] ?? null));

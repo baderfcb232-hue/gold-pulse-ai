@@ -382,8 +382,10 @@ test('encrypted backups include central hosting requests and v2 archives still d
   const archive=await exportAuthBackup(h.store,h.backup.key,h.now);
   assert.equal(archive.includes('55557777'),false);
   const decoded=readAuthBackup(archive,h.backup.key);
-  assert.equal(decoded.version,3);
+  assert.equal(decoded.version,4);
   assert.equal(decoded.tables.nabd_mt5_hosting_requests.length,1);
+  assert.deepEqual(decoded.tables.nabd_member_alert_preferences,[]);
+  assert.deepEqual(decoded.tables.nabd_member_telegram,[]);
   const oldTables={};
   for(const name of ['nabd_users','nabd_auth_audit','nabd_auth_settings','nabd_member_mt5_accounts'])
     oldTables[name]=(await h.store.query('SELECT * FROM '+name)).rows;

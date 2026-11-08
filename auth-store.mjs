@@ -54,6 +54,28 @@ CREATE TABLE IF NOT EXISTS nabd_mt5_hosting_requests (
 CREATE INDEX IF NOT EXISTS nabd_mt5_hosting_queue ON nabd_mt5_hosting_requests(status,requested_at);
 -- Read-only scoped Windows worker identity. Secret material is stored as a SHA-256
 -- digest only. No MT5 passwords, balances, positions, or trading permissions.
+-- Subscriber private alert preferences and Telegram chat linkage; never broker permissions.
+CREATE TABLE IF NOT EXISTS nabd_member_alert_preferences (
+ user_id TEXT PRIMARY KEY REFERENCES nabd_users(id) ON DELETE CASCADE,
+ gold_enabled INTEGER NOT NULL DEFAULT 1 CHECK(gold_enabled IN (0,1)),
+ btc_enabled INTEGER NOT NULL DEFAULT 1 CHECK(btc_enabled IN (0,1)),
+ signals_enabled INTEGER NOT NULL DEFAULT 1 CHECK(signals_enabled IN (0,1)),
+ execution_enabled INTEGER NOT NULL DEFAULT 0 CHECK(execution_enabled IN (0,1)),
+ system_enabled INTEGER NOT NULL DEFAULT 1 CHECK(system_enabled IN (0,1)),
+ updated_at DOUBLE PRECISION NOT NULL
+);
+CREATE TABLE IF NOT EXISTS nabd_member_telegram (
+ user_id TEXT PRIMARY KEY REFERENCES nabd_users(id) ON DELETE CASCADE,
+ chat_id TEXT NOT NULL UNIQUE,
+ linked_at DOUBLE PRECISION NOT NULL,
+ last_test_at DOUBLE PRECISION
+);
+CREATE TABLE IF NOT EXISTS nabd_member_telegram_pending (
+ user_id TEXT PRIMARY KEY REFERENCES nabd_users(id) ON DELETE CASCADE,
+ token_hash TEXT NOT NULL UNIQUE,
+ expires_at DOUBLE PRECISION NOT NULL
+);
+CREATE INDEX IF NOT EXISTS nabd_member_telegram_expiry ON nabd_member_telegram_pending(expires_at);
 CREATE TABLE IF NOT EXISTS nabd_mt5_monitor_workers (
  account_id TEXT PRIMARY KEY REFERENCES nabd_member_mt5_accounts(id) ON DELETE CASCADE,
  token_hash TEXT NOT NULL UNIQUE,

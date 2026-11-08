@@ -21,24 +21,26 @@ export function backupStorage({endpoint, bucket, accessKey, secretKey, region = 
 }
 const legacyBackupTables = ['nabd_users', 'nabd_auth_audit', 'nabd_auth_settings'];
 const v2BackupTables = [...legacyBackupTables, 'nabd_member_mt5_accounts'];
-export const backupTables = [...v2BackupTables, 'nabd_mt5_hosting_requests'];
+const v3BackupTables = [...v2BackupTables, 'nabd_mt5_hosting_requests'];
+export const backupTables = [...v3BackupTables, 'nabd_member_alert_preferences', 'nabd_member_telegram'];
 export async function exportAuthBackup(store, key, clock) {
   if (!key) throw Object.assign(Error('مفتاح النسخ الاحتياطي غير مضبوط.'), {status: 503});
   return store.transaction(async query => {
     const tables = {};
     for (const name of backupTables) tables[name] = (await query(`SELECT * FROM ${name}`)).rows;
     // Sessions, reset links and rate counters are intentionally never restored.
-    return encrypt(JSON.stringify({version: 3, created_at: clock(), tables}), key);
+    return encrypt(JSON.stringify({version: 4, created_at: clock(), tables}), key);
   });
 }
 export function readAuthBackup(value, key) {
   const data = JSON.parse(decrypt(value, key));
-  if (![1, 2, 3].includes(data.version) || !data.tables) throw Error('Invalid backup');
-  const required = data.version === 1 ? legacyBackupTables : data.version === 2 ? v2BackupTables : backupTables;
+  if (![1, 2, 3, 4].includes(data.version) || !data.tables) throw Error('Invalid backup');
+  const required = data.version === 1 ? legacyBackupTables : data.version === 2 ? v2BackupTables : data.version === 3 ? v3BackupTables : backupTables;
   if (!required.every(name => Array.isArray(data.tables[name]))) throw Error('Invalid backup');
   // Legacy archives predate member MT5 registrations and hosting requests.
   if (data.version === 1) data.tables.nabd_member_mt5_accounts = [];
   if (data.version <= 2) data.tables.nabd_mt5_hosting_requests = [];
+  if (data.version <= 3) { data.tables.nabd_member_alert_preferences = []; data.tables.nabd_member_telegram = []; }
   return data;
 }
 export function backupConfig(env) {

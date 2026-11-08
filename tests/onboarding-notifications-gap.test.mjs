@@ -17,8 +17,13 @@ test('original prompt phase 11 includes a usable account-notification step',()=>
 test('onboarding never claims per-member Telegram connection or execution rights',()=>{
  const html=read('public/onboarding.html');
  const js=read('public/onboarding.js');
- assert.match(html,/لا تتوفر هنا بعد خدمة ربط Telegram خاص بكل مشترك/);
- assert.match(js,/Personal subscriber linking and test messages are not yet available/);
- assert.doesNotMatch(js,/\/api\/telegram\/link|\/api\/trade\/send|order_send/);
+ assert.match(html,/id="onboarding-telegram-link"/);
+ assert.match(html,/id="onboarding-telegram-test"/);
+ assert.match(html,/id="onboarding-telegram-unlink"/);
+ assert.match(js,/telegramDisabled/);
+ assert.match(js,/\/api\/auth\/telegram\/link/);
+ assert.match(js,/\/api\/auth\/telegram\/test/);
+ assert.match(js,/\/api\/auth\/alerts/);
+ assert.doesNotMatch(js,/\/api\/trade\/send|order_send/);
  assert.doesNotMatch(html,/name="(?:password|investorPassword|workerToken)"/);
 });

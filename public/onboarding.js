@@ -12,7 +12,19 @@ const T={
   step1:'تسجيل الدخول',step2:'تسجيل Demo',step3:'طلب الاستضافة',step4:'موافقة الإدارة',step5:'التحقق من المراقبة',
   alertsTitle:'إعداد التنبيهات',alertsDescription:'شغّل أو أوقف إشعارات التوصيات داخل الموقع. لا يعني هذا ربط Telegram شخصيًا.',
   alertsSite:'تنبيهات التوصيات داخل الموقع',alertsSave:'حفظ إعداد التنبيهات',
-  alertsSaved:'تم حفظ تفضيلات التنبيهات.',alertsTelegram:'Telegram الحالي قناة نشر عامة؛ ربط حساب Telegram خاص بالمشترك وإرسال رسالة اختبار شخصية غير متاحين بعد.',
+  alertsSaved:'تم حفظ تفضيلات التنبيهات.',alertsTelegram:'يُستخدم بوت منفصل للتنبيهات الخاصة، ولا يغيّر قناة التوصيات العامة.',
+  alertsGold:'تنبيهات الذهب XAUUSD',alertsBitcoin:'تنبيهات البيتكوين BTCUSD',
+  alertsSignals:'التوصيات الجديدة',alertsExecution:'تحديثات تنفيذ الصفقات المؤكدة فقط',
+  alertsSystem:'اتصال MT5 وحالة النظام',telegramLink:'ربط Telegram الخاص بي',
+  telegramTest:'إرسال رسالة اختبار',telegramUnlink:'إلغاء الربط',
+  telegramOpen:'افتح البوت، ثم اضغط Start لتأكيد الربط',
+  telegramNote:'إرسال رسالة الاختبار يثبت الربط فقط؛ نشر توصيات فردية تلقائيًا يحتاج تفعيل خدمة التوزيع لاحقًا.',
+  telegramDisabled:'ربط Telegram الشخصي غير مُعدّ من إدارة نبض بعد.',
+  telegramUnlinked:'لم تربط Telegram الشخصي بعد.',telegramLinked:'Telegram الخاص بك مربوط.',
+  telegramTestSent:'تم تأكيد وصول رسالة الاختبار إلى Telegram.',
+  telegramLinkCreated:'افتح رابط البوت وأرسل Start ثم حدّث الحالة.',
+  telegramUnlinkedDone:'تم إلغاء ربط Telegram الشخصي.',
+  telegramSaveError:'تعذر تحديث التفضيلات؛ حاول مجددًا.',
   signin:'ابدأ بتسجيل الدخول',signinDescription:'سجّل الدخول إلى حساب نبض الموثّق لعرض طلبات MT5 الخاصة بك فقط.',
   signinAction:'إنشاء حساب أو تسجيل الدخول',register:'معلومات حساب Demo',
   registerDescription:'الوسيط المدعوم حاليًا: JustMarkets Demo فقط. وسطاء آخرون في مراحل لاحقة.',
@@ -42,7 +54,19 @@ const T={
   step1:'Sign in',step2:'Register demo',step3:'Hosting request',step4:'Admin approval',step5:'Monitor verification',
   alertsTitle:'Notification setup',alertsDescription:'Enable or disable on-site recommendation notices. This does not link your personal Telegram account.',
   alertsSite:'On-site recommendation notices',alertsSave:'Save notification preferences',
-  alertsSaved:'Notification preferences saved.',alertsTelegram:'Current Telegram integration is a public broadcast channel. Personal subscriber linking and test messages are not yet available.',
+  alertsSaved:'Notification preferences saved.',alertsTelegram:'Personal alerts use a separate bot and do not change the public signal channel.',
+  alertsGold:'Gold XAUUSD alerts',alertsBitcoin:'Bitcoin BTCUSD alerts',
+  alertsSignals:'New signals',alertsExecution:'Confirmed trade execution updates only',
+  alertsSystem:'MT5 connection and system status',telegramLink:'Link my Telegram',
+  telegramTest:'Send test message',telegramUnlink:'Unlink Telegram',
+  telegramOpen:'Open the bot and press Start to confirm',
+  telegramNote:'A test message verifies your personal connection only. Automatic individual signal delivery requires a separate dispatch service.',
+  telegramDisabled:'Personal Telegram linking has not been configured by NABD admins.',
+  telegramUnlinked:'Your personal Telegram is not linked.',telegramLinked:'Your personal Telegram is linked.',
+  telegramTestSent:'Telegram test delivery confirmed.',
+  telegramLinkCreated:'Open the bot and press Start, then refresh status.',
+  telegramUnlinkedDone:'Your personal Telegram link was removed.',
+  telegramSaveError:'Unable to update preferences. Please retry.',
   signin:'Sign in to start',signinDescription:'Sign in to your verified NABD account to see only your own MT5 requests.',
   signinAction:'Create account or sign in',register:'Demo account details',
   registerDescription:'Currently supported: JustMarkets Demo only. Other brokers are planned but unavailable.',
@@ -69,7 +93,7 @@ const T={
 const $=id=>document.getElementById(id);
 const lang=()=>document.documentElement.lang==='en'?'en':'ar';
 const words=()=>T[lang()];
-let user=null,csrf='',registry=null,loading=false,sequence=0;
+let user=null,csrf='',registry=null,alertState=null,loading=false,sequence=0;
 const statusText=(value)=>value===null||value===undefined?'—':String(value);
 const localizedTime=v=>Number.isFinite(Number(v))&&Number(v)>0?
  new Date(Number(v)*1000).toLocaleString(lang()==='ar'?'ar-PS':'en-GB',{
@@ -106,6 +130,17 @@ function paint(){
  });
  $('onboarding-alerts').hidden=!user;
  if(user){$('onboarding-alerts-form').elements.notifications.checked=user.notifications===true||user.notifications===1;}
+ const pref=alertState?.preferences;
+ if(user&&pref){
+  for(const name of ['gold','bitcoin','signals','execution','system'])
+   $('onboarding-alerts-form').elements[name].checked=pref[name]===true;
+ }
+ const personal=alertState?.telegram;
+ const configured=personal?.configured===true,linked=personal?.linked===true;
+ $('onboarding-telegram-status').textContent=!configured?w.telegramDisabled:linked?w.telegramLinked:w.telegramUnlinked;
+ $('onboarding-telegram-link').disabled=!configured||linked;
+ $('onboarding-telegram-test').disabled=!configured||!linked;
+ $('onboarding-telegram-unlink').disabled=!configured||!linked;
  $('onboarding-signin').hidden=s.phase!=='SIGN_IN';
  $('onboarding-register').hidden=!s.mayRegister;
  $('onboarding-hosting').hidden=!s.mayRequestHosting;
@@ -131,11 +166,15 @@ async function refresh(){
   const me=await requestJson('/api/auth/me');
   if(tick!==sequence)return;
   user=me.user||null;csrf=me.csrf||'';
-  if(!user){registry=null;notify('');paint();return;}
-  registry=await requestJson('/api/auth/mt5-accounts');
+  if(!user){registry=null;alertState=null;notify('');paint();return;}
+  const [accountData,prefsData]=await Promise.all([
+   requestJson('/api/auth/mt5-accounts'),
+   requestJson('/api/auth/alerts').catch(()=>null)
+  ]);
+  registry=accountData;alertState=prefsData;
   if(tick===sequence){notify('');paint();}
  }catch(error){
-  user=null;registry=null;csrf='';paint();
+  user=null;registry=null;alertState=null;csrf='';paint();
   notify(error?.status===401?words().sessionExpired:words().loadError,true);
  }finally{loading=false;$('onboarding-refresh').disabled=false;}
 }
@@ -143,7 +182,7 @@ async function write(path,data,button){
  if(!user||!csrf)throw new Error(words().sessionExpired);
  button.disabled=true;
  try{
-  await requestJson(path,{
+  return await requestJson(path,{
    method:'POST',
    headers:{'Content-Type':'application/json','X-NABD-CSRF':csrf},
    body:JSON.stringify(data)
@@ -182,8 +221,36 @@ function init(){
   try{
    await write('/api/auth/profile',{name:user.name,notifications},button);
    try{localStorage.setItem('nabd-signal-notices',notifications?'on':'off');}catch{}
+   if(alertState?.telegram){
+    try{
+     const values=Object.fromEntries(['gold','bitcoin','signals','execution','system'].map(name=>[name,form.elements[name].checked]));
+     await write('/api/auth/alerts',values,button);
+    }catch(error){feedback.textContent=error?.message||words().telegramSaveError;return;}
+   }else{
+    feedback.textContent=words().telegramSaveError;return;
+   }
    await refresh();
    feedback.textContent=words().alertsSaved;
+  }catch(error){feedback.textContent=error?.message||words().loadError;}
+ });
+ $('onboarding-telegram-link').addEventListener('click',async()=>{
+  const button=$('onboarding-telegram-link'),feedback=$('onboarding-alerts-feedback');
+  try{
+   const r=await write('/api/auth/telegram/link',{},button);
+   if(typeof r.url!=='string'||!/^https:\/\/t\.me\/[A-Za-z][A-Za-z0-9_]{4,31}\?start=nabd_[A-Za-z0-9_-]{43}$/.test(r.url))throw Error(words().loadError);
+   const anchor=$('onboarding-telegram-open');anchor.href=r.url;anchor.hidden=false;
+   feedback.textContent=words().telegramLinkCreated;
+  }catch(error){feedback.textContent=error?.message||words().loadError;}
+ });
+ $('onboarding-telegram-test').addEventListener('click',async()=>{
+  const button=$('onboarding-telegram-test'),feedback=$('onboarding-alerts-feedback');
+  try{await write('/api/auth/telegram/test',{},button);feedback.textContent=words().telegramTestSent;}
+  catch(error){feedback.textContent=error?.message||words().loadError;}
+ });
+ $('onboarding-telegram-unlink').addEventListener('click',async()=>{
+  const button=$('onboarding-telegram-unlink'),feedback=$('onboarding-alerts-feedback');
+  try{await write('/api/auth/telegram/unlink',{},button);
+   $('onboarding-telegram-open').hidden=true;await refresh();feedback.textContent=words().telegramUnlinkedDone;
   }catch(error){feedback.textContent=error?.message||words().loadError;}
  });
  $('onboarding-registration-form').addEventListener('submit',async event=>{
