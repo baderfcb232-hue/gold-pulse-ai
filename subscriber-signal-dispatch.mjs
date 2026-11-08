@@ -51,10 +51,22 @@ export function createSubscriberSignalDispatch({
   for(let start=0;start<recipients.length;start+=3){
    const batch=recipients.slice(start,start+3);
    const results=await Promise.allSettled(batch.map(async recipient=>{
+    // Re-evaluate current consent and chat binding atomically at claim time.
+    // A preselected recipient may have disabled notices or unlinked Telegram.
     const claim=await store.query(`INSERT INTO nabd_member_telegram_deliveries
       (user_id,signal_id,symbol,status,claimed_at)
-      VALUES(?,?,?,'SENDING',?) ON CONFLICT(user_id,signal_id) DO NOTHING
-      RETURNING user_id`,[recipient.user_id,p.id,p.symbol,now]);
+      SELECT t.user_id,?,?,'SENDING',?
+      FROM nabd_member_telegram t
+      JOIN nabd_users u ON u.id=t.user_id
+      JOIN nabd_member_alert_preferences a ON a.user_id=u.id
+      WHERE t.user_id=? AND t.chat_id=?
+        AND u.status='active' AND u.verified_at IS NOT NULL
+        AND u.notifications=1 AND u.recommendations=1 AND a.signals_enabled=1
+        AND ((?='XAUUSD' AND a.gold_enabled=1)
+          OR (?='BTCUSD' AND a.btc_enabled=1))
+      ON CONFLICT(user_id,signal_id) DO NOTHING
+      RETURNING user_id`,
+      [p.id,p.symbol,now,recipient.user_id,recipient.chat_id,p.symbol,p.symbol]);
     if(!claim.rows.length)return false;
     attempted++;
     let status='UNCERTAIN',messageId=null;
