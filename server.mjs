@@ -163,7 +163,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   const telegram = createTelegramPublisher({db, clock, ...telegramOptions, enabled: cfg.publicationEnabled,
     health: () => [...(!snapshot?.received_at || clock()-snapshot.received_at>90 ? ['BRIDGE'] : []),
       ...(runtimeBackup?.status().state==='ERROR' ? ['STORAGE'] : [])],
-    signals: telegramCandidates});
+    signals: telegramCandidates,
+    onSignalPublished: p => accounts.publishSubscriberSignal(p)});
   let revision = 0;
   const audit = (event, data) => db.prepare('INSERT INTO audit(time,event,data) VALUES(?,?,?)').run(clock(), event, JSON.stringify(data));
   const signalRows = () => db.prepare('SELECT data FROM signals ORDER BY issued_at DESC LIMIT 200').all().map(x => JSON.parse(x.data));
