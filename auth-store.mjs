@@ -70,6 +70,16 @@ CREATE TABLE IF NOT EXISTS nabd_member_telegram (
  linked_at DOUBLE PRECISION NOT NULL,
  last_test_at DOUBLE PRECISION
 );
+CREATE TABLE IF NOT EXISTS nabd_member_telegram_deliveries (
+ user_id TEXT NOT NULL REFERENCES nabd_users(id) ON DELETE CASCADE,
+ signal_id TEXT NOT NULL,
+ symbol TEXT NOT NULL CHECK(symbol IN ('XAUUSD','BTCUSD')),
+ status TEXT NOT NULL CHECK(status IN ('SENDING','SENT','FAILED','UNCERTAIN')),
+ claimed_at DOUBLE PRECISION NOT NULL,
+ completed_at DOUBLE PRECISION,
+ telegram_message_id BIGINT,
+ PRIMARY KEY(user_id,signal_id)
+);
 CREATE TABLE IF NOT EXISTS nabd_member_telegram_pending (
  user_id TEXT PRIMARY KEY REFERENCES nabd_users(id) ON DELETE CASCADE,
  token_hash TEXT NOT NULL UNIQUE,
