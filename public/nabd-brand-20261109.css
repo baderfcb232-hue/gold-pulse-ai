@@ -1,0 +1,26 @@
+/* Approved NABD N monogram — transparent, responsive and theme-aware. */
+.header .brand{display:flex;align-items:center;justify-content:center;min-width:0}
+.header .brand .brand-logo{
+  display:block;width:76px;height:72px;max-width:100%;
+  object-fit:contain;object-position:center;
+  flex:0 0 auto;background:transparent;border:0;
+  filter:none;
+}
+html[dir="rtl"] .header .brand .brand-logo-en,
+html[dir="ltr"] .header .brand .brand-logo-ar{display:none}
+:root[data-nabd-theme="dark"] .header .brand .brand-logo{filter:brightness(0) invert(1)}
+:root[data-nabd-theme="light"] .header .brand .brand-logo{filter:none}
+@media(min-width:1181px){
+  .header .brand .brand-logo{width:94px;height:88px}
+  .header .brand{margin-bottom:8px}
+}
+@media(min-width:761px) and (max-width:1180px){
+  .header .brand .brand-logo{width:68px;height:64px}
+}
+@media(max-width:760px){
+  .header .brand{justify-content:flex-start;overflow:visible}
+  .header .brand .brand-logo{width:52px;height:49px;max-width:52px}
+}
+@media(max-width:360px){
+  .header .brand .brand-logo{width:42px;height:40px;max-width:42px}
+}
