@@ -51,10 +51,25 @@
     <p data-t="alertsDescription">يمكنك تشغيل أو إيقاف إشعارات التوصيات داخل الموقع من حسابك. لا يعني هذا ربط Telegram بشكل شخصي.</p>
     <form id="onboarding-alerts-form">
       <label class="consent"><input type="checkbox" name="notifications"><span data-t="alertsSite">تنبيهات التوصيات داخل الموقع</span></label>
+      <label class="consent"><input type="checkbox" name="gold"><span data-t="alertsGold">تنبيهات الذهب XAUUSD</span></label>
+      <label class="consent"><input type="checkbox" name="bitcoin"><span data-t="alertsBitcoin">تنبيهات البيتكوين BTCUSD</span></label>
+      <label class="consent"><input type="checkbox" name="signals"><span data-t="alertsSignals">وصول توصية جديدة</span></label>
+      <label class="consent"><input type="checkbox" name="execution"><span data-t="alertsExecution">تحديثات تنفيذ الصفقة المؤكدة فقط</span></label>
+      <label class="consent"><input type="checkbox" name="system"><span data-t="alertsSystem">حالة النظام والاتصال</span></label>
       <button type="submit" id="onboarding-alerts-save" data-t="alertsSave">حفظ إعداد التنبيهات</button>
     </form>
     <p class="feedback" id="onboarding-alerts-feedback" role="status" aria-live="polite"></p>
-    <p data-t="alertsTelegram">قناة Telegram الحالية للنشر العام؛ لا تتوفر هنا بعد خدمة ربط Telegram خاص بكل مشترك أو إرسال رسالة اختبار له.</p>
+    <div class="telegram-actions" id="onboarding-telegram">
+      <p id="onboarding-telegram-status" aria-live="polite"></p>
+      <div class="telegram-buttons">
+        <button type="button" id="onboarding-telegram-link" data-t="telegramLink">ربط Telegram الخاص بي</button>
+        <button type="button" id="onboarding-telegram-test" data-t="telegramTest" disabled>إرسال رسالة اختبار</button>
+        <button type="button" id="onboarding-telegram-unlink" data-t="telegramUnlink" disabled>إلغاء الربط</button>
+      </div>
+      <a id="onboarding-telegram-open" class="secondary-link" hidden target="_blank" rel="noopener noreferrer" data-t="telegramOpen">افتح البوت لتأكيد الربط</a>
+      <p data-t="alertsTelegram">قناة Telegram الحالية للنشر العام؛ لا تتوفر هنا بعد خدمة ربط Telegram خاص بكل مشترك أو إرسال رسالة اختبار له.</p>
+      <p data-t="telegramNote">اختبار الرسالة يتحقق من الربط الشخصي فقط؛ إرسال توصيات فردية تلقائيًا يحتاج تفعيل خدمة التوزيع لاحقًا.</p>
+    </div>
   </section>
   <section class="setup-grid">
    <article class="setup-card" id="onboarding-signin" hidden>
