@@ -174,5 +174,18 @@ export const appExtraEnglish=Object.freeze({
   "بلغ الوقف المرجعي": "Reference stop reached",
   "وسيط MT5": "MT5 broker",
   "انتظار توافق الاتجاه:": "Waiting for trend alignment:",
+  "إعدادات البوت الخاص غير مكتملة على Render": "Private bot configuration on Render is incomplete",
+  "اسم البوت لا يطابق بيانات Telegram": "Bot username does not match Telegram",
+  "رابط Webhook غير مطابق أو غير مُسجل": "Webhook URL is missing or incorrect",
+  "شهادة Webhook مخصصة تحتاج مراجعة": "Custom webhook certificate requires review",
+  "يوجد تراكم كبير في تحديثات Telegram": "Telegram webhook update backlog is too large",
+  "Telegram سجّل خطأ حديثًا عند تسليم Webhook": "Telegram reported a recent webhook delivery error",
+  "تعذر الوصول إلى Telegram API": "Unable to reach Telegram API",
+  "تم التحقق من هوية البوت ورابط Webhook، ولم يُثبت تسليم رسالة خاصة بعد": "Bot identity and webhook URL verified; private message delivery not yet proven",
+  "جاري فحص Telegram من خادم نبض…": "Checking Telegram from the NABD server…",
+  "حالة غير معروفة": "Unknown state",
+  "توزيع التوصيات الشخصية مفعّل في الإعدادات.": "Private signals are enabled in configuration.",
+  "توزيع التوصيات الشخصية معطّل في الإعدادات.": "Private signals are disabled in configuration.",
+  "خطأ اتصال": "Connection error",
   "حفظ": "Save"
 });
