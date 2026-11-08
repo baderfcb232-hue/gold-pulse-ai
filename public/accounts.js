@@ -299,16 +299,29 @@ const subscriberTelegramStates={
   TELEGRAM_API_UNAVAILABLE:'تعذر الوصول إلى Telegram API',
   API_READY:'تم التحقق من هوية البوت ورابط Webhook، ولم يُثبت تسليم رسالة خاصة بعد'
 };
+const subscriberTelegramStatesEn={
+  NOT_CONFIGURED:'The private bot configuration on Render is incomplete',
+  BOT_IDENTITY_MISMATCH:'Bot username does not match Telegram',
+  WEBHOOK_URL_MISMATCH:'Webhook URL is missing or incorrect',
+  WEBHOOK_CUSTOM_CERTIFICATE:'Custom webhook certificate requires review',
+  WEBHOOK_BACKLOG:'Telegram webhook updates are backed up',
+  WEBHOOK_RECENT_ERROR:'Telegram reported a recent webhook delivery error',
+  TELEGRAM_API_UNAVAILABLE:'Unable to reach Telegram API',
+  API_READY:'Bot identity and webhook URL verified; private message delivery not yet proven'
+};
 async function checkSubscriberTelegram(){
  const button=$('admin-subscriber-tg-check'),status=$('admin-subscriber-tg-status');
- button.disabled=true;status.textContent='جاري فحص Telegram من خادم نبض…';
+ button.disabled=true;status.textContent=currentLocale()==='en'?'Checking Telegram from the NABD server…':'جاري فحص Telegram من خادم نبض…';
  try{
   const r=await api('/api/admin/subscriber-telegram-readiness');
-  status.textContent=subscriberTelegramStates[r.state]||'حالة غير معروفة';
+  status.textContent=(currentLocale()==='en'?subscriberTelegramStatesEn:subscriberTelegramStates)[r.state]||(currentLocale()==='en'?'Unknown state':'حالة غير معروفة');
   $('admin-subscriber-tg-details').textContent=
-    (r.autoSignalsEnabled?'توزيع التوصيات الشخصية مفعّل في الإعدادات.':'توزيع التوصيات الشخصية معطّل في الإعدادات.')+
-    ' · التحقق من وصول الرسالة الفعلية يحتاج اختبارًا خاصًا من حساب المشترك.';
- }catch(error){status.textContent='تعذر فحص الخدمة: '+(error?.message||'خطأ اتصال');}
+    (currentLocale()==='en'?
+      (r.autoSignalsEnabled?'Private signals are enabled in configuration.':'Private signals are disabled in configuration.')+
+        ' · Confirm actual delivery from a linked member account.':
+      (r.autoSignalsEnabled?'توزيع التوصيات الشخصية مفعّل في الإعدادات.':'توزيع التوصيات الشخصية معطّل في الإعدادات.')+
+        ' · التحقق من وصول الرسالة الفعلية يحتاج اختبارًا خاصًا من حساب المشترك.');
+ }catch(error){status.textContent=(currentLocale()==='en'?'Readiness check failed: ':'تعذر فحص الخدمة: ')+(error?.message||(currentLocale()==='en'?'Connection error':'خطأ اتصال'));}
  finally{button.disabled=false;}
 }
 $('admin-subscriber-tg-check').onclick=checkSubscriberTelegram;
