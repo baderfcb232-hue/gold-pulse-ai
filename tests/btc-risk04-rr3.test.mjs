@@ -25,3 +25,17 @@ test('two 0.4 percent BTC positions fit exactly inside the 0.8 percent cap',()=>
  assert.equal(allowed(1,2,40,40.01,10000,.8),false);
  assert.equal(allowed(2,2,40,40,10000,.8),false);
 });
+
+// Regression guard: unlimited-entry Demo must not disable the account loss circuit breaker.
+test('BTC Demo unlimited entries still enforce daily loss allowance',()=>{
+ const start=ea.indexOf('bool DailyRiskLimitReached(string &reason)\n  {');
+ const end=ea.indexOf('\n//+------------------------------------------------------------------+',start);
+ assert.ok(start>=0 && end>start);
+ const guard=ea.slice(start,end);
+ assert.doesNotMatch(guard,/if\(DemoWebsiteNoDailyLimitsEnabled\(\)\)\s*\{reason="";return false;\}/);
+ assert.match(guard,/today_net<=-limit/);
+ const riskStart=ea.indexOf('double ExecutionRiskBudget(const ENUM_ORDER_TYPE order_type,const double entry,const double stop_loss)\n  {');
+ const riskEnd=ea.indexOf('\ndouble CalculateVolume(',riskStart);
+ assert.ok(riskStart>=0 && riskEnd>riskStart);
+ assert.match(ea.slice(riskStart,riskEnd),/return MathMin\(budget,daily\);/);
+});
