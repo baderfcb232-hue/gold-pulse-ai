@@ -26,7 +26,7 @@ async function verify(){
   console.log('[NABD AGENTIC TEST] verification status:',state);
 }
 const server=http.createServer((req,res)=>{
-  if(req.method!=='GET'||req.url!=='/healthz'){
+  if(req.method!=='GET'||new URL(req.url,'http://localhost').pathname!=='/healthz'){
     res.writeHead(404,{'Content-Type':'application/json','Cache-Control':'no-store'});
     res.end(JSON.stringify({error:'not_found'}));return;
   }
