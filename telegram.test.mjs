@@ -139,6 +139,6 @@ test('Telegram signal message contains only the six requested trading lines', ()
   assert.equal(formatSignal(p), [
     'XAUUSD — بيع','الدخول: 4091.32','وقف الخسارة: 4097.8',
     'الهدف الأول: 4084.84','الهدف الثاني: 4081.6','الفريم: M5'
-  ].join('\\n'.replace('\\n','\n')));
+  ].join('\n'));
   assert.doesNotMatch(formatSignal(p), /JustMarkets|Render|رقم التوصية|رقم أمر|تجريبي/);
 });
