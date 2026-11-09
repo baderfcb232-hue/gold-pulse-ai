@@ -130,3 +130,15 @@ test('uncertain diagnostic is never retried, including after publisher restart',
     await pub.close(); pub = createTelegramPublisher(options); await pub.publish(); assert.equal(sends, 1);}
   finally {await pub.close(); db.close();}
 });
+
+
+test('Telegram signal message contains only the six requested trading lines', () => {
+  const p={id:'DC78002CF922',symbol:'XAUUSD',side:'SELL',entry:4091.32,sl:4097.8,
+    tp1:4084.84,tp2:4081.6,timeframe:'M5',telegramExecutionStatus:'DISPATCHED',
+    website_approval_id:'2000000006177',broker_symbol:'XAUUSD.m',source:'MT5'};
+  assert.equal(formatSignal(p), [
+    'XAUUSD — بيع','الدخول: 4091.32','وقف الخسارة: 4097.8',
+    'الهدف الأول: 4084.84','الهدف الثاني: 4081.6','الفريم: M5'
+  ].join('\\n'.replace('\\n','\n')));
+  assert.doesNotMatch(formatSignal(p), /JustMarkets|Render|رقم التوصية|رقم أمر|تجريبي/);
+});
