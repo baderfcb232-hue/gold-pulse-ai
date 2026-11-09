@@ -1,4 +1,3 @@
-import {recommendationCode} from './execution-trace.mjs';
 export function formatSignal(p) {
   const price = v => v != null && Number.isFinite(Number(v)) ? String(v) : '—';
   return [`${p.symbol} — ${p.side === 'BUY' ? 'شراء' : 'بيع'}`,
