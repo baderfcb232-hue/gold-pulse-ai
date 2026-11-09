@@ -1423,7 +1423,8 @@ double GetTodayNet()
 
 bool DailyRiskLimitReached(string &reason)
   {
-   if(DemoWebsiteNoDailyLimitsEnabled()){reason="";return false;}
+   // Demo unlimited-entry mode may relax the entry count only; never bypass the daily loss guard.
+   reason="";
    // Do not bypass the 2% daily loss guard when unlimited daily entries are enabled.
    if(!HistorySelect(StartOfDay(ServerNow()),ServerNow()))
      {reason="Daily history unavailable; cannot validate daily loss";return(true);}
@@ -1562,7 +1563,8 @@ double ExecutionRiskBudget(const ENUM_ORDER_TYPE order_type,const double entry,c
       if(minimum<=0.0 || !OrderCalcProfit(order_type,g_symbol,minimum,entry,stop_loss,loss))return 0.0;
       budget=MathMax(budget,MathAbs(loss));
      }
-   return DemoWebsiteNoDailyLimitsEnabled() ? budget : MathMin(budget,daily);
+   // Apply remaining daily loss allowance even when unlimited Demo entries are enabled.
+   return MathMin(budget,daily);
   }
 double CalculateVolume(const ENUM_ORDER_TYPE order_type,const double entry,const double stop_loss)
   {
