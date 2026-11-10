@@ -15,7 +15,8 @@ const goldSpot=createPublicGoldObserver();
 const sources=createResearchSources({goldKey:process.env.NABD_TEST_GOLD_TWELVEDATA_KEY}); // Calendar polled only by economicCalendar to avoid duplicate paid-provider calls.
 const hybrid=new HybridScheduler();
 const officialNews=createOfficialNewsMonitor();
-const economicCalendar=createEconomicCalendarMonitor({key:process.env.NABD_TEST_TRADING_ECONOMICS_KEY});
+let connectedJournal=null;
+const economicCalendar=createEconomicCalendarMonitor({key:process.env.NABD_TEST_TRADING_ECONOMICS_KEY,journalProvider:()=>connectedJournal});
 const blsIndicators=createBlsOfficialMonitor();
 let journalState={status:'NOT_CONFIGURED',isolated:true,persistenceConnected:false,writePathEnabled:false};
 const port=Number(process.env.PORT||10000);
@@ -53,7 +54,8 @@ const server=http.createServer((req,res)=>{
 });
 server.listen(port,'0.0.0.0',()=>{console.log('[NABD AGENTIC TEST] ready on port',port);void verify();
   void connectResearchJournal().then(r=>{
-    journalState={status:r.status,isolated:true,persistenceConnected:r.status==='CONNECTED',writePathEnabled:false};
+    connectedJournal=r.status==='CONNECTED'?r.journal:null;
+    journalState={status:r.status,isolated:true,persistenceConnected:r.status==='CONNECTED',writePathEnabled:!!connectedJournal&&!!process.env.NABD_TEST_TRADING_ECONOMICS_KEY};
     console.log('[NABD RESEARCH JOURNAL]',r.status);
   });
   void feed.poll().then(r=>console.log('[NABD REFERENCE FEED]',r.status,r.code||r.observation?.trigger));
