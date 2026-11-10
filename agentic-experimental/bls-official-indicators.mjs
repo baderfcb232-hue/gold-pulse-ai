@@ -6,6 +6,12 @@ export const BLS_SERIES=Object.freeze([
  {id:'CES0000000001',name:'Total nonfarm payroll employment',unit:'THOUSANDS'}
 ]);
 const URL='https://api.bls.gov/publicAPI/v1/timeseries/data/';
+export function shiftMonth(period,months){
+ if(!/^\\d{4}-(0[1-9]|1[0-2])$/.test(period)||!Number.isInteger(months))throw Error('BLS_INVALID_PERIOD');
+ const [year,month]=period.split('-').map(Number);
+ const d=new Date(Date.UTC(year,month-1+months,1));
+ return d.toISOString().slice(0,7);
+}
 export function parseBlsResponse(raw,seriesId,now){
  if(raw?.status!=='REQUEST_SUCCEEDED'||!Array.isArray(raw?.Results?.series))
    throw Error('BLS_INVALID_RESPONSE');
@@ -17,11 +23,20 @@ export function parseBlsResponse(raw,seriesId,now){
   /^M(0[1-9]|1[0-2])$/.test(String(x.period))&&
   /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(String(x.value).replace(/,/g,'')))
  .map(x=>({period:x.year+'-'+x.period.slice(1),value:Number(String(x.value).replace(/,/g,''))}))
- .filter(x=>Number.isFinite(x.value)).sort((a,b)=>b.period.localeCompare(a.period)).slice(0,3);
+ .filter(x=>Number.isFinite(x.value)).sort((a,b)=>b.period.localeCompare(a.period)).slice(0,18);
  if(!observations.length)throw Error('BLS_NO_NUMERIC_OBSERVATION');
  const latest=observations[0];
+ const previous=observations.find(o=>o.period===shiftMonth(latest.period,-1));
+ const yearAgo=observations.find(o=>o.period===shiftMonth(latest.period,-12));
+ const payrollChange=seriesId==='CES0000000001'&&previous?Math.round((latest.value-previous.value)*1000):null;
+ const cpiYearOverYear=seriesId==='CUUR0000SA0'&&yearAgo&&yearAgo.value>0?
+   (latest.value/yearAgo.value-1)*100:null;
  return {source:'BLS_PUBLIC_DATA_API_V1',seriesId,name:meta.name,unit:meta.unit,
-  period:latest.period,latestValue:latest.value,previousValue:observations[1]?.value??null,
+  period:latest.period,latestValue:latest.value,previousValue:previous?.value??null,
+  previousPeriod:previous?.period??null,yearAgoValue:yearAgo?.value??null,
+  nfpMonthlyChangePersons:payrollChange,cpiYearOverYearPercent:cpiYearOverYear,
+  derivedDataPresent:seriesId==='CES0000000001'?payrollChange!==null:
+    seriesId==='CUUR0000SA0'?cpiYearOverYear!==null:true,
   observedAt:new Date(now*1000).toISOString(),forecast:null,actualReleaseTimeVerified:false,
   revisionStatus:'UNVERIFIED',comparisonToForecast:null,marketImpact:'UNKNOWN',
   isRealTime:false,eligibleForTrading:false};
