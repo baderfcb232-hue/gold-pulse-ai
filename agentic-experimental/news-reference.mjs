@@ -15,6 +15,9 @@ export function parseCalendar(raw,now){
   // Therefore NOT eligible as an independently verified urgent news trigger.
   events.push({id,title,eventAt,publishedAt,highImpact:true,
    actualAvailable:hasActual,forecastAvailable:!!String(row.Forecast||'').trim(),
+   actualRaw:typeof row.Actual==='string'?row.Actual.slice(0,50):null,
+   forecastRaw:typeof row.Forecast==='string'?row.Forecast.slice(0,50):null,
+   previousRaw:typeof row.Previous==='string'?row.Previous.slice(0,50):null,
    verified:false,symbol:'ALL',reason:'RELEASE_TIME_UNVERIFIED',
    source:'TRADING_ECONOMICS_CALENDAR_REFERENCE'});
  }
