@@ -1,0 +1,18 @@
+# Isolated experimental service only. Never adopt the production gold-pulse-ai service.
+# Existing Postgres instance nabd-agentic-research-test is referenced, not created here.
+services:
+  - type: web
+    name: nabd-agentic-ai-test
+    runtime: node
+    plan: free
+    region: frankfurt
+    repo: https://github.com/baderfcb232-hue/gold-pulse-ai
+    branch: experimental/nabd-agentic-ai-test
+    autoDeployTrigger: off
+    buildCommand: npm ci --omit=dev
+    startCommand: node agentic-experimental/render-connectivity-server.mjs
+    envVars:
+      - key: NABD_TEST_RESEARCH_DATABASE_URL
+        fromDatabase:
+          name: nabd-agentic-research-test
+          property: connectionString
