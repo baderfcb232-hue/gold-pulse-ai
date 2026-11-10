@@ -10,7 +10,7 @@ import {newsResearchReadiness} from './news-surprise.mjs';
 import {createEconomicCalendarMonitor} from './economic-calendar-monitor.mjs';
 const feed=createShadowFeedRunner();
 const goldSpot=createPublicGoldObserver();
-const sources=createResearchSources({goldKey:process.env.NABD_TEST_GOLD_TWELVEDATA_KEY,newsKey:process.env.NABD_TEST_TRADING_ECONOMICS_KEY});
+const sources=createResearchSources({goldKey:process.env.NABD_TEST_GOLD_TWELVEDATA_KEY}); // Calendar polled only by economicCalendar to avoid duplicate paid-provider calls.
 const hybrid=new HybridScheduler();
 const officialNews=createOfficialNewsMonitor();
 const economicCalendar=createEconomicCalendarMonitor({key:process.env.NABD_TEST_TRADING_ECONOMICS_KEY});
@@ -57,5 +57,6 @@ server.listen(port,'0.0.0.0',()=>{console.log('[NABD AGENTIC TEST] ready on port
   timer.unref();
   const goldTimer=setInterval(()=>void goldSpot.poll().then(r=>{if(r.status==='ERROR')console.log('[NABD GOLD REFERENCE] ERROR',r.code);}),60000);goldTimer.unref();
   void economicCalendar.poll().then(r=>console.log('[NABD CALENDAR PREVIEW]',r.status));
-  const calendarTimer=setInterval(()=>{void sources.check();void economicCalendar.poll();},15*60000);calendarTimer.unref();
+  const calendarTimer=setInterval(()=>void economicCalendar.poll(),5*60000);calendarTimer.unref();
+  const goldCandlesTimer=setInterval(()=>void sources.check(),15*60000);goldCandlesTimer.unref();
 });
