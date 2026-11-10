@@ -16,3 +16,33 @@ jobs:
           node-version: '24'
       - name: Test experimental adapters only
         run: node --test agentic-experimental/*.test.mjs
+
+  isolated-postgres:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: nabd_agentic_research_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U test_user -d nabd_agentic_research_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=15
+    env:
+      NABD_TEST_RESEARCH_DATABASE_URL: postgresql://test_user:ci_only_password@localhost:5432/nabd_agentic_research_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install locked pg dependencies
+        run: npm ci --omit=dev
+      - name: Test journal against isolated real PostgreSQL
+        run: node --test agentic-experimental/research-journal.integration.test.mjs
