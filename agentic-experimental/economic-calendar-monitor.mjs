@@ -16,7 +16,7 @@ export function previewEconomicEvent(event) {
   status:comparable?'UNVERIFIED_RESEARCH_PREVIEW':'INCOMPLETE_DATA'};
 }
 export function createEconomicCalendarMonitor({key,load=fetchCalendarReference,
- clock=()=>Math.floor(Date.now()/1000),maxSnapshots=300}={}){
+ clock=()=>Math.floor(Date.now()/1000),maxSnapshots=300,journalProvider=()=>null}={}){
  let busy=false,lastAttempt=null,lastSuccess=null,lastError=null;
  let count=0,events=[],observedReleaseCount=0;
  const before=new Map(),released=new Map();
@@ -33,6 +33,7 @@ export function createEconomicCalendarMonitor({key,load=fetchCalendarReference,
      typeof e.title==='string'&&e.title.length<=160&&
      typeof e.actualRaw!=='object'&&typeof e.forecastRaw!=='object');
    const out=[];
+   const journal=journalProvider();
    for(const e of safe){
      const candidate=previewEconomicEvent(e);
      const id=e.id+':'+e.eventAt;
@@ -43,16 +44,29 @@ export function createEconomicCalendarMonitor({key,load=fetchCalendarReference,
      if(forecastKnownBefore&&!before.has(id)){
        before.set(id,{forecastRaw:e.forecastRaw,observedAt:now,eventAt:e.eventAt});
      }
-     const baseline=before.get(id);
+     // Read durable point-in-time evidence before considering current vendor forecasts.
+     let baseline=before.get(id);
+     if(journal){
+       const persisted=await journal.firstForecast({provider:'TRADING_ECONOMICS_CALENDAR_REFERENCE',id:e.id,scheduledAt:e.eventAt});
+       if(persisted)baseline={forecastRaw:persisted.raw,observedAt:persisted.observedAt,eventAt:e.eventAt};
+       else if(forecastKnownBefore){
+         await journal.saveForecast({provider:'TRADING_ECONOMICS_CALENDAR_REFERENCE',id:e.id,scheduledAt:e.eventAt,observedAt:now,raw:e.forecastRaw});
+       }
+     }
      const baselineValue=parseComparable(baseline?.forecastRaw);
      const hasProvenBaseline=!!baseline&&baseline.observedAt<e.eventAt&&
        baselineValue&&actual&&baselineValue.unit===actual.unit;
      const firstObserved=actual&&now>=e.eventAt&&!released.has(id);
      if(firstObserved){
+       if(journal)await journal.saveActual({provider:'TRADING_ECONOMICS_CALENDAR_REFERENCE',id:e.id,scheduledAt:e.eventAt,observedAt:now,raw:e.actualRaw});
        released.set(id,{firstObservedAt:now,withBaseline:!!hasProvenBaseline});
        observedReleaseCount++;
      }
-     const observation=released.get(id);
+     let observation=released.get(id);
+     if(journal){
+       const stored=await journal.firstActual({provider:'TRADING_ECONOMICS_CALENDAR_REFERENCE',id:e.id,scheduledAt:e.eventAt});
+       if(stored)observation={firstObservedAt:stored.observedAt,withBaseline:!!hasProvenBaseline};
+     }
      const difference=hasProvenBaseline?actual.value-baselineValue.value:null;
      candidate.pointInTime=hasProvenBaseline?{
        status:'FORECAST_SNAPSHOT_RECORDED_BEFORE_RELEASE',
@@ -83,7 +97,7 @@ export function createEconomicCalendarMonitor({key,load=fetchCalendarReference,
  function report(){return {status:!key?'NOT_CONFIGURED':lastError?'FEED_ERROR':lastSuccess?'OBSERVING':'NOT_CHECKED',
   source:'TRADING_ECONOMICS_CALENDAR_REFERENCE',lastAttempt,lastSuccess,lastError,count,events,
   preReleaseSnapshots:before.size,observedReleases:observedReleaseCount,
-  persistence:'VOLATILE_MEMORY_ONLY',releaseTimestampVerified:false,
+  persistence:journalProvider()?'ISOLATED_POSTGRES_JOURNAL':'VOLATILE_MEMORY_ONLY',releaseTimestampVerified:false,
   realTimeSurpriseEnabled:false,autoTradingEnabled:false,aiAnalysisEnabled:false};}
  return {poll,report};
 }
