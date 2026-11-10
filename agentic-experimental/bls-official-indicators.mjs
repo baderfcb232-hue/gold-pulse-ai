@@ -7,7 +7,7 @@ export const BLS_SERIES=Object.freeze([
 ]);
 const URL='https://api.bls.gov/publicAPI/v1/timeseries/data/';
 export function shiftMonth(period,months){
- if(!/^\\d{4}-(0[1-9]|1[0-2])$/.test(period)||!Number.isInteger(months))throw Error('BLS_INVALID_PERIOD');
+ if(!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(period)||!Number.isInteger(months))throw Error('BLS_INVALID_PERIOD');
  const [year,month]=period.split('-').map(Number);
  const d=new Date(Date.UTC(year,month-1+months,1));
  return d.toISOString().slice(0,7);
