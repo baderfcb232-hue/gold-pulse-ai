@@ -1,6 +1,8 @@
 // NABD Agentic AI isolated connectivity service.
 // No imports from production. No trading, database, Telegram, or signal routes.
 import http from 'node:http';
+import {HybridScheduler} from './hybrid-scheduler.mjs';
+const hybrid=new HybridScheduler();
 const port=Number(process.env.PORT||10000);
 const model=process.env.NABD_RESEARCH_MODEL||'gpt-4.1-mini';
 let state='NO_API_KEY';
@@ -26,11 +28,12 @@ async function verify(){
   console.log('[NABD AGENTIC TEST] verification status:',state);
 }
 const server=http.createServer((req,res)=>{
-  if(req.method!=='GET'||new URL(req.url,'http://localhost').pathname!=='/healthz'){
+  const pathname=new URL(req.url,'http://localhost').pathname;
+  if(req.method!=='GET'||!['/healthz','/hybrid/status'].includes(pathname)){
     res.writeHead(404,{'Content-Type':'application/json','Cache-Control':'no-store'});
     res.end(JSON.stringify({error:'not_found'}));return;
   }
   res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
-  res.end(JSON.stringify({service:'nabd-agentic-ai-test',experimental:true,reference_only:true,trading_enabled:false,model_connection:state,last_checked:checkTime}));
+  res.end(JSON.stringify(pathname==='/hybrid/status' ? hybrid.report() : {service:'nabd-agentic-ai-test',experimental:true,reference_only:true,trading_enabled:false,model_connection:state,last_checked:checkTime}));
 });
 server.listen(port,'0.0.0.0',()=>{console.log('[NABD AGENTIC TEST] ready on port',port);void verify();});
