@@ -33,6 +33,11 @@ export function createResearchJournal({query}={}){
    [provider,id,scheduledAt]);
   const row=result?.rows?.[0];return row?{raw:row.forecast_raw,observedAt:Number(row.observed_at)}:null;
  }
+ async function firstActual({provider,id,scheduledAt}){
+  ensure();
+  const result=await query('SELECT actual_raw, EXTRACT(EPOCH FROM first_observed_at)::bigint AS observed_at FROM agentic_research.actual_observations WHERE event_provider=$1 AND provider_event_id=$2 AND scheduled_at=to_timestamp($3)',[provider,id,scheduledAt]);
+  const row=result?.rows?.[0];return row?{raw:row.actual_raw,observedAt:Number(row.observed_at)}:null;
+ }
  async function saveActual({provider,id,scheduledAt,observedAt,raw,unit=null,numeric=null}){
   ensure();
   if(!provider||!id||!raw||!Number.isSafeInteger(scheduledAt)||
@@ -43,7 +48,7 @@ export function createResearchJournal({query}={}){
    [provider,id,scheduledAt,observedAt,raw,numeric,unit,'VENDOR_FIRST_OBSERVED_NOT_OFFICIAL_RELEASE']);
   return {inserted:result?.rowCount===1};
  }
- return {verify,saveForecast,firstForecast,saveActual,status:()=>({verified,database:verified?ISOLATED_DB_NAME:null,
+ return {verify,saveForecast,firstForecast,firstActual,saveActual,status:()=>({verified,database:verified?ISOLATED_DB_NAME:null,
    writesAllowed:verified,persistenceConnected:verified})};
 }
 export async function connectResearchJournal({url=process.env.NABD_TEST_RESEARCH_DATABASE_URL}={}){
