@@ -1,4 +1,5 @@
 // Disabled-by-default isolated Postgres journal adapter.
+import {readFile} from 'node:fs/promises';
 // Requires explicit isolated DATABASE URL, 'pg' package at runtime and schema migration.
 // No automatic connection to any production database.
 export const ISOLATED_DB_NAME='nabd_agentic_research_test';
@@ -55,7 +56,14 @@ export async function connectResearchJournal({url=process.env.NABD_TEST_RESEARCH
   const pool=new pg.Pool({connectionString:url,max:2,connectionTimeoutMillis:5000,
     idleTimeoutMillis:10000,ssl:undefined});
   const journal=createResearchJournal({query:(sql,args)=>pool.query(sql,args)});
-  try{await journal.verify();return {status:'CONNECTED',journal,close:()=>pool.end()};}
+  try{
+   await journal.verify(); // Critical: verify exact test DB name before ANY DDL.
+   const migration=await readFile(new URL('./sql/001_research_journal.sql',import.meta.url),'utf8');
+   const migrationClient=await pool.connect();
+   try{await migrationClient.query(migration);}finally{migrationClient.release();}
+   await pool.query('SELECT 1 FROM agentic_research.forecast_snapshots LIMIT 0');
+   return {status:'CONNECTED',journal,close:()=>pool.end()};
+  }
   catch(e){await pool.end();return {status:String(e.message).slice(0,80),journal:null};}
  }catch(e){return {status:e?.code==='ERR_MODULE_NOT_FOUND'?'PG_DRIVER_UNAVAILABLE':'DATABASE_CONNECTION_FAILED',journal:null};}
 }
