@@ -2,6 +2,8 @@
 // No imports from production. No trading, database, Telegram, or signal routes.
 import http from 'node:http';
 import {HybridScheduler} from './hybrid-scheduler.mjs';
+import {createShadowFeedRunner} from './shadow-feed-runner.mjs';
+const feed=createShadowFeedRunner();
 const hybrid=new HybridScheduler();
 const port=Number(process.env.PORT||10000);
 const model=process.env.NABD_RESEARCH_MODEL||'gpt-4.1-mini';
@@ -29,11 +31,15 @@ async function verify(){
 }
 const server=http.createServer((req,res)=>{
   const pathname=new URL(req.url,'http://localhost').pathname;
-  if(req.method!=='GET'||!['/healthz','/hybrid/status'].includes(pathname)){
+  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status'].includes(pathname)){
     res.writeHead(404,{'Content-Type':'application/json','Cache-Control':'no-store'});
     res.end(JSON.stringify({error:'not_found'}));return;
   }
   res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
-  res.end(JSON.stringify(pathname==='/hybrid/status' ? hybrid.report() : {service:'nabd-agentic-ai-test',experimental:true,reference_only:true,trading_enabled:false,model_connection:state,last_checked:checkTime}));
+  res.end(JSON.stringify(pathname==='/feed/status' ? feed.report() : pathname==='/hybrid/status' ? hybrid.report() : {service:'nabd-agentic-ai-test',experimental:true,reference_only:true,trading_enabled:false,model_connection:state,last_checked:checkTime}));
 });
-server.listen(port,'0.0.0.0',()=>{console.log('[NABD AGENTIC TEST] ready on port',port);void verify();});
+server.listen(port,'0.0.0.0',()=>{console.log('[NABD AGENTIC TEST] ready on port',port);void verify();
+  void feed.poll().then(r=>console.log('[NABD REFERENCE FEED]',r.status,r.code||r.observation?.trigger));
+  const timer=setInterval(()=>void feed.poll().then(r=>{if(r.status==='ERROR')console.log('[NABD REFERENCE FEED] ERROR',r.code);}),60000);
+  timer.unref();
+});
