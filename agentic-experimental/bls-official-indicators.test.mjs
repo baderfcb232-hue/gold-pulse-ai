@@ -15,13 +15,20 @@ test('future or malformed response rejected',()=>{
  assert.throws(()=>parseBlsResponse({},'CUUR0000SA0',now),/BLS_INVALID_RESPONSE/);
  assert.throws(()=>parseBlsResponse(response('BAD'),'CUUR0000SA0',now),/BLS_MISSING_SERIES/);
 });
-test('no-key three official series load with fixed host',async()=>{
- const urls=[];
- const data=await fetchBlsIndicators({now,fetcher:async url=>{
-  urls.push(url);return {ok:true,json:async()=>response(url.split('/').at(-1))};
+test('no-key batch of three official series uses one POST',async()=>{
+ const requests=[];
+ const data=await fetchBlsIndicators({now,fetcher:async (url,opts)=>{
+  requests.push({url,opts});return {ok:true,json:async()=>({status:'REQUEST_SUCCEEDED',
+    Results:{series:BLS_SERIES.map(s=>response(s.id).Results.series[0])}})};
  }});
- assert.equal(data.length,3);assert.equal(urls.length,3);
- assert.ok(urls.every(u=>u.startsWith('https://api.bls.gov/publicAPI/v1/timeseries/data/')));
+ assert.equal(data.length,3);assert.equal(requests.length,1);
+ assert.equal(requests[0].url,'https://api.bls.gov/publicAPI/v1/timeseries/data/');
+ assert.equal(requests[0].opts.method,'POST');
+ assert.deepEqual(JSON.parse(requests[0].opts.body).seriesid,BLS_SERIES.map(x=>x.id));
+});
+test('BLS quota response is identified without exposing upstream message',async()=>{
+ await assert.rejects(()=>fetchBlsIndicators({now,fetcher:async()=>({ok:true,
+  json:async()=>({status:'REQUEST_NOT_PROCESSED',message:['Daily limit exceeded']})})}),/BLS_RATE_OR_DAILY_LIMIT/);
 });
 test('monitor never claims surprise readiness',async()=>{
  const monitor=createBlsOfficialMonitor({clock:()=>now,load:async()=>BLS_SERIES.map(x=>parseBlsResponse(response(x.id),x.id,now))});
