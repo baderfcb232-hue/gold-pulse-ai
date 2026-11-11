@@ -21,3 +21,15 @@ test('all optional inputs present still never authorize trading',()=>{
  assert.equal(s.demoTradeAllowed,false);
  assert.equal(s.productionChanged,false);
 });
+
+test('working FRED historical substitute does not assert realtime news readiness',()=>{
+ const s=buildExperimentReadiness({bls:{status:'FEED_ERROR',lastError:'BLS_AUTHORIZATION_FAILED'},
+  fred:{status:'OBSERVING_HISTORICAL'},brain:{status:'READY_FOR_VERIFIED_DEMO_CONTEXT'},
+  demo:{brokerConnected:false},journal:{persistenceConnected:true},
+  smoke:{status:'SYNTHETIC_SELF_TEST_PASSED'}});
+ const historical=s.steps.find(x=>x.id==='HISTORICAL_ECONOMIC_DATA');
+ assert.equal(historical.status,'FRED_REFERENCE_READY');
+ assert.equal(historical.source,'FRED_BLS_HISTORICAL_REFERENCE');
+ assert.ok(s.blockers.includes('FXSTREET_LIVE_NEWS'));
+ assert.equal(s.demoTradeAllowed,false);
+});
