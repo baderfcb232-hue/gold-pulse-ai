@@ -17,7 +17,7 @@ jobs:
       - name: Test experimental adapters only
         run: node --test agentic-experimental/*.test.mjs
       - name: Check isolated Windows DEMO sensor syntax
-        run: python3 -m py_compile agentic-experimental/mt5-demo-readonly-sensor.py agentic-experimental/mt5-demo-upload.py
+        run: python3 -m py_compile agentic-experimental/mt5-demo-readonly-sensor.py agentic-experimental/mt5-demo-upload.py agentic-experimental/run-mt5-demo-once.py
       - name: Test isolated Windows DEMO sensor guards with mocked broker
         run: python3 -m unittest discover -s agentic-experimental -p 'test_mt5_demo_*.py' -v
 
