@@ -96,3 +96,30 @@ CI run does not establish that a remote BLS service or a live broker works.
 6. Future authenticated ingestion is a separate engineering stage requiring
    dedicated credentials and endpoint security reviews. Until then
    `/demo-sensor/status` must remain `brokerConnected:false`.
+
+## Authenticated demo research ingestion (added November 11)
+- `POST /demo-sensor/observe` accepts only HMAC-SHA256 signed JSON from
+  the **separate DEMO-only Windows observation sensor**.
+- `NABD_TEST_DEMO_SENSOR_HMAC_SECRET` must contain at least 32 random bytes
+  and must be configured **only** in the experimental Render Environment and
+  separately on the isolated Windows sensor. No API key or password is stored
+  in the repository or transmitted in the snapshot. Keep this value secret.
+- The request uses headers `X-NABD-Sensor-Timestamp` and
+  `X-NABD-Sensor-Signature`. The signature covers timestamp + newline +
+  exact UTF-8 body. TLS, a 10-second window, a 120-KiB bound, replay checks,
+  stale tick rejection and strict DEMO market validation are enforced.
+- The service is **disabled with HTTP 503** until the independent experiment
+  secret is configured. Do not point it to a production terminal.
+- The standalone `mt5-demo-upload.py` reads a local fresh sensor file,
+  signs it and posts only to the isolated Render URL over HTTPS. Neither
+  uploader nor receiver can create an order or trigger live AI spend.
+- Run `mt5-demo-readonly-sensor.py` first with fresh closed candles,
+  then run `mt5-demo-upload.py` promptly (within 10 seconds).
+- `/demo-sensor/status` reports ingress state and quote freshness; it does
+  not expose the HMAC secret or broker credentials.
+- The HMAC key is **not configured by these code changes**, the terminal is
+  **not deployed**, and therefore real MT5 connectivity is **not verified**.
+- Registered BLS v2 key is similarly an external credential. Public v1
+  denial `BLS_AUTHORIZATION_FAILED` is retained as an explicit blocker,
+  not promoted to a data-ready state.
+- FXStreet remains the **last** integration step.
