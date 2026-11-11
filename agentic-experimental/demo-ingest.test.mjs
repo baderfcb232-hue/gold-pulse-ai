@@ -42,7 +42,6 @@ test('rejects out-of-order quotes and a synthetic broker impersonation',()=>{
  let time=now;
  const ingest=createDemoIngest({secret,clock:()=>time});
  assert.equal(ingest.receive(signed(body())).status,'OBSERVED');
- time++;
  const earlier=signed(body({...snapshot,timestamp:now-2}));
  earlier.timestamp=String(time);
  earlier.signature=signDemoEnvelope(secret,time,earlier.body);
