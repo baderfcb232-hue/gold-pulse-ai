@@ -13,10 +13,16 @@ export function shiftMonth(period,months){
  const d=new Date(Date.UTC(year,month-1+months,1));
  return d.toISOString().slice(0,7);
 }
+export function blsSeriesFromResponse(raw){
+ const results=raw?.Results;
+ if(Array.isArray(results))return results.flatMap(x=>Array.isArray(x?.series)?x.series:[]);
+ if(results&&Array.isArray(results.series))return results.series;
+ return null;
+}
 export function parseBlsResponse(raw,seriesId,now){
- if(raw?.status!=='REQUEST_SUCCEEDED'||!Array.isArray(raw?.Results?.series))
-   throw Error('BLS_INVALID_RESPONSE');
- const series=raw.Results.series.find(s=>s.seriesID===seriesId);
+ const rows=blsSeriesFromResponse(raw);
+ if(raw?.status!=='REQUEST_SUCCEEDED'||!rows)throw Error('BLS_INVALID_RESPONSE');
+ const series=rows.find(s=>s.seriesID===seriesId);
  if(!series||!Array.isArray(series.data))throw Error('BLS_MISSING_SERIES');
  const meta=BLS_SERIES.find(s=>s.id===seriesId);
  if(!meta)throw Error('BLS_UNKNOWN_SERIES');
@@ -43,7 +49,7 @@ export function parseBlsResponse(raw,seriesId,now){
   isRealTime:false,eligibleForTrading:false};
 }
 export function describeBlsFailure(raw){
- if(raw?.status==='REQUEST_SUCCEEDED'&&Array.isArray(raw?.Results?.series))return null;
+ if(raw?.status==='REQUEST_SUCCEEDED'&&blsSeriesFromResponse(raw))return null;
  const messages=Array.isArray(raw?.message)?raw.message.map(String).join(' ').toLowerCase():'';
  if(/limit|quota|too many|exceed|rate/.test(messages))return 'BLS_RATE_OR_DAILY_LIMIT';
  if(/locked|unavailable|maintenance|temporary/.test(messages))return 'BLS_UPSTREAM_TEMPORARILY_UNAVAILABLE';
@@ -56,7 +62,7 @@ export async function fetchBlsIndicators({fetcher=fetch,now=Math.floor(Date.now(
  const response=await fetcher(registrationKey?V2_URL:V1_URL,{
   method:'POST',headers:{accept:'application/json','content-type':'application/json'},
   body:JSON.stringify({...{seriesid:BLS_SERIES.map(x=>x.id)},
-   ...(registrationKey?{registrationKey}: {})}),
+   ...(registrationKey?{registrationkey:registrationKey}: {})}),
   redirect:'error',signal:AbortSignal.timeout(12000)});
  if(!response.ok)throw Error('BLS_HTTP_'+response.status);
  const raw=await response.json();
