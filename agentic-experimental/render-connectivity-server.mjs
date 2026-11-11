@@ -15,10 +15,12 @@ import {liveNewsSystemStatus} from './live-news-gate.mjs';
 import {createLiveCalendarStream} from './live-calendar-stream.mjs';
 import {createResearchBrain} from './research-brain.mjs';
 import {demoSensorReadiness} from './mt5-demo-sensor.mjs';
+import {runSyntheticShadowSmoke} from './shadow-smoke.mjs';
 const feed=createShadowFeedRunner();
 const goldSpot=createPublicGoldObserver();
 const sources=createResearchSources({goldKey:process.env.NABD_TEST_GOLD_TWELVEDATA_KEY}); // Calendar polled only by economicCalendar to avoid duplicate paid-provider calls.
 const hybrid=new HybridScheduler();
+let shadowSmoke={status:'NOT_RUN',syntheticDataOnly:true,brokerTradingEnabled:false};
 const researchBrain=createResearchBrain({key:process.env.OPENAI_API_KEY,model:process.env.NABD_RESEARCH_MODEL||'gpt-4.1-mini'});
 const officialNews=createOfficialNewsMonitor();
 let connectedJournal=null;
@@ -53,14 +55,18 @@ async function verify(){
 }
 const server=http.createServer((req,res)=>{
   const pathname=new URL(req.url,'http://localhost').pathname;
-  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-calendar/status','/brain/status','/demo-sensor/status'].includes(pathname)){
+  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-calendar/status','/brain/status','/demo-sensor/status','/shadow-smoke/status'].includes(pathname)){
     res.writeHead(404,{'Content-Type':'application/json','Cache-Control':'no-store'});
     res.end(JSON.stringify({error:'not_found'}));return;
   }
   res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
-  res.end(JSON.stringify(pathname==='/brain/status' ? researchBrain.report() : pathname==='/demo-sensor/status' ? demoSensorReadiness() : pathname==='/live-calendar/status' ? liveCalendarStream.report() : pathname==='/live-news/status' ? liveNewsSystemStatus({journalConnected:!!connectedJournal,calendarKeyConfigured:!!process.env.NABD_TEST_TRADING_ECONOMICS_STREAM_KEY&&!!process.env.NABD_TEST_TRADING_ECONOMICS_STREAM_SECRET,realtimeFeedVerified:false,officialReleaseTimestampVerified:false,preReleaseForecastCaptured:false,brokerFeedVerified:false}) : pathname==='/delayed-consensus/status' ? delayedCalendar.report() : pathname==='/journal/status' ? journalState : pathname==='/official-data/status' ? blsIndicators.report() : pathname==='/calendar/status' ? economicCalendar.report() : pathname==='/news/research' ? newsResearchReadiness({calendarConfigured:!!process.env.NABD_TEST_TRADING_ECONOMICS_KEY,verifiedReleaseArchive:false,goldBrokerCandles:false,btcBrokerCandles:false,openaiConnected:state==='CONNECTED'}) : pathname==='/news/status' ? officialNews.report() : pathname==='/gold/status' ? goldSpot.report() : pathname==='/research/status' ? sources.report() : pathname==='/feed/status' ? feed.report() : pathname==='/hybrid/status' ? hybrid.report() : {service:'nabd-agentic-ai-test',experimental:true,reference_only:true,trading_enabled:false,model_connection:state,last_checked:checkTime}));
+  res.end(JSON.stringify(pathname==='/shadow-smoke/status' ? shadowSmoke : pathname==='/brain/status' ? researchBrain.report() : pathname==='/demo-sensor/status' ? demoSensorReadiness() : pathname==='/live-calendar/status' ? liveCalendarStream.report() : pathname==='/live-news/status' ? liveNewsSystemStatus({journalConnected:!!connectedJournal,calendarKeyConfigured:!!process.env.NABD_TEST_TRADING_ECONOMICS_STREAM_KEY&&!!process.env.NABD_TEST_TRADING_ECONOMICS_STREAM_SECRET,realtimeFeedVerified:false,officialReleaseTimestampVerified:false,preReleaseForecastCaptured:false,brokerFeedVerified:false}) : pathname==='/delayed-consensus/status' ? delayedCalendar.report() : pathname==='/journal/status' ? journalState : pathname==='/official-data/status' ? blsIndicators.report() : pathname==='/calendar/status' ? economicCalendar.report() : pathname==='/news/research' ? newsResearchReadiness({calendarConfigured:!!process.env.NABD_TEST_TRADING_ECONOMICS_KEY,verifiedReleaseArchive:false,goldBrokerCandles:false,btcBrokerCandles:false,openaiConnected:state==='CONNECTED'}) : pathname==='/news/status' ? officialNews.report() : pathname==='/gold/status' ? goldSpot.report() : pathname==='/research/status' ? sources.report() : pathname==='/feed/status' ? feed.report() : pathname==='/hybrid/status' ? hybrid.report() : {service:'nabd-agentic-ai-test',experimental:true,reference_only:true,trading_enabled:false,model_connection:state,last_checked:checkTime}));
 });
 server.listen(port,'0.0.0.0',()=>{console.log('[NABD AGENTIC TEST] ready on port',port);void verify();
+  void runSyntheticShadowSmoke().then(result=>{shadowSmoke=result;
+    console.log('[NABD SHADOW SELF TEST]',result.status);
+  }).catch(()=>{shadowSmoke={status:'SYNTHETIC_SELF_TEST_FAILED',syntheticDataOnly:true,brokerTradingEnabled:false};
+    console.log('[NABD SHADOW SELF TEST] FAILED');});
   void connectResearchJournal().then(r=>{
     connectedJournal=r.status==='CONNECTED'?r.journal:null;
     journalState={status:r.status,isolated:true,persistenceConnected:r.status==='CONNECTED',writePathEnabled:!!connectedJournal&&!!process.env.NABD_TEST_TRADING_ECONOMICS_KEY};
