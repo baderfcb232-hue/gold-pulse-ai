@@ -58,5 +58,5 @@ export function liveNewsSystemStatus({
  return {status:blockers.length?'BLOCKED':'SHADOW_DATA_READY',
   blockers,signal:'WAIT',liveTradingEnabled:false,
   demoNewsExecutionEnabled:false,shadowMode:true,
-  tradingEnabled:tradeExecutionEnabled===true?false:false};
+  tradingEnabled:false};
 }
