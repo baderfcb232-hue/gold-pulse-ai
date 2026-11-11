@@ -58,3 +58,41 @@ database, MT5 terminals or Telegram order bridge are used.**
 `node --test agentic-experimental/*.test.mjs`
 GitHub Actions also runs an isolated PostgreSQL integration test. A passing
 CI run does not establish that a remote BLS service or a live broker works.
+
+## November 11 implementation update (isolated only)
+- BLS fixed real official `Results:[{series:[]}]` response shape (also retains
+  older object parser); v2 uses documented lowercase `registrationkey` field.
+- A single BLS v1 POST is still rejected at runtime with
+  `BLS_AUTHORIZATION_FAILED` on this Render service. This is an external
+  authorization blocker, **not** a successful source connection. The API
+  registration form requires manual completion; put the free registration
+  key in `NABD_TEST_BLS_REGISTRATION_KEY` on the **experimental service only**.
+  Do not put API credentials in GitHub/chat.
+- `shadow-pipeline.mjs` validates demo sensor data + multi-timeframe chart,
+  runs a research brain only for qualified context, applies shadow risk
+  and never creates an order or lot.
+- `shadow-smoke.mjs` runs **synthetic** scenarios and publishes status via
+  `/shadow-smoke/status`. This is not an MT5 or real OpenAI execution test.
+- `/integration/status` lists isolated components and unresolved blockers.
+- `mt5-demo-readonly-sensor.py` is an *offline standalone Windows-only*
+  read-only sensor for a new, dedicated DEMO terminal. It does not connect
+  to Render. It was syntax-tested and safety-tested with mocked MT5 using
+  GitHub Actions, **not compiled/tested on a real terminal**.
+
+### Isolated Windows DEMO sensor setup
+1. Use a **separate** Windows demo-only installation of MetaTrader 5.
+   Do not reuse the production MT5, credentials or VPS session.
+2. Install Python and `python -m pip install MetaTrader5` on that
+   dedicated Windows test machine.
+3. Set `NABD_TEST_MT5_TERMINAL_PATH` to the full path of that separate
+   terminal's `terminal64.exe`. Set `NABD_TEST_SENSOR_OUTPUT_DIR` to a local
+   output folder.
+4. Set `NABD_TEST_GOLD_SYMBOL` and `NABD_TEST_BTC_SYMBOL` to their actual
+   broker names (for example `XAUUSD.m` and `BTCUSD.m` only if verified
+   on the isolated demo terminal).
+5. Run `python agentic-experimental/mt5-demo-readonly-sensor.py` with the
+   independent demo terminal logged in. Only a local JSON reference file is
+   written; no server uploads, orders, execution, or network publishing.
+6. Future authenticated ingestion is a separate engineering stage requiring
+   dedicated credentials and endpoint security reviews. Until then
+   `/demo-sensor/status` must remain `brokerConnected:false`.
