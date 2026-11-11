@@ -24,13 +24,34 @@ export function validateIsolatedDemoSnapshot(snapshot,now){
  else if(snapshot.candlesM5.some(c=>!valid(c.time)||![c.open,c.high,c.low,c.close].every(finite)||
     c.low<=0||c.low>Math.min(c.open,c.close)||c.high<Math.max(c.open,c.close)))
   errors.push('INVALID_DEMO_CANDLES');
+ const higherFrames=['M15','H1','H4'];
+ let multiTimeframeVerified=true;
+ for(const frame of higherFrames){
+  const bars=snapshot['candles'+frame];
+  const duration={M15:900,H1:3600,H4:14400}[frame];
+  if(!Array.isArray(bars)||bars.length<2||bars.length>500){
+   multiTimeframeVerified=false;continue;
+  }
+  if(bars.some((bar,i)=>!valid(bar.time)||![
+   bar.open,bar.high,bar.low,bar.close].every(finite)||
+   bar.low<=0||bar.low>Math.min(bar.open,bar.close)||
+   bar.high<Math.max(bar.open,bar.close)||
+   bar.time+duration>now||i>0&&bars[i-1].time>=bar.time)){
+   errors.push('INVALID_'+frame+'_CANDLES');
+   multiTimeframeVerified=false;
+  }
+ }
  if(errors.length)return {status:'REJECTED',errors,safe:null};
  return {status:'VALIDATED_RESEARCH_SENSOR',errors:[],safe:{
   environment:snapshot.environment,accountType:'DEMO',symbol:snapshot.symbol,
   brokerServer:snapshot.brokerServer,timestamp:snapshot.timestamp,
   bid:snapshot.bid,ask:snapshot.ask,tickSize:snapshot.tickSize,
   tickValue:snapshot.tickValue,contractSize:snapshot.contractSize,
-  candlesM5:snapshot.candlesM5.slice(-100)},
+  candlesM5:snapshot.candlesM5.slice(-100),
+  multiTimeframeVerified,
+  candlesM15:multiTimeframeVerified?snapshot.candlesM15.slice(-100):null,
+  candlesH1:multiTimeframeVerified?snapshot.candlesH1.slice(-100):null,
+  candlesH4:multiTimeframeVerified?snapshot.candlesH4.slice(-100):null},
   executionAllowed:false,ordersSupported:false};
 }
 export function demoSensorReadiness(){
