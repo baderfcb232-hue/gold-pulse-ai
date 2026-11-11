@@ -71,7 +71,7 @@ server.listen(port,'0.0.0.0',()=>{console.log('[NABD AGENTIC TEST] ready on port
   const goldTimer=setInterval(()=>void goldSpot.poll().then(r=>{if(r.status==='ERROR')console.log('[NABD GOLD REFERENCE] ERROR',r.code);}),60000);goldTimer.unref();
   void economicCalendar.poll().then(r=>console.log('[NABD CALENDAR PREVIEW]',r.status));
   void blsIndicators.poll().then(r=>console.log('[NABD BLS SERIES]',r.status,r.code||''));
-  void delayedCalendar.poll().then(r=>console.log('[NABD DELAYED CONSENSUS]',r.status,r.eventCount));
+  void delayedCalendar.poll().then(r=>console.log('[NABD DELAYED CONSENSUS]',r.status,JSON.stringify(r.evidence)));
   const delayedTimer=setInterval(()=>void delayedCalendar.poll(),60*60000);delayedTimer.unref();
   const blsTimer=setInterval(()=>void blsIndicators.poll(),4*3600*1000);blsTimer.unref();
   // Conservative default: 8 polls/day (~240/month), not 288/day. Higher frequency requires explicit plan-aware configuration.
