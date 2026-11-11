@@ -51,3 +51,14 @@ test('rejects out-of-order quotes and a synthetic broker impersonation',()=>{
  fake.signature=signDemoEnvelope(secret,time,fake.body);
  assert.equal(ingest.receive(fake).code,'BROKER_IDENTITY_UNVERIFIED');
 });
+
+test('sensor report goes stale after ten seconds instead of claiming broker connected',()=>{
+ let time=now;
+ const ingest=createDemoIngest({secret,clock:()=>time});
+ assert.equal(ingest.receive(signed(body())).status,'OBSERVED');
+ assert.equal(ingest.report().status,'OBSERVING_ISOLATED_DEMO');
+ time=now+11;
+ assert.equal(ingest.report().status,'STALE_SENSOR');
+ assert.equal(ingest.report().markets.XAUUSD.status,'STALE');
+ assert.equal(ingest.report().allowTrading,false);
+});
