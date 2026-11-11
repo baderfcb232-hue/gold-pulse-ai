@@ -49,3 +49,23 @@ test('observing incoming event remains research-only',async()=>{
  assert.equal(v.latestEvents[0].eligibleForExecution,false);
  assert.equal(v.independentlyMeasuredLatency,false);s.stop();
 });
+
+test('parses actual Trading Economics stream documentation example including trailing-space Forecast key',()=>{
+ const event={topic:'calendar',country:'United States',category:'Inflation Expectations',event:'Consumer Inflation Expectations',
+  calendarId:'324314',importance:'3',date:new Date(at*1000).toISOString(),
+  actual:'3.8%',previous:'4.1%',teforecast:'3.9%', 'forecast ':'3.7%'};
+ const r=parseStreamCalendarMessage(event,now);
+ assert.equal(r.accepted,true);
+ assert.equal(r.event.forecastRaw,'3.7%');
+ assert.equal(r.event.allThreeComparable,true);
+ assert.equal(r.event.comparison.direction,'ABOVE_FORECAST');
+ assert.equal(r.event.eligibleForExecution,false);
+});
+test('does not replace absent consensus Forecast with TEForecast or null placeholder',()=>{
+ const event={...base,forecast:'None',teforecast:'3.0%'};
+ const r=parseStreamCalendarMessage(event,now);
+ assert.equal(r.accepted,true);
+ assert.equal(r.event.hasForecast,false);
+ assert.equal(r.event.allThreeComparable,false);
+ assert.equal(r.event.forecastRaw,null);
+});
