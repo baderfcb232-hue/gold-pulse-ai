@@ -41,17 +41,25 @@ export function parseBlsResponse(raw,seriesId,now){
   revisionStatus:'UNVERIFIED',comparisonToForecast:null,marketImpact:'UNKNOWN',
   isRealTime:false,eligibleForTrading:false};
 }
+export function describeBlsFailure(raw){
+ if(raw?.status==='REQUEST_SUCCEEDED'&&Array.isArray(raw?.Results?.series))return null;
+ const messages=Array.isArray(raw?.message)?raw.message.map(String).join(' ').toLowerCase():'';
+ if(/limit|quota|too many|exceed|rate/.test(messages))return 'BLS_RATE_OR_DAILY_LIMIT';
+ if(/locked|unavailable|maintenance|temporary/.test(messages))return 'BLS_UPSTREAM_TEMPORARILY_UNAVAILABLE';
+ return 'BLS_UPSTREAM_REJECTED_REQUEST';
+}
 export async function fetchBlsIndicators({fetcher=fetch,now=Math.floor(Date.now()/1000)}={}){
- const out=[];
- // Public v1 requests each series separately. Kept to 3 calls per poll, 4h cadence.
- for(const row of BLS_SERIES){
-  const response=await fetcher(URL+row.id,{
-   method:'GET',headers:{accept:'application/json'},redirect:'error',
-   signal:AbortSignal.timeout(12000)});
-  if(!response.ok)throw Error('BLS_HTTP_'+response.status);
-  out.push(parseBlsResponse(await response.json(),row.id,now));
- }
- return out;
+ // The official v1 API allows up to 25 series in ONE POST. One request instead
+ // of three makes restarts and free/shared-IP quotas less likely to break.
+ const response=await fetcher(URL,{
+  method:'POST',headers:{accept:'application/json','content-type':'application/json'},
+  body:JSON.stringify({seriesid:BLS_SERIES.map(x=>x.id)}),
+  redirect:'error',signal:AbortSignal.timeout(12000)});
+ if(!response.ok)throw Error('BLS_HTTP_'+response.status);
+ const raw=await response.json();
+ const reason=describeBlsFailure(raw);
+ if(reason)throw Error(reason);
+ return BLS_SERIES.map(row=>parseBlsResponse(raw,row.id,now));
 }
 export function createBlsOfficialMonitor({load=fetchBlsIndicators,
  clock=()=>Math.floor(Date.now()/1000)}={}){
