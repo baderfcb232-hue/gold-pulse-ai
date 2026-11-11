@@ -73,6 +73,9 @@ server.listen(port,'0.0.0.0',()=>{console.log('[NABD AGENTIC TEST] ready on port
   void delayedCalendar.poll().then(r=>console.log('[NABD DELAYED CONSENSUS]',r.status,r.eventCount));
   const delayedTimer=setInterval(()=>void delayedCalendar.poll(),60*60000);delayedTimer.unref();
   const blsTimer=setInterval(()=>void blsIndicators.poll(),4*3600*1000);blsTimer.unref();
-  const calendarTimer=setInterval(()=>void economicCalendar.poll(),5*60000);calendarTimer.unref();
+  // Conservative default: 8 polls/day (~240/month), not 288/day. Higher frequency requires explicit plan-aware configuration.
+  const calendarMinutes=Number(process.env.NABD_TEST_CALENDAR_POLL_MINUTES||180);
+  const safeCalendarMinutes=Number.isFinite(calendarMinutes)?Math.max(5,Math.min(1440,Math.floor(calendarMinutes))):180;
+  const calendarTimer=setInterval(()=>void economicCalendar.poll(),safeCalendarMinutes*60000);calendarTimer.unref();
   const goldCandlesTimer=setInterval(()=>void sources.check(),15*60000);goldCandlesTimer.unref();
 });
