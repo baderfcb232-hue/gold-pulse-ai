@@ -5,7 +5,8 @@ export const BLS_SERIES=Object.freeze([
  {id:'LNS14000000',name:'Civilian unemployment rate',unit:'PERCENT'},
  {id:'CES0000000001',name:'Total nonfarm payroll employment',unit:'THOUSANDS'}
 ]);
-const URL='https://api.bls.gov/publicAPI/v1/timeseries/data/';
+const V1_URL='https://api.bls.gov/publicAPI/v1/timeseries/data/';
+const V2_URL='https://api.bls.gov/publicAPI/v2/timeseries/data/';
 export function shiftMonth(period,months){
  if(!/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(period)||!Number.isInteger(months))throw Error('BLS_INVALID_PERIOD');
  const [year,month]=period.split('-').map(Number);
@@ -48,12 +49,14 @@ export function describeBlsFailure(raw){
  if(/locked|unavailable|maintenance|temporary/.test(messages))return 'BLS_UPSTREAM_TEMPORARILY_UNAVAILABLE';
  return 'BLS_UPSTREAM_REJECTED_REQUEST';
 }
-export async function fetchBlsIndicators({fetcher=fetch,now=Math.floor(Date.now()/1000)}={}){
+export async function fetchBlsIndicators({fetcher=fetch,now=Math.floor(Date.now()/1000),
+ registrationKey=process.env.NABD_TEST_BLS_REGISTRATION_KEY}={}){
  // The official v1 API allows up to 25 series in ONE POST. One request instead
  // of three makes restarts and free/shared-IP quotas less likely to break.
- const response=await fetcher(URL,{
+ const response=await fetcher(registrationKey?V2_URL:V1_URL,{
   method:'POST',headers:{accept:'application/json','content-type':'application/json'},
-  body:JSON.stringify({seriesid:BLS_SERIES.map(x=>x.id)}),
+  body:JSON.stringify({...{seriesid:BLS_SERIES.map(x=>x.id)},
+   ...(registrationKey?{registrationKey}: {})}),
   redirect:'error',signal:AbortSignal.timeout(12000)});
  if(!response.ok)throw Error('BLS_HTTP_'+response.status);
  const raw=await response.json();
@@ -81,7 +84,8 @@ export function createBlsOfficialMonitor({load=fetchBlsIndicators,
  }
  return {poll,report:()=>({status:lastError?'FEED_ERROR':lastSuccess?'OBSERVING':'NOT_CHECKED',
   source:'BLS_PUBLIC_DATA_API_V1',lastAttempt,lastSuccess,lastError,series,
-  cadence:'EVERY_4_HOURS',providerQuota:'UNREGISTERED_25_REQUESTS_PER_DAY',
+  cadence:'EVERY_4_HOURS',providerQuota:process.env.NABD_TEST_BLS_REGISTRATION_KEY?
+    'REGISTERED_500_REQUESTS_PER_DAY':'UNREGISTERED_25_REQUESTS_PER_DAY',
   firstPublicationVerified:false,forecastsAvailable:false,
   actualVsForecastReady:false,autoTradingEnabled:false,aiAnalysisEnabled:false})};
 }
