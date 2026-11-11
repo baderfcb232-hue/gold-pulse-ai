@@ -18,7 +18,8 @@ export function createShadowResearchPipeline({brain,clock=()=>Math.floor(Date.no
   const s=verified.safe;
   const ctx={symbol:s.symbol,feedType:'MT5_DEMO_BROKER',observedAt:s.timestamp,
    bid:s.bid,ask:s.ask,spreadLimit:proposal?.spreadLimit,
-   candlesVerified:true,multiTimeframeVerified:false, // M5 alone is insufficient.
+   candlesVerified:true,multiTimeframeVerified:s.multiTimeframeVerified===true,
+   candlesM5:s.candlesM5,candlesM15:s.candlesM15,candlesH1:s.candlesH1,candlesH4:s.candlesH4,
    accountType:'DEMO',news:news||{classification:'NONE'}};
   const context=validateResearchContext(ctx,now);
   if(context.status!=='RESEARCH_CONTEXT_READY'){
