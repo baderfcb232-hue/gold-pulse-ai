@@ -41,3 +41,15 @@ test('upstream 403 does not fabricate data',async()=>{
  assert.equal((await monitor.poll()).status,'ERROR');
  assert.equal(monitor.report().series.length,0);
 });
+
+test('optional registered BLS v2 uses isolated API key only in request body',async()=>{
+ const requests=[];
+ const data=await fetchBlsIndicators({now,registrationKey:'test-registration-key',fetcher:async(url,options)=>{
+  requests.push({url,body:JSON.parse(options.body)});
+  return {ok:true,json:async()=>({status:'REQUEST_SUCCEEDED',Results:{series:BLS_SERIES.map(s=>response(s.id).Results.series[0])}})};
+ }});
+ assert.equal(data.length,3);
+ assert.equal(requests[0].url,'https://api.bls.gov/publicAPI/v2/timeseries/data/');
+ assert.equal(requests[0].body.registrationKey,'test-registration-key');
+ assert.equal(requests.length,1);
+});
