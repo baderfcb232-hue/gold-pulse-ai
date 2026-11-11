@@ -50,10 +50,15 @@ export function parseBlsResponse(raw,seriesId,now){
 }
 export function describeBlsFailure(raw){
  if(raw?.status==='REQUEST_SUCCEEDED'&&blsSeriesFromResponse(raw))return null;
- const messages=Array.isArray(raw?.message)?raw.message.map(String).join(' ').toLowerCase():'';
+ const messages=(Array.isArray(raw?.message)?raw.message.map(String).join(' '):
+  typeof raw?.message==='string'?raw.message:'').toLowerCase();
  if(/limit|quota|too many|exceed|rate/.test(messages))return 'BLS_RATE_OR_DAILY_LIMIT';
+ if(/registration|authorization|api key|invalid key|unauthorized/.test(messages))return 'BLS_AUTHORIZATION_FAILED';
+ if(/syntax|malformed|invalid request|bad request|json/.test(messages))return 'BLS_REQUEST_FORMAT_REJECTED';
+ if(/forbidden|access denied|blocked|firewall/.test(messages))return 'BLS_ACCESS_BLOCKED';
  if(/locked|unavailable|maintenance|temporary/.test(messages))return 'BLS_UPSTREAM_TEMPORARILY_UNAVAILABLE';
- return 'BLS_UPSTREAM_REJECTED_REQUEST';
+ const status=typeof raw?.status==='string'&&/^[A-Z_]{3,60}$/.test(raw.status)?raw.status:'UNKNOWN_STATUS';
+ return 'BLS_UPSTREAM_REJECTED_'+status;
 }
 export async function fetchBlsIndicators({fetcher=fetch,now=Math.floor(Date.now()/1000),
  registrationKey=process.env.NABD_TEST_BLS_REGISTRATION_KEY}={}){
