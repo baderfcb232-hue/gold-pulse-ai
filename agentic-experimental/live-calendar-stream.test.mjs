@@ -69,3 +69,13 @@ test('does not replace absent consensus Forecast with TEForecast or null placeho
  assert.equal(r.event.allThreeComparable,false);
  assert.equal(r.event.forecastRaw,null);
 });
+
+test('configuration report identifies missing streaming entitlements without leaking credentials',()=>{
+ const stream=createLiveCalendarStream({key:'',secret:'',wsFactory:()=>{throw Error('should not run')}});
+ stream.connect();
+ const report=stream.report();
+ assert.equal(report.authorizationState,'CREDENTIALS_MISSING');
+ assert.deepEqual(report.missingConfiguration,['NABD_TEST_TRADING_ECONOMICS_STREAM_KEY','NABD_TEST_TRADING_ECONOMICS_STREAM_SECRET']);
+ assert.equal(report.noKeyAlternativeRealTimeConsensusAvailable,false);
+ assert.equal(report.realtimeNewsTradingEnabled,false);
+});
