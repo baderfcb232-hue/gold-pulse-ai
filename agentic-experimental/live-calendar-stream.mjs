@@ -5,24 +5,28 @@ import {parseComparable} from './news-surprise.mjs';
 const SOURCE='TRADING_ECONOMICS_STREAM';
 const safeSeconds=()=>Math.floor(Date.now()/1000);
 const valid=x=>Number.isSafeInteger(x)&&x>0;
-const clean=x=>typeof x==='string'?x.trim():typeof x==='number'?String(x):'';
+const clean=x=>{const v=typeof x==='string'?x.trim():typeof x==='number'?String(x):'';return /^(null|none|n\/a|na|undefined)$/i.test(v)?'':v;};
+// Provider streaming examples sometimes include the literal key 'forecast ' (trailing whitespace).
+// Normalize keys, but never substitute proprietary TEForecast for analyst consensus Forecast.
+function normalizedFields(message){const result={};for(const [k,v] of Object.entries(message)){const name=k.trim().toLowerCase();if(!(name in result)||result[name]==null)result[name]=v;}return result;}
 export function parseStreamCalendarMessage(raw,receivedAt=safeSeconds()){
  let m;try{m=typeof raw==='string'?JSON.parse(raw):raw;}catch{return {accepted:false,reason:'INVALID_JSON'};}
  if(!m||Array.isArray(m)||typeof m!=='object')return {accepted:false,reason:'INVALID_SCHEMA'};
  if(String(m.topic||'').toLowerCase()!=='calendar')return {accepted:false,reason:'NOT_CALENDAR'};
- const country=String(m.country||'').trim().toLowerCase();
+ const fields=normalizedFields(m);
+ const country=String(fields.country||'').trim().toLowerCase();
  if(!['united states','usa','us'].includes(country))return {accepted:false,reason:'NOT_US_EVENT'};
- if(Number(m.importance)!==3)return {accepted:false,reason:'NOT_HIGH_IMPACT'};
- const id=String(m.calendarId??m.CalendarId??'').trim();
+ if(Number(fields.importance)!==3)return {accepted:false,reason:'NOT_HIGH_IMPACT'};
+ const id=String(fields.calendarid??'').trim();
  if(!/^[0-9]{1,30}$/.test(id))return {accepted:false,reason:'INVALID_EVENT_ID'};
- const title=String(m.event||'').trim().slice(0,160);
+ const title=String(fields.event||'').trim().slice(0,160);
  if(!title)return {accepted:false,reason:'MISSING_TITLE'};
- const utc=String(m.date??'');
+ const utc=String(fields.date??'');
  // Provider documentation describes scheduled release in UTC, no independent actual-publish timestamp.
  const eventAt=Date.parse(utc.endsWith('Z')||/[+-][0-9]{2}:[0-9]{2}$/.test(utc)?utc:utc+'Z')/1000;
  if(!valid(eventAt)||!valid(receivedAt)||eventAt>receivedAt+86400*8||eventAt<receivedAt-86400*14)
   return {accepted:false,reason:'INVALID_SCHEDULE'};
- const actualRaw=clean(m.actual),forecastRaw=clean(m.forecast),previousRaw=clean(m.previous);
+ const actualRaw=clean(fields.actual),forecastRaw=clean(fields.forecast),previousRaw=clean(fields.previous);
  const a=parseComparable(actualRaw),f=parseComparable(forecastRaw),p=parseComparable(previousRaw);
  const comparable=!!a&&!!f&&a.unit===f.unit;
  return {accepted:true,event:{source:SOURCE,id,title,eventAt,receivedAt,actualRaw:actualRaw||null,
