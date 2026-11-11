@@ -126,7 +126,12 @@ export function createLiveCalendarStream({
  function stop(){stopped=true;if(reconnectTimer)clearTimeout(reconnectTimer);
   reconnectTimer=null;try{ws?.close();}catch{}ws=null;status='STOPPED';}
  function report(){const age=lastMessageAt?clock()-Math.floor(Date.parse(lastMessageAt)/1000):null;
-  return {source:SOURCE,status,configured:!!key&&!!secret,lastConnected,lastMessageAt,
+  return {source:SOURCE,status,configured:!!key&&!!secret,
+   authorizationState:!key||!secret?'CREDENTIALS_MISSING':status==='OBSERVING_STREAM_MESSAGES'?'RECEIVING_PROVIDER_EVENTS':status==='SUBSCRIBED_UNVERIFIED'?'SOCKET_OPEN_AWAITING_CALENDAR_EVENT':status,
+   missingConfiguration:[...(!key?['NABD_TEST_TRADING_ECONOMICS_STREAM_KEY']:[]),...(!secret?['NABD_TEST_TRADING_ECONOMICS_STREAM_SECRET']:[])],
+   requiredProviderEntitlement:'ECONOMIC_CALENDAR_STREAMING',
+   noKeyAlternativeRealTimeConsensusAvailable:false,
+   lastConnected,lastMessageAt,
    messageAgeSeconds:age,receivedMessages:received,acceptedEvents:accepted,
    allThreeComparableEvents:complete,latestEvents:recent,
    errors,referenceOnly:true,officialPublicationTimestampVerified:false,
