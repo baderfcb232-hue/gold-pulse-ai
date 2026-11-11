@@ -24,7 +24,8 @@ export function createDemoIngest({secret='',clock=safeNow}={}){
     receivedAt:new Date(s.receivedAt*1000).toISOString(),
     multiTimeframeVerified:s.multiTimeframeVerified};
   }
-  return {status:!configured?'AUTH_SECRET_NOT_CONFIGURED':accepted?'OBSERVING_ISOLATED_DEMO':'AWAITING_SENSOR',
+  const fresh=Object.values(markets).some(x=>x.status==='SENSOR_OBSERVED');
+  return {status:!configured?'AUTH_SECRET_NOT_CONFIGURED':fresh?'OBSERVING_ISOLATED_DEMO':accepted?'STALE_SENSOR':'AWAITING_SENSOR',
    authentication:configured?'HMAC_SHA256_CONFIGURED':'DISABLED',
    transport:'TLS_REQUIRED',maxBytes:120000,accepted,rejected,lastReceipt,lastReject,
    markets,brokerOrderRoutes:false,allowTrading:false,aiAutoInvocation:false};
