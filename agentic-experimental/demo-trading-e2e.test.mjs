@@ -21,7 +21,7 @@ function frame(duration,count){
 function snapshot(){
  const m5=frame(300,220),price=m5.at(-1).close;
  return {environment:'EXPERIMENTAL_NABD_AGENTIC',accountType:'DEMO',executionEnabled:false,
-  symbol:'XAUUSD',brokerServer:'Isolated-JustMarkets-Demo',
+  symbol:'XAUUSD',brokerServer:'Isolated-JustMarkets-Demo',accountLogin:3214567,
   timestamp:t-1,bid:price+.02,ask:price+.12,tickSize:.01,tickValue:1,contractSize:1,
   candlesM5:m5,candlesM15:frame(900,64),candlesH1:frame(3600,48),
   candlesH4:frame(14400,32)};
@@ -86,7 +86,7 @@ test('wrong Demo broker identity cannot receive an existing signed intent',async
  system.brain.onSnapshot(system.ingest.getLatest('XAUUSD'));await system.brain.flush();
  assert.equal(system.orders.report().created,1);
  const denied=system.orders.pull(signedPull(3214567,'OtherBroker-Demo'));
- assert.equal(denied.status,'NO_INTENT');
- assert.equal(system.orders.report().brokerFeedMismatch,1);
+ assert.equal(denied.status,'BROKER_MISMATCH');
  assert.equal(system.orders.report().delivered,0);
+ assert.equal(system.orders.pull(signedPull()).status,'INTENT_DELIVERED');
 });
