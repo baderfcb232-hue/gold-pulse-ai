@@ -46,7 +46,7 @@ function compose({journalResult={inserted:true},stance='BUY_WATCH',confidence=.9
    assert.equal(ctx.technicalEvidence.M5.ema200Verified,true);
    assert.equal(ctx.accountType,'DEMO');
    return {status:'RESEARCH_ANALYSIS_ONLY',plan:{
-    stance,confidence,thesis:'confirmed multi-timeframe trend'}};}};
+    stance,confidence,thesis:'confirmed multi-timeframe trend'}};}}};
  const brain=createDemoAutoBrain({brains,scheduler:new HybridScheduler(),
   clock:()=>t,enabled:true,
   journalProvider:()=>({saveAnalysis:async()=>{saved++;return journalResult;}}),
