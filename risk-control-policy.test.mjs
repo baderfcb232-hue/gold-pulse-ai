@@ -6,7 +6,7 @@ const valid=()=>({
   limits:{riskPercent:0.4,maxDailyLoss:2,maxDailyTrades:6,maxOpenPositions:2,
           maxSpread:80,maxSlippage:10,quoteMaxAgeSeconds:5},
   state:{paused:false,emergencyStop:false,dailyLoss:0,dailyTrades:0,
-         openPositions:0,proposedRiskPercent:0.4,availableMargin:100,requiredMargin:25},
+         openPositions:0,proposedRiskPercent:0.4,proposedDailyLoss:0.2,availableMargin:100,requiredMargin:25},
   quote:{timestamp:1999,spread:20,slippage:2},
   signal:{expiresAt:2020}
 });
@@ -36,6 +36,8 @@ test('old or future quotes, expired signals and execution costs block entries',(
 });
 test('missing, invalid, infinite and nonsensical data fail closed',()=>{
   for(const change of [
+    v=>{delete v.state.paused;},
+    v=>{delete v.state.proposedDailyLoss;},
     v=>{v.limits.maxDailyLoss=undefined;},
     v=>{v.state.dailyTrades=NaN;},
     v=>{v.quote.spread=Infinity;},
@@ -49,4 +51,9 @@ test('missing, invalid, infinite and nonsensical data fail closed',()=>{
 test('margin shortage blocks a new entry',()=>{
   const v=valid();v.state.requiredMargin=101;
   assert.equal(preflight(v).reason,'MARGIN_LIMIT');
+});
+
+test('projected loss cannot breach remaining daily budget even before threshold is reached',()=>{
+  const v=valid();v.state.dailyLoss=1.9;v.state.proposedDailyLoss=0.2;
+  assert.equal(preflight(v).reason,'DAILY_LOSS_LIMIT');
 });
