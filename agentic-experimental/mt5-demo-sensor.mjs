@@ -10,6 +10,9 @@ export function validateIsolatedDemoSnapshot(snapshot,now){
     snapshot.accountType!=='DEMO'||snapshot.executionEnabled!==false)
   errors.push('NOT_ISOLATED_DEMO_ONLY');
  if(!['XAUUSD','BTCUSD'].includes(snapshot.symbol))errors.push('UNSUPPORTED_SYMBOL');
+ if(snapshot.brokerSymbol!==undefined&&
+    (typeof snapshot.brokerSymbol!=='string'||!/^[-A-Za-z0-9._]{1,64}$/.test(snapshot.brokerSymbol)))
+  errors.push('INVALID_BROKER_SYMBOL');
  if(snapshot.accountLogin!=null&&(!Number.isSafeInteger(snapshot.accountLogin)||snapshot.accountLogin<=0))
   errors.push('INVALID_DEMO_ACCOUNT_LOGIN');
  if(typeof snapshot.brokerServer!=='string'||!snapshot.brokerServer.toLowerCase().includes('demo')||
@@ -47,7 +50,9 @@ export function validateIsolatedDemoSnapshot(snapshot,now){
  if(errors.length)return {status:'REJECTED',errors,safe:null};
  return {status:'VALIDATED_RESEARCH_SENSOR',errors:[],safe:{
   environment:snapshot.environment,accountType:'DEMO',symbol:snapshot.symbol,
-  brokerServer:snapshot.brokerServer,accountLogin:Number.isSafeInteger(snapshot.accountLogin)?snapshot.accountLogin:null,
+  brokerServer:snapshot.brokerServer,
+  brokerSymbol:typeof snapshot.brokerSymbol==='string'?snapshot.brokerSymbol:null,
+  accountLogin:Number.isSafeInteger(snapshot.accountLogin)?snapshot.accountLogin:null,
   timestamp:snapshot.timestamp,
   bid:snapshot.bid,ask:snapshot.ask,tickSize:snapshot.tickSize,
   tickValue:snapshot.tickValue,contractSize:snapshot.contractSize,
