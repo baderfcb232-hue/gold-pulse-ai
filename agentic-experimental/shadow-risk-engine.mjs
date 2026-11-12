@@ -1,7 +1,7 @@
 // Pure isolated risk calculation for a PAPER/DEMO shadow plan. No execution commands.
 const finite=n=>typeof n==='number'&&Number.isFinite(n);
 export function reviewShadowRisk({symbol,side,accountType,balance,riskPercent,entry,stop,target,
- spread,spreadLimit,quoteAgeSeconds,positionsForSymbol=0,modelPlan=null}={}){
+ spread,spreadLimit,quoteAgeSeconds,positionsForSymbol=0,dailyEntries=null,modelPlan=null}={}){
  const reasons=[];
  if(!['XAUUSD','BTCUSD'].includes(symbol))reasons.push('UNSUPPORTED_SYMBOL');
  if(!['BUY','SELL'].includes(side))reasons.push('INVALID_SIDE');
@@ -16,15 +16,21 @@ export function reviewShadowRisk({symbol,side,accountType,balance,riskPercent,en
   reasons.push('SPREAD_NOT_ACCEPTABLE');
  if(!finite(quoteAgeSeconds)||quoteAgeSeconds<0||quoteAgeSeconds>2)
   reasons.push('STALE_BROKER_QUOTE');
- if(!Number.isSafeInteger(positionsForSymbol)||positionsForSymbol<0||positionsForSymbol>=1)
+ const maxPositions=symbol==='BTCUSD'?2:1;
+ if(!Number.isSafeInteger(positionsForSymbol)||positionsForSymbol<0||positionsForSymbol>=maxPositions)
   reasons.push('POSITION_LIMIT');
+ if(symbol==='BTCUSD'){
+  if(riskPercent>0.4)reasons.push('BTC_RISK_CAP_EXCEEDED');
+  if(!Number.isSafeInteger(dailyEntries)||dailyEntries<0||dailyEntries>=6)
+   reasons.push('BTC_DAILY_ENTRY_LIMIT_OR_UNVERIFIED_COUNT');
+ }
  if(!modelPlan||!['BUY_WATCH','SELL_WATCH','WAIT'].includes(modelPlan.stance)||
     modelPlan.stance!==(side==='BUY'?'BUY_WATCH':'SELL_WATCH'))
   reasons.push('AI_HYPOTHESIS_NOT_ALIGNED');
  const riskAmount=finite(balance)&&finite(riskPercent)?balance*riskPercent/100:null;
  const rewardRisk=[entry,stop,target].every(finite)&&entry!==stop?
   Math.abs(target-entry)/Math.abs(entry-stop):null;
- if(!finite(rewardRisk)||rewardRisk<1.5)reasons.push('REWARD_RISK_TOO_LOW');
+ if(!finite(rewardRisk)||rewardRisk<(symbol==='BTCUSD'?3:1.5))reasons.push('REWARD_RISK_TOO_LOW');
  // Position sizing needs actual broker tick_size/tick_value and contract details.
  // A percentage risk alone cannot establish a valid MT5 lot size.
  return {status:reasons.length?'BLOCKED':'SHADOW_RISK_ACCEPTABLE',
