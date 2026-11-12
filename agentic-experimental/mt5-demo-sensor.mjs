@@ -48,11 +48,11 @@ export function validateIsolatedDemoSnapshot(snapshot,now){
   brokerServer:snapshot.brokerServer,timestamp:snapshot.timestamp,
   bid:snapshot.bid,ask:snapshot.ask,tickSize:snapshot.tickSize,
   tickValue:snapshot.tickValue,contractSize:snapshot.contractSize,
-  candlesM5:snapshot.candlesM5.slice(-100),
+  candlesM5:snapshot.candlesM5.slice(-240),
   multiTimeframeVerified,
   candlesM15:multiTimeframeVerified?snapshot.candlesM15.slice(-100):null,
-  candlesH1:multiTimeframeVerified?snapshot.candlesH1.slice(-100):null,
-  candlesH4:multiTimeframeVerified?snapshot.candlesH4.slice(-100):null},
+  candlesH1:multiTimeframeVerified?snapshot.candlesH1.slice(-80):null,
+  candlesH4:multiTimeframeVerified?snapshot.candlesH4.slice(-60):null},
   executionAllowed:false,ordersSupported:false};
 }
 export function demoSensorReadiness(){
