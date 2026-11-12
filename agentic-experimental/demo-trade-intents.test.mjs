@@ -5,7 +5,7 @@ import {createDemoTradeIntents} from './demo-trade-intents.mjs';
 const now=1800000000,secret='test-execution-only-32-byte-secret-12345';
 const sha=x=>createHmac('sha256',secret).update(x).digest('hex');
 const full=()=>({environment:'EXPERIMENTAL_NABD_AGENTIC',accountType:'DEMO',
- brokerServer:'Independent-JustMarkets-Demo',accountLogin:1234567,timestamp:now-1,bid:100,ask:100.2,
+ brokerServer:'Independent-JustMarkets-Demo',brokerSymbol:'XAUUSD.m',accountLogin:1234567,timestamp:now-1,bid:100,ask:100.2,
  candlesM5:[{time:now-300}]});
 const features=Object.fromEntries(['M5','M15','H1','H4'].map(tf=>[tf,{
  status:'INDICATORS_AVAILABLE',emaDirection:'UP',
@@ -16,7 +16,7 @@ const signed=(payload)=>{const body=JSON.stringify(payload);return {body,
  timestamp:String(now),mac:sha(now+'\n'+body),secure:true}};
 const pull=signed({source:'ISOLATED_DEMO_TRADE_EXECUTOR',accountType:'DEMO',
  accountLogin:1234567,brokerServer:'Independent-JustMarkets-Demo',
- symbols:['XAUUSD','BTCUSD'],capturedAt:now});
+ symbols:['XAUUSD','BTCUSD'],brokerSymbols:{XAUUSD:'XAUUSD.m',BTCUSD:'BTCUSD.m'},capturedAt:now});
 function create(options={}){
  return createDemoTradeIntents({enabled:true,secret,clock:()=>now,
  quoteProvider:()=>full(),...options});
@@ -144,4 +144,47 @@ test('legacy sensor without signed account may analyze, but cannot authorize a t
  assert.equal(d.consider(proposal).reason,'SENSOR_ACCOUNT_UNVERIFIED');
  assert.equal(d.pull(pull).status,'SENSOR_ACCOUNT_UNVERIFIED');
  assert.equal(d.report().executorRegistered,false);
+});
+
+test('a signed order is never routed to a mismatched MT5 symbol suffix',()=>{
+ const d=create();
+ assert.equal(d.consider(proposal).created,true);
+ const bad=signed({...JSON.parse(pull.body),
+   brokerSymbols:{XAUUSD:'XAUUSD',BTCUSD:'BTCUSD.m'}});
+ assert.equal(d.pull(bad).status,'BROKER_SYMBOL_MISMATCH');
+ assert.equal(d.report().delivered,0);
+ assert.equal(d.pull(pull).status,'INTENT_DELIVERED');
+});
+test('time window allows ordinary 4-second observer cadence without permitting stale broker quotes',()=>{
+ let t=now+5;
+ const d=create({clock:()=>t});
+ assert.equal(d.consider(proposal).created,true);
+ const p=JSON.parse(pull.body);p.capturedAt=t;
+ const body=JSON.stringify(p);
+ const ok={body,timestamp:String(t),mac:sha(t+'\n'+body),secure:true};
+ assert.equal(d.pull(ok).status,'INTENT_DELIVERED');
+ t=now+7;
+ const stale=create({clock:()=>t});
+ assert.equal(stale.consider(proposal).reason,'STALE_BROKER_QUOTE');
+});
+test('expired unpulled Demo intent cannot permanently block the next M5 candle',()=>{
+ let t=now;
+ const mk=(bar)=>({...proposal,closedBarTime:bar});
+ const d=create({clock:()=>t,quoteProvider:()=>({...full(),timestamp:t-1,
+   candlesM5:[{time:t-300}]})});
+ assert.equal(d.consider(mk(t-300)).created,true);
+ t+=300;
+ assert.equal(d.consider(mk(t-300)).created,true);
+ assert.equal(d.report().created,2);
+ assert.equal(d.report().queued.length,1);
+});
+test('uncertain broker response remains explicit rather than reported as a rejected order',()=>{
+ const d=create();
+ d.consider(proposal);
+ d.pull(pull);
+ const payload={id:'XAUUSD-'+(now-300),status:'UNCERTAIN',accountType:'DEMO',
+   accountLogin:1234567,occurredAt:now};
+ assert.equal(d.ack(signed(payload)).status,'RECORDED');
+ assert.equal(d.report().uncertainBrokerResults,1);
+ assert.equal(d.report().filledAcks,0);
 });
