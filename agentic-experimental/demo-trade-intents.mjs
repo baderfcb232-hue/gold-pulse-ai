@@ -38,9 +38,11 @@ export function createDemoTradeIntents({
    return deny(symbol,'UNVERIFIED_BROKER');
   if(!Number.isSafeInteger(s.accountLogin)||s.accountLogin<=0)
    return deny(symbol,'SENSOR_ACCOUNT_UNVERIFIED');
+  if(typeof s.brokerSymbol!=='string'||!/^[-A-Za-z0-9._]{1,64}$/.test(s.brokerSymbol))
+   return deny(symbol,'BROKER_SYMBOL_UNVERIFIED');
   if(registeredDemoLogin!==null&&registeredDemoLogin!==s.accountLogin)
    return deny(symbol,'BROKER_ACCOUNT_MISMATCH');
-  if(!Number.isSafeInteger(s.timestamp)||s.timestamp>n||n-s.timestamp>2)
+  if(!Number.isSafeInteger(s.timestamp)||s.timestamp>n||n-s.timestamp>6)
    return deny(symbol,'STALE_BROKER_QUOTE');
   const f=features;
   if(!f||['M5','M15','H1','H4'].some(tf=>f[tf]?.status!=='INDICATORS_AVAILABLE')||
@@ -64,7 +66,9 @@ export function createDemoTradeIntents({
     n-closedBarTime>750)return deny(symbol,'HISTORY_NOT_VERIFIED');
   const id=symbol+'-'+closedBarTime;
   if(seen.has(id))return deny(symbol,'DUPLICATE_M5_INTENT');
-  if(queue.has(symbol))return deny(symbol,'INTENT_ALREADY_PENDING');
+  const pending=queue.get(symbol);
+  if(pending && pending.expires<n){queue.delete(symbol);audit(symbol,'EXPIRED_UNPULLED_INTENT');}
+  else if(pending)return deny(symbol,'INTENT_ALREADY_PENDING');
   const entry=buy?s.ask:s.bid,dist=Math.max(1.5*atr,spread*4);
   const rr=symbol==='BTCUSD'?3:2;
   const stop=round(entry+(buy?-dist:dist));
@@ -82,7 +86,7 @@ export function createDemoTradeIntents({
   created++;audit(symbol,'QUEUED',null);
   return {created:true,id,orderCreated:false,brokerExecution:false};
  }
- function take(symbols=[],brokerServer=null){
+ function take(symbols=[],brokerServer=null,brokerSymbols=null){
   if(!enabled||!keyReady)return null;
   for(const symbol of symbols){
    const p=queue.get(symbol);
@@ -91,10 +95,11 @@ export function createDemoTradeIntents({
    const n=clock(),fresh=quoteProvider(symbol);
    // An executor on a different DEMO broker must never receive an order,
    // even when it knows the test key and has similar quote prices.
-   if(!fresh||fresh.brokerServer!==brokerServer){
+   if(!fresh||fresh.brokerServer!==brokerServer||
+      fresh.brokerSymbol!==brokerSymbols?.[symbol]){
      brokerFeedMismatch++;audit(symbol,'BLOCKED','BROKER_FEED_IDENTITY_MISMATCH');continue;
    }
-   if(p.expires<n||fresh.timestamp>n||n-fresh.timestamp>2||
+   if(p.expires<n||fresh.timestamp>n||n-fresh.timestamp>6||
       Math.abs((p.side==='BUY'?fresh.ask:fresh.bid)-p.entry)>Math.max(p.atr*0.25,0.01)){
     audit(symbol,'EXPIRED_OR_PRICE_MOVED');continue;
    }
@@ -127,6 +132,10 @@ export function createDemoTradeIntents({
      x.brokerServer.length>100||!x.brokerServer.toLowerCase().includes('demo')||
      !Array.isArray(x.symbols)||x.symbols.length!==2||
      x.symbols[0]!=='XAUUSD'||x.symbols[1]!=='BTCUSD'||
+     !x.brokerSymbols||typeof x.brokerSymbols!=='object'||
+     Array.isArray(x.brokerSymbols)||!['XAUUSD','BTCUSD'].every(k=>
+       typeof x.brokerSymbols[k]==='string'&&
+       /^[-A-Za-z0-9._]{1,64}$/.test(x.brokerSymbols[k]))||
      !Number.isSafeInteger(x.capturedAt)||Math.abs(x.capturedAt-Number(timestamp))>2)
     return {status:'REJECTED',wire:null};
   // Both EAs must belong to the SAME independently isolated DEMO account.
@@ -142,6 +151,14 @@ export function createDemoTradeIntents({
     return {status:'SENSOR_ACCOUNT_UNVERIFIED',wire:null};
   if(observed.some(s=>s.accountLogin!==x.accountLogin))
     return {status:'WRONG_DEMO_ACCOUNT',wire:null};
+  if(observed.some(s=>typeof s.brokerSymbol!=='string'))
+    return {status:'SYMBOL_MAPPING_UNVERIFIED',wire:null};
+  for(const symbol of x.symbols){
+    const s=quoteProvider(symbol);
+    if(s&&Number.isSafeInteger(s.timestamp)&&s.timestamp<=clock()&&clock()-s.timestamp<=10&&
+       s.brokerSymbol!==x.brokerSymbols[symbol])
+      return {status:'BROKER_SYMBOL_MISMATCH',wire:null};
+  }
   if(registeredDemoLogin!==null&&
      (registeredDemoLogin!==x.accountLogin||registeredDemoServer!==x.brokerServer))
     return {status:'WRONG_DEMO_ACCOUNT',wire:null};
@@ -149,7 +166,7 @@ export function createDemoTradeIntents({
     registeredDemoLogin=x.accountLogin;registeredDemoServer=x.brokerServer;
   }
   lastExecutorSeen=clock();
-  const wire=take(x.symbols,x.brokerServer);
+  const wire=take(x.symbols,x.brokerServer,x.brokerSymbols);
   return {status:wire?'INTENT_DELIVERED':'NO_INTENT',wire,liveTrading:false};
  }
 
@@ -165,7 +182,7 @@ export function createDemoTradeIntents({
    return {status:'REJECTED'};
   let parsed;try{parsed=JSON.parse(body)}catch{return {status:'REJECTED'}}
   if(!parsed||typeof parsed.id!=='string'||!delivered.has(parsed.id)||
-     !['FILLED','REJECTED'].includes(parsed.status)||
+     !['FILLED','REJECTED','UNCERTAIN'].includes(parsed.status)||
      parsed.accountType!=='DEMO'||!Number.isSafeInteger(parsed.accountLogin)||
      parsed.accountLogin<=0||parsed.accountLogin!==registeredDemoLogin||
      !Number.isSafeInteger(parsed.occurredAt)||
@@ -181,7 +198,7 @@ export function createDemoTradeIntents({
   // This is an authenticated EA claim with deal reference, NOT independent
   // broker verification. Never label this as independent broker confirmation.
   const status=parsed.status==='FILLED'?
-    (hasBrokerReference?'EA_REPORTED_FILL_WITH_DEAL':'UNVERIFIED_EA_FILL_CLAIM'):'EA_REPORTED_REJECTION';
+    (hasBrokerReference?'EA_REPORTED_FILL_WITH_DEAL':'UNVERIFIED_EA_FILL_CLAIM'):parsed.status==='REJECTED'?'EA_REPORTED_REJECTION':'EA_UNCERTAIN_BROKER_RESULT';
   acks.set(parsed.id,{status,at:clock(),hasBrokerReference});
   lastAckAt=clock();
   audit(deliveredIntent.symbol,status);
@@ -193,6 +210,7 @@ export function createDemoTradeIntents({
    brokerAcks:acks.size,filledAcks:[...acks.values()].filter(x=>x.hasBrokerReference).length,
    eaUnverifiedFillClaims:[...acks.values()].filter(x=>x.status==='UNVERIFIED_EA_FILL_CLAIM').length,
    brokerIndependentlyVerifiedFills:0,
+   uncertainBrokerResults:[...acks.values()].filter(x=>x.status==='EA_UNCERTAIN_BROKER_RESULT').length,
    queued:[...queue.keys()],lastBySymbol,executorRegistered:registeredDemoLogin!==null,
    executorOnline:lastExecutorSeen!==null&&clock()>=lastExecutorSeen&&clock()-lastExecutorSeen<=15,
    lastExecutorSeenAt:lastExecutorSeen===null?null:new Date(lastExecutorSeen*1000).toISOString(),
