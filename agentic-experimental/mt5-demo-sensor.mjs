@@ -10,7 +10,7 @@ export function validateIsolatedDemoSnapshot(snapshot,now){
     snapshot.accountType!=='DEMO'||snapshot.executionEnabled!==false)
   errors.push('NOT_ISOLATED_DEMO_ONLY');
  if(!['XAUUSD','BTCUSD'].includes(snapshot.symbol))errors.push('UNSUPPORTED_SYMBOL');
- if(snapshot.accountLogin!==undefined&&(!Number.isSafeInteger(snapshot.accountLogin)||snapshot.accountLogin<=0))
+ if(snapshot.accountLogin!=null&&(!Number.isSafeInteger(snapshot.accountLogin)||snapshot.accountLogin<=0))
   errors.push('INVALID_DEMO_ACCOUNT_LOGIN');
  if(typeof snapshot.brokerServer!=='string'||!snapshot.brokerServer.toLowerCase().includes('demo')||
     snapshot.brokerServer.length>100)errors.push('DEMO_BROKER_NOT_PROVEN');
