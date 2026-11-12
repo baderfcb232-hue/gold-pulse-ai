@@ -21,14 +21,14 @@ function frame(duration,count){
 function snapshot(){
  const m5=frame(300,220),price=m5.at(-1).close;
  return {environment:'EXPERIMENTAL_NABD_AGENTIC',accountType:'DEMO',executionEnabled:false,
-  symbol:'XAUUSD',brokerServer:'Isolated-JustMarkets-Demo',accountLogin:3214567,
+  symbol:'XAUUSD',brokerServer:'Isolated-JustMarkets-Demo',brokerSymbol:'XAUUSD.m',accountLogin:3214567,
   timestamp:t-1,bid:price+.02,ask:price+.12,tickSize:.01,tickValue:1,contractSize:1,
   candlesM5:m5,candlesM15:frame(900,64),candlesH1:frame(3600,48),
   candlesH4:frame(14400,32)};
 }
 function signedPull(login=3214567,server='Isolated-JustMarkets-Demo'){
  const body=JSON.stringify({source:'ISOLATED_DEMO_TRADE_EXECUTOR',accountType:'DEMO',
-  accountLogin:login,brokerServer:server,symbols:['XAUUSD','BTCUSD'],capturedAt:t});
+  accountLogin:login,brokerServer:server,symbols:['XAUUSD','BTCUSD'],brokerSymbols:{XAUUSD:'XAUUSD.m',BTCUSD:'BTCUSD.m'},capturedAt:t});
  return {body,timestamp:String(t),mac:mac(execSecret,t+'\n'+body),secure:true};
 }
 function compose({journalResult={inserted:true},stance='BUY_WATCH',confidence=.92,accountType='DEMO'}={}){
