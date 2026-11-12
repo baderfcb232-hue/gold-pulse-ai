@@ -4,8 +4,8 @@ import {createHmac} from 'node:crypto';
 import {createDemoTradeIntents} from './demo-trade-intents.mjs';
 const now=1800000000,secret='test-execution-only-32-byte-secret-12345';
 const sha=x=>createHmac('sha256',secret).update(x).digest('hex');
-const full=()=>({environment:'EXPERIMENTAL_NABD_AGENTIC',accountType:'DEMO',
- brokerServer:'Independent-JustMarkets-Demo',brokerSymbol:'XAUUSD.m',accountLogin:1234567,timestamp:now-1,bid:100,ask:100.2,
+const full=(sym='XAUUSD')=>({environment:'EXPERIMENTAL_NABD_AGENTIC',accountType:'DEMO',
+ brokerServer:'Independent-JustMarkets-Demo',brokerSymbol:sym==='BTCUSD'?'BTCUSD.m':'XAUUSD.m',accountLogin:1234567,timestamp:now-1,bid:100,ask:100.2,
  candlesM5:[{time:now-300}]});
 const features=Object.fromEntries(['M5','M15','H1','H4'].map(tf=>[tf,{
  status:'INDICATORS_AVAILABLE',emaDirection:'UP',
@@ -19,7 +19,7 @@ const pull=signed({source:'ISOLATED_DEMO_TRADE_EXECUTOR',accountType:'DEMO',
  symbols:['XAUUSD','BTCUSD'],brokerSymbols:{XAUUSD:'XAUUSD.m',BTCUSD:'BTCUSD.m'},capturedAt:now});
 function create(options={}){
  return createDemoTradeIntents({enabled:true,secret,clock:()=>now,
- quoteProvider:()=>full(),...options});
+ quoteProvider:sym=>full(sym),...options});
 }
 test('model WATCH + deep verified trend creates single expiry-bound signed DEMO intent',()=>{
  const d=create();
@@ -62,7 +62,7 @@ test('risk gate rejects WAIT, low confidence, missing indicators, trend conflict
 });
 test('expired intents are dropped without retry or a remotely generated order',()=>{
  let tick=now;
- const d=create({clock:()=>tick,quoteProvider:()=>({...full(),timestamp:tick-1})});
+ const d=create({clock:()=>tick,quoteProvider:sym=>({...full(sym),timestamp:tick-1})});
  assert.equal(d.consider(proposal).created,true);
  tick+=21;
  assert.equal(d.pull({...pull, timestamp:String(tick),mac:sha(tick+'\n'+pull.body)}).status,'REJECTED');
@@ -92,7 +92,7 @@ test('false, missing execution flag or key never issues commands',()=>{
 
 test('executorRegistered is historical; executorOnline requires recent authenticated polls',()=>{
  let t=now;
- const d=create({clock:()=>t,quoteProvider:()=>({...full(),timestamp:t-1})});
+ const d=create({clock:()=>t,quoteProvider:sym=>({...full(sym),timestamp:t-1})});
  assert.equal(d.report().executorRegistered,false);
  assert.equal(d.report().executorOnline,false);
  assert.equal(d.pull(pull).status,'NO_INTENT');
