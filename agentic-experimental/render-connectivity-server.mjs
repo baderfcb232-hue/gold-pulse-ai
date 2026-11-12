@@ -96,7 +96,7 @@ const server=http.createServer(async(req,res)=>{
       secure:req.socket.encrypted===true||req.headers['x-forwarded-proto']==='https'};
     const result=pathname==='/demo-trade/pull'?
       demoTradeIntents.pull(auth):demoTradeIntents.ack(auth);
-    send(['REJECTED','WRONG_DEMO_ACCOUNT','BROKER_MISMATCH','SENSOR_ACCOUNT_UNVERIFIED'].includes(result.status)?403:
+    send(['REJECTED','WRONG_DEMO_ACCOUNT','BROKER_MISMATCH','SENSOR_ACCOUNT_UNVERIFIED','SYMBOL_MAPPING_UNVERIFIED','BROKER_SYMBOL_MISMATCH'].includes(result.status)?403:
       result.status==='WAITING_FOR_SENSOR'?409:200,result);
     return;
   }
