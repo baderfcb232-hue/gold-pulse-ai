@@ -105,3 +105,11 @@ test('BTC shadow guard allows a second position only within daily, risk and RR p
  assert.ok(reviewShadowRisk({...base,riskPercent:0.5}).reasons.includes('BTC_RISK_CAP_EXCEEDED'));
  assert.ok(reviewShadowRisk({...base,target:102.5}).reasons.includes('REWARD_RISK_TOO_LOW'));
 });
+
+test('nullable old observer login supports research but never constitutes verified trade identity',()=>{
+ const safe=validateIsolatedDemoSnapshot({...sample,accountLogin:null},now);
+ assert.equal(safe.status,'VALIDATED_RESEARCH_SENSOR');
+ assert.equal(safe.safe.accountLogin,null);
+ assert.equal(validateIsolatedDemoSnapshot({...sample,accountLogin:-2},now).status,'REJECTED');
+ assert.equal(validateIsolatedDemoSnapshot({...sample,accountLogin:12345},now).safe.accountLogin,12345);
+});
