@@ -38,7 +38,7 @@ export function createShadowResearchPipeline({brain,clock=()=>Math.floor(Date.no
    entry:proposal?.entry,stop:proposal?.stop,target:proposal?.target,
    spread:s.ask-s.bid,spreadLimit:proposal?.spreadLimit,
    quoteAgeSeconds:now-s.timestamp,
-   positionsForSymbol:proposal?.positionsForSymbol,modelPlan:analysis.plan
+   positionsForSymbol:proposal?.positionsForSymbol,dailyEntries:proposal?.dailyEntries,modelPlan:analysis.plan
   });
   lastResult={status:risk.status==='SHADOW_RISK_ACCEPTABLE'?
    'SHADOW_RESEARCH_ONLY':'BLOCKED',phase:'SHADOW_RISK',
