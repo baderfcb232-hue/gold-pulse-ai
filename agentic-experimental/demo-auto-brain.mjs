@@ -52,7 +52,8 @@ export function createDemoAutoBrain({
     completed++;
     record(symbol,'ANALYZED',{stance:result.plan.stance,
      confidence:result.plan.confidence,closedBarAt:utc(trigger.closedBarTime),
-     trigger:trigger.reason,simulationOnly:true});
+     trigger:trigger.reason,reasonSummary:(result.plan.thesis||'').slice(0,180),
+     evidenceCount:result.plan.evidence?.length||0,simulationOnly:true});
    }
    const journal=journalProvider();
    if(journal?.saveAnalysis){
@@ -61,7 +62,7 @@ export function createDemoAutoBrain({
       trigger:trigger.reason,status:result.status,
       stance:result.plan?.stance||null,
       confidence:result.plan?.confidence??null,
-      reasonCodes:result.reasons||[],analyzedAt:clock()});
+      reasonCodes:result.reasons||[],analyzedAt:clock(),plan:result.plan||null});
     }catch{persistenceFailures++;record(symbol,'PERSISTENCE_FAILED',
        {reason:'ISOLATED_RESEARCH_JOURNAL_WRITE_FAILED'});}
    }
