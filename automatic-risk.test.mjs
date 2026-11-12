@@ -85,10 +85,18 @@ test('gold in unlimited-entry demo mode still enforces the daily loss cap',()=>{
   s.execution.demo=false;assert.equal(automaticRiskSizing(s,p,now).estimate.volume,0);
 });
 
-test('BTC minimum fallback behavior is not altered by the gold-only restriction',()=>{
+test('BTC Demo unlimited-entry mode still enforces the daily loss budget',()=>{
   const s=snapshot(),p=plan();s.symbol='BTCUSD.m';p.broker_symbol='BTCUSD.m';
   s.broker='JustMarkets-Demo';
   s.execution={...s.execution,demo:true,minimum_volume_fallback:true,daily_risk_remaining:0,
     website_recommendations:true,demo_recommendations:true,website_no_daily_limits:true};
-  assert.equal(automaticRiskSizing(s,p,now).estimate.volume,.01);
+  let result=automaticRiskSizing(s,p,now);
+  assert.equal(result.estimate.volume,0);
+  assert.equal(result.estimate.code,'DAILY_RISK_BELOW_MINIMUM_VOLUME');
+  s.execution.daily_risk_remaining=10;
+  result=automaticRiskSizing(s,p,now);
+  assert.equal(result.estimate.volume,.01);
+  assert.equal(result.estimate.code,'SIZED_DEMO_MINIMUM');
+  s.execution.daily_risk_remaining=undefined;
+  assert.equal(automaticRiskSizing(s,p,now).estimate.volume,0);
 });
