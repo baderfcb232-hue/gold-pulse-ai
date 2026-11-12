@@ -59,6 +59,9 @@ CREATE TABLE IF NOT EXISTS agentic_research.shadow_analysis_decisions (
   inserted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY(symbol, closed_bar_at)
 );
+-- Allow previously created isolated test tables to receive bounded research explanations.
+ALTER TABLE agentic_research.shadow_analysis_decisions
+ ADD COLUMN IF NOT EXISTS plan_summary JSONB NOT NULL DEFAULT '{}'::jsonb;
 CREATE INDEX IF NOT EXISTS idx_shadow_decisions_recent
  ON agentic_research.shadow_analysis_decisions (analyzed_at DESC);
 
