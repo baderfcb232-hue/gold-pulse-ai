@@ -27,7 +27,7 @@ jobs:
           checks={
             '/':[b'lang="ar" dir="rtl"',b'data-lang-target="en"',b'language-pref.js?v=2',b'market-motion.css?v=motion-1'],
             '/en':[b'lang="en" dir="ltr"',b'data-lang-target="ar"',b'language-pref.js?v=2',b'Trading involves risk',b'market-motion.css?v=motion-1'],
-            '/marketing-i18n.css':[b'.nav-language'],
+            '/marketing-i18n.css':[b'.nav-language',b'visual-orb-one'],
             '/market-motion.css':[b'nabd-market-pulse-draw'],
             '/language-pref.js':[b'nabd-marketing-language',b'nabd:dashboard:language'],
             '/dashboard':[b'id="market-symbols"'],
