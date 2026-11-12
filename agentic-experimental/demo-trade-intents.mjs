@@ -6,20 +6,14 @@ const finite=x=>typeof x==='number'&&Number.isFinite(x);
 const round=x=>Number(x.toFixed(8));
 const signature=(secret,wire)=>createHmac('sha256',secret).update(wire).digest('hex');
 const openPosition=Object.freeze({XAUUSD:1,BTCUSD:2});
-const reasonCodes=new Set([
- 'DEMO_EXECUTION_DISABLED','SECRET_NOT_CONFIGURED','NO_AI_WATCH','LOW_CONFIDENCE',
- 'UNVERIFIED_BROKER','STALE_BROKER_QUOTE','SPREAD_LIMIT','HISTORY_NOT_VERIFIED',
- 'TREND_CONFLICT','RSI_UNFAVORABLE','ATR_MISSING','UNSAFE_LEVELS',
- 'DUPLICATE_M5_INTENT','INTENT_ALREADY_PENDING'
-]);
 export function createDemoTradeIntents({
  enabled=false,secret='',clock=()=>Math.floor(Date.now()/1000),quoteProvider=()=>null,
  onAudit=()=>{}
 }={}){
  const keyReady=typeof secret==='string'&&Buffer.byteLength(secret,'utf8')>=32;
  const queue=new Map(),seen=new Set(),delivered=new Map(),acks=new Map();
- let registeredDemoLogin=null,registeredDemoServer=null;
- let created=0,pulled=0,rejected=0;
+ let registeredDemoLogin=null,registeredDemoServer=null,lastExecutorSeen=null,lastAckAt=null;
+ let created=0,pulled=0,rejected=0,brokerFeedMismatch=0;
  const lastBySymbol={};
  function audit(symbol,state,reason=null){
   lastBySymbol[symbol]={at:new Date(clock()*1000).toISOString(),state,reason};
@@ -84,14 +78,19 @@ export function createDemoTradeIntents({
   created++;audit(symbol,'QUEUED',null);
   return {created:true,id,orderCreated:false,brokerExecution:false};
  }
- function take(symbols=[]){
+ function take(symbols=[],brokerServer=null){
   if(!enabled||!keyReady)return null;
   for(const symbol of symbols){
    const p=queue.get(symbol);
    if(!p)continue;
    queue.delete(symbol);
    const n=clock(),fresh=quoteProvider(symbol);
-   if(p.expires<n||!fresh||fresh.timestamp>n||n-fresh.timestamp>2||
+   // An executor on a different DEMO broker must never receive an order,
+   // even when it knows the test key and has similar quote prices.
+   if(!fresh||fresh.brokerServer!==brokerServer){
+     brokerFeedMismatch++;audit(symbol,'BLOCKED','BROKER_FEED_IDENTITY_MISMATCH');continue;
+   }
+   if(p.expires<n||fresh.timestamp>n||n-fresh.timestamp>2||
       Math.abs((p.side==='BUY'?fresh.ask:fresh.bid)-p.entry)>Math.max(p.atr*0.25,0.01)){
     audit(symbol,'EXPIRED_OR_PRICE_MOVED');continue;
    }
@@ -132,7 +131,8 @@ export function createDemoTradeIntents({
   if(registeredDemoLogin===null){
     registeredDemoLogin=x.accountLogin;registeredDemoServer=x.brokerServer;
   }
-  const wire=take(x.symbols);
+  lastExecutorSeen=clock();
+  const wire=take(x.symbols,x.brokerServer);
   return {status:wire?'INTENT_DELIVERED':'NO_INTENT',wire,liveTrading:false};
  }
 
@@ -154,15 +154,33 @@ export function createDemoTradeIntents({
      !Number.isSafeInteger(parsed.occurredAt)||
      Math.abs(parsed.occurredAt-clock())>30)return {status:'REJECTED'};
   if(acks.has(parsed.id))return {status:'DUPLICATE'};
-  acks.set(parsed.id,{status:parsed.status,at:clock()});
-  audit(delivered.get(parsed.id).symbol,'BROKER_ACK_'+parsed.status);
+  const deliveredIntent=delivered.get(parsed.id);
+  if(parsed.occurredAt<deliveredIntent.deliveredAt-2||parsed.occurredAt>deliveredIntent.expires+30)
+    return {status:'REJECTED'};
+  const dealTicketValid=Number.isSafeInteger(parsed.brokerDealTicket)&&parsed.brokerDealTicket>0;
+  const retcodeValid=[10009,10010].includes(parsed.tradeRetcode);
+  const volumeValid=finite(parsed.executedVolume)&&parsed.executedVolume>0&&parsed.executedVolume<=1000;
+  const hasBrokerReference=parsed.status==='FILLED'&&dealTicketValid&&retcodeValid&&volumeValid;
+  // This is an authenticated EA claim with deal reference, NOT independent
+  // broker verification. Never label this as independent broker confirmation.
+  const status=parsed.status==='FILLED'?
+    (hasBrokerReference?'EA_REPORTED_FILL_WITH_DEAL':'UNVERIFIED_EA_FILL_CLAIM'):'EA_REPORTED_REJECTION';
+  acks.set(parsed.id,{status,at:clock(),hasBrokerReference});
+  lastAckAt=clock();
+  audit(deliveredIntent.symbol,status);
   return {status:'RECORDED'};
  }
  function report(){
   return {enabled:enabled&&keyReady,status:!enabled?'OFF':!keyReady?'SECRET_NOT_CONFIGURED':'DEMO_INTENTS_ARMED',
    mode:'ISOLATED_DEMO_ONLY',created,delivered:pulled,rejected,
-   brokerAcks:acks.size,filledAcks:[...acks.values()].filter(x=>x.status==='FILLED').length,
+   brokerAcks:acks.size,filledAcks:[...acks.values()].filter(x=>x.hasBrokerReference).length,
+   eaUnverifiedFillClaims:[...acks.values()].filter(x=>x.status==='UNVERIFIED_EA_FILL_CLAIM').length,
+   brokerIndependentlyVerifiedFills:0,
    queued:[...queue.keys()],lastBySymbol,executorRegistered:registeredDemoLogin!==null,
+   executorOnline:lastExecutorSeen!==null&&clock()>=lastExecutorSeen&&clock()-lastExecutorSeen<=15,
+   lastExecutorSeenAt:lastExecutorSeen===null?null:new Date(lastExecutorSeen*1000).toISOString(),
+   lastAckAt:lastAckAt===null?null:new Date(lastAckAt*1000).toISOString(),
+   brokerFeedMismatch,
    tradeCountVerifiedByBroker:false,
    liveTrading:false,serverPlacesOrders:false,dailyLimitsEnforcedByEA:true};
  }
