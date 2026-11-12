@@ -21,8 +21,9 @@ export function validateIsolatedDemoSnapshot(snapshot,now){
   errors.push('MISSING_BROKER_CONTRACT');
  if(!Array.isArray(snapshot.candlesM5)||snapshot.candlesM5.length<2||
     snapshot.candlesM5.length>500)errors.push('INSUFFICIENT_DEMO_CANDLES');
- else if(snapshot.candlesM5.some(c=>!valid(c.time)||![c.open,c.high,c.low,c.close].every(finite)||
-    c.low<=0||c.low>Math.min(c.open,c.close)||c.high<Math.max(c.open,c.close)))
+ else if(snapshot.candlesM5.some((c,i)=>!c||!valid(c.time)||![c.open,c.high,c.low,c.close].every(finite)||
+    c.low<=0||c.low>Math.min(c.open,c.close)||c.high<Math.max(c.open,c.close)||
+    c.time+300>now||i>0&&snapshot.candlesM5[i-1].time>=c.time))
   errors.push('INVALID_DEMO_CANDLES');
  const higherFrames=['M15','H1','H4'];
  let multiTimeframeVerified=true;
