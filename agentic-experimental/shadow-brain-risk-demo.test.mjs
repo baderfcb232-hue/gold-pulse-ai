@@ -91,3 +91,17 @@ test('M5 observation rejects an open or unordered candle and malformed bar',()=>
  const malformed=validateIsolatedDemoSnapshot({...sample,candlesM5:[null,candle(now-300)]},now);
  assert.equal(malformed.status,'REJECTED');
 });
+
+test('BTC shadow guard allows a second position only within daily, risk and RR policy',()=>{
+ const base={symbol:'BTCUSD',side:'BUY',accountType:'DEMO',balance:2000,
+  riskPercent:0.4,entry:100,stop:99,target:103,spread:0.1,spreadLimit:1,
+  quoteAgeSeconds:1,positionsForSymbol:1,dailyEntries:5,modelPlan:plan};
+ const allowed=reviewShadowRisk(base);
+ assert.equal(allowed.status,'SHADOW_RISK_ACCEPTABLE');
+ assert.equal(allowed.order,null);assert.equal(allowed.executionAllowed,false);
+ assert.ok(reviewShadowRisk({...base,positionsForSymbol:2}).reasons.includes('POSITION_LIMIT'));
+ assert.ok(reviewShadowRisk({...base,dailyEntries:6}).reasons.includes('BTC_DAILY_ENTRY_LIMIT_OR_UNVERIFIED_COUNT'));
+ assert.ok(reviewShadowRisk({...base,dailyEntries:null}).reasons.includes('BTC_DAILY_ENTRY_LIMIT_OR_UNVERIFIED_COUNT'));
+ assert.ok(reviewShadowRisk({...base,riskPercent:0.5}).reasons.includes('BTC_RISK_CAP_EXCEEDED'));
+ assert.ok(reviewShadowRisk({...base,target:102.5}).reasons.includes('REWARD_RISK_TOO_LOW'));
+});
