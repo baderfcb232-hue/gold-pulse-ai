@@ -5,7 +5,7 @@ import {createDemoTradeIntents} from './demo-trade-intents.mjs';
 const now=1800000000,secret='test-execution-only-32-byte-secret-12345';
 const sha=x=>createHmac('sha256',secret).update(x).digest('hex');
 const full=()=>({environment:'EXPERIMENTAL_NABD_AGENTIC',accountType:'DEMO',
- brokerServer:'Independent-JustMarkets-Demo',timestamp:now-1,bid:100,ask:100.2,
+ brokerServer:'Independent-JustMarkets-Demo',accountLogin:1234567,timestamp:now-1,bid:100,ask:100.2,
  candlesM5:[{time:now-300}]});
 const features=Object.fromEntries(['M5','M15','H1','H4'].map(tf=>[tf,{
  status:'INDICATORS_AVAILABLE',emaDirection:'UP',
@@ -108,10 +108,11 @@ test('executorRegistered is historical; executorOnline requires recent authentic
 test('foreign Demo broker account never receives a pending order',()=>{
  const d=create(); assert.equal(d.consider(proposal).created,true);
  const foreign=signed({...JSON.parse(pull.body),brokerServer:'OtherBroker-Demo'});
- assert.equal(d.pull(foreign).status,'NO_INTENT');
- assert.equal(d.report().brokerFeedMismatch,1);
+ assert.equal(d.pull(foreign).status,'BROKER_MISMATCH');
+ assert.equal(d.report().brokerFeedMismatch,0);
  assert.equal(d.report().delivered,0);
- assert.equal(d.report().queued.length,0);
+ assert.equal(d.report().queued.length,1);
+ assert.equal(d.pull(pull).status,'INTENT_DELIVERED');
 });
 test('an ACK with a validated deal reference is EA-reported, never independent broker proof',()=>{
  const d=create();d.consider(proposal);d.pull(pull);
@@ -128,4 +129,19 @@ test('an impossible ACK time cannot be accepted',()=>{
  const claim={id:'XAUUSD-'+(now-300),status:'FILLED',accountType:'DEMO',
    accountLogin:1234567,occurredAt:now-31};
  assert.equal(d.ack(signed(claim)).status,'REJECTED');
+});
+
+test('wrong demo account is refused before pinning executor or consuming orders',()=>{
+ const d=create();
+ assert.equal(d.consider(proposal).created,true);
+ const wrong=signed({...JSON.parse(pull.body),accountLogin:999999});
+ assert.equal(d.pull(wrong).status,'WRONG_DEMO_ACCOUNT');
+ assert.equal(d.report().executorRegistered,false);
+ assert.equal(d.pull(pull).status,'INTENT_DELIVERED');
+});
+test('legacy sensor without signed account may analyze, but cannot authorize a trade',()=>{
+ const d=create({quoteProvider:()=>{const {accountLogin,...old}=full();return old}});
+ assert.equal(d.consider(proposal).reason,'SENSOR_ACCOUNT_UNVERIFIED');
+ assert.equal(d.pull(pull).status,'SENSOR_ACCOUNT_UNVERIFIED');
+ assert.equal(d.report().executorRegistered,false);
 });
