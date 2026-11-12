@@ -6,6 +6,11 @@ on:
       - 'automatic-risk.test.mjs'
       - 'risk-control-policy.mjs'
       - 'risk-control-policy.test.mjs'
+      - 'risk-center-readonly.test.mjs'
+      - 'public/risk-control-center.html'
+      - 'public/risk-control-center.js'
+      - 'public/risk-control-center.css'
+      - 'server.mjs'
       - '.github/workflows/phase12-risk-policy.yml'
   workflow_dispatch:
 jobs:
@@ -17,4 +22,4 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci --ignore-scripts
-      - run: node --test automatic-risk.test.mjs risk-control-policy.test.mjs
+      - run: node --test automatic-risk.test.mjs risk-control-policy.test.mjs risk-center-readonly.test.mjs
