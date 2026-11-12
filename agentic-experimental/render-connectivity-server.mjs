@@ -35,7 +35,7 @@ let connectedJournal=null;
 const demoAutoBrain=createDemoAutoBrain({brains:{XAUUSD:researchBrain,BTCUSD:btcResearchBrain},
  scheduler:hybrid,enabled:process.env.NABD_TEST_AUTO_RESEARCH==='true',
  journalProvider:()=>connectedJournal,
- onAudit:(symbol,event)=>console.log('[NABD AUTO BRAIN]',symbol,event.stage,event.stance||event.reason||'')});
+ onAudit:(symbol,event)=>console.log('[NABD AUTO BRAIN]',symbol,event.stage,event.stance||'',event.reasonSummary||event.reason||'')});
 const economicCalendar=createEconomicCalendarMonitor({key:process.env.NABD_TEST_TRADING_ECONOMICS_KEY,journalProvider:()=>connectedJournal});
 const blsIndicators=createBlsOfficialMonitor();
 const fredHistorical=createFredHistoricalMonitor();
