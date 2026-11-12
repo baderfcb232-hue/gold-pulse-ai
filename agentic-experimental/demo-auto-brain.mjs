@@ -3,6 +3,7 @@
 // No MT5 order, signal dispatch, Telegram, or production imports.
 import {validateIsolatedDemoSnapshot} from './mt5-demo-sensor.mjs';
 import {validateResearchContext} from './research-brain.mjs';
+import {multiTimeframeFeatures} from './market-features.mjs';
 
 const utc=t=>new Date(t*1000).toISOString();
 const noOrders=Object.freeze({executionAllowed:false,ordersCreated:0,tradeAllowed:false});
@@ -33,6 +34,7 @@ export function createDemoAutoBrain({
     candlesM5:clean.candlesM5,candlesM15:clean.candlesM15,
     candlesH1:clean.candlesH1,candlesH4:clean.candlesH4,
     accountType:'DEMO',
+    technicalEvidence:multiTimeframeFeatures(clean),
     // Unlicensed/late economic headlines never become release-time evidence.
     news:{classification:'NONE'}};
    const ready=validateResearchContext(ctx,now);
