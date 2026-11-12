@@ -31,8 +31,10 @@ export function createDemoAutoBrain({
    const ctx={symbol,feedType:'MT5_DEMO_BROKER',observedAt:clean.timestamp,
     bid:clean.bid,ask:clean.ask,spreadLimit:spreadLimits[symbol],
     candlesVerified:true,multiTimeframeVerified:clean.multiTimeframeVerified,
-    candlesM5:clean.candlesM5,candlesM15:clean.candlesM15,
-    candlesH1:clean.candlesH1,candlesH4:clean.candlesH4,
+    // Model sees recent price structure plus indicators computed from deeper
+    // closed-bar history. Do not pay for 200 raw candles per model call.
+    candlesM5:clean.candlesM5.slice(-40),candlesM15:clean.candlesM15.slice(-32),
+    candlesH1:clean.candlesH1.slice(-24),candlesH4:clean.candlesH4.slice(-24),
     accountType:'DEMO',
     technicalEvidence:multiTimeframeFeatures(clean),
     // Unlicensed/late economic headlines never become release-time evidence.
