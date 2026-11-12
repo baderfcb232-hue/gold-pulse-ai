@@ -1,5 +1,5 @@
 // Aggregated experimental readiness. A connected model is not a trained trading analyst.
-export function buildExperimentReadiness({bls={},fred={},brain={},autoBrain={},demo={},journal={},smoke={},
+export function buildExperimentReadiness({bls={},fred={},brain={},autoBrain={},demo={},execution={},journal={},smoke={},
  fxStreetAuthorized=false,officialReleaseVerified=false}={}){
  const steps=[
   {id:'HISTORICAL_ECONOMIC_DATA',status:bls.status==='OBSERVING'?'BLS_DIRECT_READY':fred.status==='OBSERVING_HISTORICAL'?'FRED_REFERENCE_READY':'BLOCKED',
@@ -12,6 +12,13 @@ export function buildExperimentReadiness({bls={},fred={},brain={},autoBrain={},d
       'AI_KEY_NOT_CONFIGURED'},
   {id:'DEMO_BROKER_SENSOR',status:demo.brokerConnected===true?'READY':'BLOCKED',
    reason:demo.brokerConnected===true?null:'NO_ISOLATED_MT5_DEMO_CONNECTION'},
+  {id:'DEMO_EXECUTOR_AUTH',status:execution.executorOnline===true?'CONNECTED':
+     execution.enabled===true?'WAITING_FOR_EXECUTOR_POLL':'BLOCKED',
+   reason:execution.executorOnline===true?null:
+     execution.enabled===true?'EXECUTOR_NOT_ONLINE_IN_LAST_15_SECONDS':'DEMO_INTENT_CHANNEL_DISABLED'},
+  {id:'DEMO_BROKER_FILL_VERIFICATION',status:'UNVERIFIED',
+   reason:execution.filledAcks>0?'EA_DEAL_TICKET_REPORTED_NOT_INDEPENDENTLY_VERIFIED':
+     'NO_BROKER_DEAL_CONFIRMED_BY_INDEPENDENT_CHECK'},
   {id:'SHADOW_PIPELINE',status:smoke.status==='SYNTHETIC_SELF_TEST_PASSED'?'SYNTHETIC_TEST_PASS':'BLOCKED',
    reason:smoke.status==='SYNTHETIC_SELF_TEST_PASSED'?'NOT_REAL_BROKER_OR_OPENAI_EXECUTION':'SELF_TEST_NOT_PASSING'},
   {id:'ISOLATED_POSTGRES',status:journal.persistenceConnected===true?'READY':'BLOCKED',
@@ -24,5 +31,9 @@ export function buildExperimentReadiness({bls={},fred={},brain={},autoBrain={},d
   codeDeployed:true,productionChanged:false,liveTradeAllowed:false,
   demoTradeAllowed:false,ordersCreated:0,
   autoResearchEnabled:autoBrain.enabled===true,realDemoAnalyses:autoBrain.completed||0,
+  demoIntentChannelArmed:execution.enabled===true,
+  demoExecutorRecentlyOnline:execution.executorOnline===true,
+  eaReportedFillsWithDealReference:execution.filledAcks||0,
+  independentlyVerifiedBrokerFills:0,
   notice:'Synthetic testing and model connectivity never authorize market orders'};
 }
