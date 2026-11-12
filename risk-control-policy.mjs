@@ -24,7 +24,9 @@ export const RISK_REASONS = Object.freeze({
 export function evaluateRiskPreflight({limits, state, quote, signal, now} = {}) {
   const deny = reason => ({allowNewEntry: false, reason, closeOpenPositions: false});
   if (state?.paused === true || state?.emergencyStop === true) return deny(RISK_REASONS.STOPPED);
-  if (!limits || !state || !quote || !signal || !finite(now)) return deny(RISK_REASONS.MISSING_DATA);
+  if (!limits || !state || !quote || !signal || !finite(now) ||
+      typeof state.paused !== 'boolean' || typeof state.emergencyStop !== 'boolean')
+    return deny(RISK_REASONS.MISSING_DATA);
   if (!positive(limits.riskPercent) || limits.riskPercent > 100 ||
       !positive(limits.maxDailyLoss) || !Number.isSafeInteger(limits.maxDailyTrades) || limits.maxDailyTrades < 1 ||
       !Number.isSafeInteger(limits.maxOpenPositions) || limits.maxOpenPositions < 1 ||
@@ -32,10 +34,10 @@ export function evaluateRiskPreflight({limits, state, quote, signal, now} = {}) 
       !positive(limits.quoteMaxAgeSeconds))
     return deny(RISK_REASONS.INVALID_LIMITS);
   if (![state.dailyLoss, state.dailyTrades, state.openPositions, state.proposedRiskPercent,
-        state.availableMargin, state.requiredMargin, quote.spread, quote.slippage,
+        state.availableMargin, state.requiredMargin, state.proposedDailyLoss, quote.spread, quote.slippage,
         quote.timestamp, signal.expiresAt].every(finite) ||
       ![state.dailyLoss, state.dailyTrades, state.openPositions, state.proposedRiskPercent,
-        state.availableMargin, state.requiredMargin, quote.spread, quote.slippage].every(nonnegative))
+        state.availableMargin, state.requiredMargin, state.proposedDailyLoss, quote.spread, quote.slippage].every(nonnegative))
     return deny(RISK_REASONS.MISSING_DATA);
   if (!Number.isSafeInteger(state.dailyTrades) || !Number.isSafeInteger(state.openPositions))
     return deny(RISK_REASONS.MISSING_DATA);
@@ -43,7 +45,8 @@ export function evaluateRiskPreflight({limits, state, quote, signal, now} = {}) 
     return deny(RISK_REASONS.STALE_PRICE);
   if (signal.expiresAt <= now || signal.expiresAt < quote.timestamp)
     return deny(RISK_REASONS.SIGNAL_EXPIRED);
-  if (state.dailyLoss >= limits.maxDailyLoss) return deny(RISK_REASONS.DAILY_LOSS_LIMIT);
+  if (state.dailyLoss + state.proposedDailyLoss > limits.maxDailyLoss + 1e-8)
+    return deny(RISK_REASONS.DAILY_LOSS_LIMIT);
   if (state.dailyTrades >= limits.maxDailyTrades) return deny(RISK_REASONS.DAILY_TRADE_LIMIT);
   if (state.openPositions >= limits.maxOpenPositions) return deny(RISK_REASONS.OPEN_POSITION_LIMIT);
   if (quote.spread > limits.maxSpread) return deny(RISK_REASONS.SPREAD_LIMIT);
