@@ -46,4 +46,20 @@ CREATE TABLE IF NOT EXISTS agentic_research.feed_checks (
 CREATE INDEX IF NOT EXISTS idx_feed_checks_recent ON agentic_research.feed_checks (observed_at DESC);
 -- Least-privilege roles should be assigned to the service independently.
 -- Use INSERT ... ON CONFLICT DO NOTHING to retain the first forecast and actual observation.
+-- Decisions are research-only; do not store account credentials or raw price streams.
+CREATE TABLE IF NOT EXISTS agentic_research.shadow_analysis_decisions (
+  symbol TEXT NOT NULL CHECK (symbol IN ('XAUUSD','BTCUSD')),
+  closed_bar_at TIMESTAMPTZ NOT NULL,
+  analyzed_at TIMESTAMPTZ NOT NULL,
+  trigger TEXT NOT NULL,
+  analysis_status TEXT NOT NULL,
+  stance TEXT CHECK (stance IS NULL OR stance IN ('BUY_WATCH','SELL_WATCH','WAIT')),
+  confidence DOUBLE PRECISION CHECK (confidence IS NULL OR (confidence BETWEEN 0 AND 1)),
+  reason_codes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  inserted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY(symbol, closed_bar_at)
+);
+CREATE INDEX IF NOT EXISTS idx_shadow_decisions_recent
+ ON agentic_research.shadow_analysis_decisions (analyzed_at DESC);
+
 COMMIT;
