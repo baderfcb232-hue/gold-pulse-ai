@@ -10,7 +10,7 @@ export function validateIsolatedDemoSnapshot(snapshot,now){
     snapshot.accountType!=='DEMO'||snapshot.executionEnabled!==false)
   errors.push('NOT_ISOLATED_DEMO_ONLY');
  if(!['XAUUSD','BTCUSD'].includes(snapshot.symbol))errors.push('UNSUPPORTED_SYMBOL');
- if(snapshot.brokerSymbol!==undefined&&
+ if(snapshot.brokerSymbol!=null&&
     (typeof snapshot.brokerSymbol!=='string'||!/^[-A-Za-z0-9._]{1,64}$/.test(snapshot.brokerSymbol)))
   errors.push('INVALID_BROKER_SYMBOL');
  if(snapshot.accountLogin!=null&&(!Number.isSafeInteger(snapshot.accountLogin)||snapshot.accountLogin<=0))
