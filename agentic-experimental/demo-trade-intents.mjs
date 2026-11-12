@@ -124,7 +124,7 @@ export function createDemoTradeIntents({
      x.brokerServer.length>100||!x.brokerServer.toLowerCase().includes('demo')||
      !Array.isArray(x.symbols)||x.symbols.length!==2||
      x.symbols[0]!=='XAUUSD'||x.symbols[1]!=='BTCUSD'||
-     x.capturedAt!==Number(timestamp))
+     !Number.isSafeInteger(x.capturedAt)||Math.abs(x.capturedAt-Number(timestamp))>2)
     return {status:'REJECTED',wire:null};
   if(registeredDemoLogin!==null&&
      (registeredDemoLogin!==x.accountLogin||registeredDemoServer!==x.brokerServer))
