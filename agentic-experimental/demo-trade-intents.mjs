@@ -36,6 +36,10 @@ export function createDemoTradeIntents({
     !s.brokerServer?.toLowerCase().includes('demo')||
     !finite(s.bid)||!finite(s.ask)||s.bid<=0||s.ask<=s.bid)
    return deny(symbol,'UNVERIFIED_BROKER');
+  if(!Number.isSafeInteger(s.accountLogin)||s.accountLogin<=0)
+   return deny(symbol,'SENSOR_ACCOUNT_UNVERIFIED');
+  if(registeredDemoLogin!==null&&registeredDemoLogin!==s.accountLogin)
+   return deny(symbol,'BROKER_ACCOUNT_MISMATCH');
   if(!Number.isSafeInteger(s.timestamp)||s.timestamp>n||n-s.timestamp>2)
    return deny(symbol,'STALE_BROKER_QUOTE');
   const f=features;
@@ -125,6 +129,19 @@ export function createDemoTradeIntents({
      x.symbols[0]!=='XAUUSD'||x.symbols[1]!=='BTCUSD'||
      !Number.isSafeInteger(x.capturedAt)||Math.abs(x.capturedAt-Number(timestamp))>2)
     return {status:'REJECTED',wire:null};
+  // Both EAs must belong to the SAME independently isolated DEMO account.
+  // Legacy read-only snapshots without a signed login may still be used for
+  // chart research, but they MUST NEVER authorize broker execution.
+  const observed=x.symbols.map(symbol=>quoteProvider(symbol))
+    .filter(s=>s&&Number.isSafeInteger(s.timestamp)&&
+      s.timestamp<=clock()&&clock()-s.timestamp<=10);
+  if(!observed.length)return {status:'WAITING_FOR_SENSOR',wire:null};
+  if(observed.some(s=>s.brokerServer!==x.brokerServer))
+    return {status:'BROKER_MISMATCH',wire:null};
+  if(observed.some(s=>!Number.isSafeInteger(s.accountLogin)||s.accountLogin<=0))
+    return {status:'SENSOR_ACCOUNT_UNVERIFIED',wire:null};
+  if(observed.some(s=>s.accountLogin!==x.accountLogin))
+    return {status:'WRONG_DEMO_ACCOUNT',wire:null};
   if(registeredDemoLogin!==null&&
      (registeredDemoLogin!==x.accountLogin||registeredDemoServer!==x.brokerServer))
     return {status:'WRONG_DEMO_ACCOUNT',wire:null};
