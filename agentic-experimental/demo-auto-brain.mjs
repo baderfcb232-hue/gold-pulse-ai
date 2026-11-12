@@ -10,7 +10,7 @@ const noOrders=Object.freeze({executionAllowed:false,ordersCreated:0,tradeAllowe
 const durations=Object.freeze({M5:300,M15:900,H1:3600,H4:14400});
 export function createDemoAutoBrain({
  brains={},scheduler,clock=()=>Math.floor(Date.now()/1000),
- enabled=false,spreadLimits={XAUUSD:2.5,BTCUSD:80},journalProvider=()=>null,onAudit=()=>{}
+ enabled=false,spreadLimits={XAUUSD:2.5,BTCUSD:80},journalProvider=()=>null,onAudit=()=>{},onPlan=()=>{}
 }={}){
  if(!scheduler||typeof scheduler.consider!=='function')throw Error('SCHEDULER_REQUIRED');
  let scheduled=0,completed=0,blocked=0,persistenceFailures=0;
@@ -58,15 +58,25 @@ export function createDemoAutoBrain({
      evidenceCount:result.plan.evidence?.length||0,simulationOnly:true});
    }
    const journal=journalProvider();
+   let auditable=false;
    if(journal?.saveAnalysis){
     try{
-     await journal.saveAnalysis({symbol,closedBarAt:trigger.closedBarTime,
+     const saved=await journal.saveAnalysis({symbol,closedBarAt:trigger.closedBarTime,
       trigger:trigger.reason,status:result.status,
       stance:result.plan?.stance||null,
       confidence:result.plan?.confidence??null,
       reasonCodes:result.reasons||[],analyzedAt:clock(),plan:result.plan||null});
+     auditable=saved?.inserted===true;
     }catch{persistenceFailures++;record(symbol,'PERSISTENCE_FAILED',
        {reason:'ISOLATED_RESEARCH_JOURNAL_WRITE_FAILED'});}
+   }
+   // Only a successfully persisted, unique, research-only decision can
+   // reach the separate DEMO intent gate. A model never calls a broker.
+   if(auditable&&result.status==='RESEARCH_ANALYSIS_ONLY'&&result.plan){
+    try{
+     onPlan({symbol,plan:result.plan,features:ctx.technicalEvidence,
+       closedBarTime:trigger.closedBarTime});
+    }catch{blocked++;record(symbol,'BLOCKED',{reason:'DEMO_INTENT_GATE_FAILED'});}
    }
   }catch{
    blocked++;record(symbol,'BLOCKED',{reason:'RESEARCH_RUNTIME_ERROR'});
