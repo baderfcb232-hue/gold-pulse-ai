@@ -50,7 +50,7 @@ export function createResearchJournal({query}={}){
  }
 
  async function saveAnalysis({symbol,closedBarAt,analyzedAt,trigger,status,stance=null,
-  confidence=null,reasonCodes=[]}={}){
+  confidence=null,reasonCodes=[],plan=null}={}){
   ensure();
   if(!['XAUUSD','BTCUSD'].includes(symbol)||
      !Number.isSafeInteger(closedBarAt)||closedBarAt<=0||
@@ -62,9 +62,18 @@ export function createResearchJournal({query}={}){
      !Array.isArray(reasonCodes)||reasonCodes.length>10||
      reasonCodes.some(x=>typeof x!=='string'||x.length>100))
    throw Error('INVALID_ISOLATED_ANALYSIS');
+  const summary=plan&&typeof plan==='object'?{
+   thesis:typeof plan.thesis==='string'?plan.thesis.slice(0,1000):null,
+   counterThesis:typeof plan.counterThesis==='string'?plan.counterThesis.slice(0,1000):null,
+   evidence:Array.isArray(plan.evidence)?plan.evidence.filter(x=>typeof x==='string')
+     .slice(0,8).map(x=>x.slice(0,240)):[],
+   invalidation:typeof plan.invalidation==='string'?plan.invalidation.slice(0,1000):null,
+   riskNotes:typeof plan.riskNotes==='string'?plan.riskNotes.slice(0,1000):null,
+   timeHorizonMinutes:Number.isSafeInteger(plan.timeHorizonMinutes)?plan.timeHorizonMinutes:null
+  }:{};
   const r=await query(
-   'INSERT INTO agentic_research.shadow_analysis_decisions (symbol,closed_bar_at,analyzed_at,trigger,analysis_status,stance,confidence,reason_codes) VALUES ($1,to_timestamp($2),to_timestamp($3),$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING RETURNING symbol',
-   [symbol,closedBarAt,analyzedAt,trigger,status,stance,confidence,reasonCodes]);
+   'INSERT INTO agentic_research.shadow_analysis_decisions (symbol,closed_bar_at,analyzed_at,trigger,analysis_status,stance,confidence,reason_codes,plan_summary) VALUES ($1,to_timestamp($2),to_timestamp($3),$4,$5,$6,$7,$8,$9::jsonb) ON CONFLICT DO NOTHING RETURNING symbol',
+   [symbol,closedBarAt,analyzedAt,trigger,status,stance,confidence,reasonCodes,JSON.stringify(summary)]);
   return {inserted:r?.rowCount===1};
  }
  return {verify,saveForecast,firstForecast,firstActual,saveActual,saveAnalysis,status:()=>({verified,database:verified?ISOLATED_DB_NAME:null,
