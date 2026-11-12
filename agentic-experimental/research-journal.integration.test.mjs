@@ -16,6 +16,12 @@ test('isolated Postgres actually migrates, persists and rejects revised forecast
   assert.deepEqual(revised,{inserted:false});
   assert.deepEqual(await journal.firstForecast({provider,id,scheduledAt}),{raw:'3.2%',observedAt:scheduledAt-100});
   assert.deepEqual(await journal.saveActual({provider,id,scheduledAt,observedAt:scheduledAt+30,raw:'3.4%'}),{inserted:true});
+  const shadow={symbol:'XAUUSD',closedBarAt:scheduledAt-300,analyzedAt:scheduledAt,
+   trigger:'M5_CLOSED',status:'RESEARCH_ANALYSIS_ONLY',stance:'WAIT',
+   confidence:0.51,reasonCodes:[]};
+  assert.deepEqual(await journal.saveAnalysis(shadow),{inserted:true});
+  assert.deepEqual(await journal.saveAnalysis({...shadow,stance:'BUY_WATCH'}),{inserted:false});
+  await assert.rejects(journal.saveAnalysis({...shadow,symbol:'EURUSD'}),/INVALID_ISOLATED_ANALYSIS/);
   await connection.close();connection=null;
   const reopened=await connectResearchJournal({url});assert.equal(reopened.status,'CONNECTED');
   try{assert.deepEqual(await reopened.journal.firstForecast({provider,id,scheduledAt}),{raw:'3.2%',observedAt:scheduledAt-100});}
