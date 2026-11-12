@@ -18,6 +18,7 @@ import {demoSensorReadiness} from './mt5-demo-sensor.mjs';
 import {runSyntheticShadowSmoke} from './shadow-smoke.mjs';
 import {buildExperimentReadiness} from './readiness-report.mjs';
 import {createDemoIngest} from './demo-ingest.mjs';
+import {createDemoAutoBrain} from './demo-auto-brain.mjs';
 import {createFredHistoricalMonitor} from './fred-historical-fallback.mjs';
 const feed=createShadowFeedRunner();
 const goldSpot=createPublicGoldObserver();
@@ -25,9 +26,16 @@ const sources=createResearchSources({goldKey:process.env.NABD_TEST_GOLD_TWELVEDA
 const hybrid=new HybridScheduler();
 let shadowSmoke={status:'NOT_RUN',syntheticDataOnly:true,brokerTradingEnabled:false};
 const researchBrain=createResearchBrain({key:process.env.OPENAI_API_KEY,model:process.env.NABD_RESEARCH_MODEL||'gpt-4.1-mini'});
+// Use a separate in-flight guard for each market; a slow gold analysis never
+// forces the concurrently observed Bitcoin broker snapshot to become stale.
+const btcResearchBrain=createResearchBrain({key:process.env.OPENAI_API_KEY,model:process.env.NABD_RESEARCH_MODEL||'gpt-4.1-mini'});
 const demoIngest=createDemoIngest({secret:process.env.NABD_TEST_DEMO_SENSOR_HMAC_SECRET||''});
 const officialNews=createOfficialNewsMonitor();
 let connectedJournal=null;
+const demoAutoBrain=createDemoAutoBrain({brains:{XAUUSD:researchBrain,BTCUSD:btcResearchBrain},
+ scheduler:hybrid,enabled:process.env.NABD_TEST_AUTO_RESEARCH==='true',
+ journalProvider:()=>connectedJournal,
+ onAudit:(symbol,event)=>console.log('[NABD AUTO BRAIN]',symbol,event.stage,event.stance||event.reason||'')});
 const economicCalendar=createEconomicCalendarMonitor({key:process.env.NABD_TEST_TRADING_ECONOMICS_KEY,journalProvider:()=>connectedJournal});
 const blsIndicators=createBlsOfficialMonitor();
 const fredHistorical=createFredHistoricalMonitor();
@@ -79,14 +87,19 @@ const server=http.createServer(async(req,res)=>{
       signature:req.headers['x-nabd-sensor-signature'],
       secure:req.socket.encrypted===true||req.headers['x-forwarded-proto']==='https'
     });
-    send(verdict.status==='OBSERVED'?202:403,verdict);return;
+    const researchScheduling={};
+    if(verdict.status==='OBSERVED'){
+      for(const symbol of verdict.symbols)
+        researchScheduling[symbol]=demoAutoBrain.onSnapshot(demoIngest.getLatest(symbol));
+    }
+    send(verdict.status==='OBSERVED'?202:403,{...verdict,researchScheduling});return;
   }
-  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/fred-historical/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-calendar/status','/brain/status','/demo-sensor/status','/shadow-smoke/status','/integration/status'].includes(pathname)){
+  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/fred-historical/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-calendar/status','/brain/status','/auto-brain/status','/demo-sensor/status','/shadow-smoke/status','/integration/status'].includes(pathname)){
     res.writeHead(404,{'Content-Type':'application/json','Cache-Control':'no-store'});
     res.end(JSON.stringify({error:'not_found'}));return;
   }
   res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
-  res.end(JSON.stringify(pathname==='/integration/status' ? buildExperimentReadiness({bls:blsIndicators.report(),fred:fredHistorical.report(),brain:researchBrain.report(),demo:{...demoSensorReadiness(),brokerConnected:Object.values(demoIngest.report().markets).some(m=>m.status==='SENSOR_OBSERVED')},journal:journalState,smoke:shadowSmoke,fxStreetAuthorized:false,officialReleaseVerified:false}) : pathname==='/shadow-smoke/status' ? shadowSmoke : pathname==='/brain/status' ? researchBrain.report() : pathname==='/demo-sensor/status' ? {...demoSensorReadiness(),httpIngestEnabled:demoIngest.report().authentication==='HMAC_SHA256_CONFIGURED',brokerConnected:Object.values(demoIngest.report().markets).some(x=>x.status==='SENSOR_OBSERVED'),ingestion:demoIngest.report()} : pathname==='/live-calendar/status' ? liveCalendarStream.report() : pathname==='/live-news/status' ? liveNewsSystemStatus({journalConnected:!!connectedJournal,calendarKeyConfigured:!!process.env.NABD_TEST_TRADING_ECONOMICS_STREAM_KEY&&!!process.env.NABD_TEST_TRADING_ECONOMICS_STREAM_SECRET,realtimeFeedVerified:false,officialReleaseTimestampVerified:false,preReleaseForecastCaptured:false,brokerFeedVerified:false}) : pathname==='/delayed-consensus/status' ? delayedCalendar.report() : pathname==='/journal/status' ? journalState : pathname==='/fred-historical/status' ? fredHistorical.report() : pathname==='/official-data/status' ? blsIndicators.report() : pathname==='/calendar/status' ? economicCalendar.report() : pathname==='/news/research' ? newsResearchReadiness({calendarConfigured:!!process.env.NABD_TEST_TRADING_ECONOMICS_KEY,verifiedReleaseArchive:false,goldBrokerCandles:false,btcBrokerCandles:false,openaiConnected:state==='CONNECTED'}) : pathname==='/news/status' ? officialNews.report() : pathname==='/gold/status' ? goldSpot.report() : pathname==='/research/status' ? sources.report() : pathname==='/feed/status' ? feed.report() : pathname==='/hybrid/status' ? hybrid.report() : {service:'nabd-agentic-ai-test',experimental:true,reference_only:true,trading_enabled:false,model_connection:state,last_checked:checkTime}));
+  res.end(JSON.stringify(pathname==='/integration/status' ? buildExperimentReadiness({bls:blsIndicators.report(),fred:fredHistorical.report(),brain:researchBrain.report(),autoBrain:demoAutoBrain.report(),demo:{...demoSensorReadiness(),brokerConnected:Object.values(demoIngest.report().markets).some(m=>m.status==='SENSOR_OBSERVED')},journal:journalState,smoke:shadowSmoke,fxStreetAuthorized:false,officialReleaseVerified:false}) : pathname==='/shadow-smoke/status' ? shadowSmoke : pathname==='/brain/status' ? {...researchBrain.report(),BTCUSD:btcResearchBrain.report(),autoResearch:demoAutoBrain.report()} : pathname==='/auto-brain/status' ? demoAutoBrain.report() : pathname==='/demo-sensor/status' ? {...demoSensorReadiness(),acceptedMethod:'HMAC_SHA256_AUTHENTICATED_HTTP',autoResearch:demoAutoBrain.report(),httpIngestEnabled:demoIngest.report().authentication==='HMAC_SHA256_CONFIGURED',brokerConnected:Object.values(demoIngest.report().markets).some(x=>x.status==='SENSOR_OBSERVED'),ingestion:demoIngest.report()} : pathname==='/live-calendar/status' ? liveCalendarStream.report() : pathname==='/live-news/status' ? liveNewsSystemStatus({journalConnected:!!connectedJournal,calendarKeyConfigured:!!process.env.NABD_TEST_TRADING_ECONOMICS_STREAM_KEY&&!!process.env.NABD_TEST_TRADING_ECONOMICS_STREAM_SECRET,realtimeFeedVerified:false,officialReleaseTimestampVerified:false,preReleaseForecastCaptured:false,brokerFeedVerified:false}) : pathname==='/delayed-consensus/status' ? delayedCalendar.report() : pathname==='/journal/status' ? journalState : pathname==='/fred-historical/status' ? fredHistorical.report() : pathname==='/official-data/status' ? blsIndicators.report() : pathname==='/calendar/status' ? economicCalendar.report() : pathname==='/news/research' ? newsResearchReadiness({calendarConfigured:!!process.env.NABD_TEST_TRADING_ECONOMICS_KEY,verifiedReleaseArchive:false,goldBrokerCandles:false,btcBrokerCandles:false,openaiConnected:state==='CONNECTED'}) : pathname==='/news/status' ? officialNews.report() : pathname==='/gold/status' ? goldSpot.report() : pathname==='/research/status' ? sources.report() : pathname==='/feed/status' ? feed.report() : pathname==='/hybrid/status' ? {...hybrid.report(),marketAdapter:Object.values(demoIngest.report().markets).some(m=>m.status==='SENSOR_OBSERVED')?'isolated_demo_sensor':'not_connected'} : {service:'nabd-agentic-ai-test',experimental:true,reference_only:true,trading_enabled:false,model_connection:state,last_checked:checkTime}));
 });
 server.listen(port,'0.0.0.0',()=>{console.log('[NABD AGENTIC TEST] ready on port',port);void verify();
   void runSyntheticShadowSmoke().then(result=>{shadowSmoke=result;
