@@ -33,3 +33,26 @@ test('working FRED historical substitute does not assert realtime news readiness
  assert.ok(s.blockers.includes('FXSTREET_LIVE_NEWS'));
  assert.equal(s.demoTradeAllowed,false);
 });
+
+test('demo intent channel armed does not imply broker fill or independent verification',()=>{
+ const r=buildExperimentReadiness({brain:{status:'READY_FOR_VERIFIED_DEMO_CONTEXT'},
+  autoBrain:{enabled:true,completed:4},demo:{brokerConnected:true},
+  execution:{enabled:true,executorOnline:true,filledAcks:1},
+  journal:{persistenceConnected:true},smoke:{status:'SYNTHETIC_SELF_TEST_PASSED'}});
+ assert.equal(r.steps.find(x=>x.id==='DEMO_EXECUTOR_AUTH').status,'CONNECTED');
+ assert.equal(r.steps.find(x=>x.id==='DEMO_BROKER_FILL_VERIFICATION').status,'UNVERIFIED');
+ assert.equal(r.demoExecutorRecentlyOnline,true);
+ assert.equal(r.eaReportedFillsWithDealReference,1);
+ assert.equal(r.independentlyVerifiedBrokerFills,0);
+ assert.equal(r.demoTradeAllowed,false);
+});
+test('registered but offline executor remains blocked in readiness even with active research',()=>{
+ const r=buildExperimentReadiness({brain:{status:'READY_FOR_VERIFIED_DEMO_CONTEXT'},
+  autoBrain:{enabled:true,completed:12},demo:{brokerConnected:true},
+  execution:{enabled:true,executorRegistered:true,executorOnline:false},
+  journal:{persistenceConnected:true}});
+ const exec=r.steps.find(x=>x.id==='DEMO_EXECUTOR_AUTH');
+ assert.equal(exec.status,'WAITING_FOR_EXECUTOR_POLL');
+ assert.equal(r.demoExecutorRecentlyOnline,false);
+ assert.equal(r.ordersCreated,0);
+});
