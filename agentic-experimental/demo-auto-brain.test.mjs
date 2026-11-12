@@ -5,15 +5,16 @@ import {createDemoIngest,signDemoEnvelope} from './demo-ingest.mjs';
 import {HybridScheduler} from './hybrid-scheduler.mjs';
 
 const now=1800000000,secret='isolated-tests-hmac-secret-32-bytes-12345';
-function bars(duration){
+function bars(duration,count){
  const t=Math.floor((now-10)/duration)*duration-duration;
- return [t-duration,t].map(time=>({time,open:100,high:101,low:99,close:100.4}));
+ return Array.from({length:count},(_,i)=>({time:t-(count-i-1)*duration,
+  open:100,high:101,low:99,close:100.4}));
 }
 function snapshot(symbol='XAUUSD'){
  return {environment:'EXPERIMENTAL_NABD_AGENTIC',accountType:'DEMO',
   executionEnabled:false,symbol,brokerServer:'Independent-JustMarkets-Demo',
   timestamp:now-1,bid:100,ask:100.2,tickSize:0.01,tickValue:1,contractSize:1,
-  candlesM5:bars(300),candlesM15:bars(900),candlesH1:bars(3600),candlesH4:bars(14400)};
+  candlesM5:bars(300,220),candlesM15:bars(900,64),candlesH1:bars(3600,48),candlesH4:bars(14400,32)};
 }
 function ingress(input={}){
  const source={source:'ISOLATED_MT5_DEMO_SENSOR',capturedAt:now,
@@ -42,7 +43,9 @@ test('authenticated real-shape Demo snapshot automatically invokes AI research o
  assert.equal(ai.onSnapshot(safe).scheduled,true);
  await ai.flush();
  assert.equal(called.length,1);assert.equal(called[0].accountType,'DEMO');
- assert.equal(called[0].candlesH4.length,2);
+ assert.equal(called[0].candlesH4.length,24);
+ assert.equal(called[0].technicalEvidence.M5.ema200Verified,true);
+ assert.equal(called[0].technicalEvidence.H4.ema21!==null,true);
  assert.equal(called[0].news.classification,'NONE');
  assert.equal(ai.report().lastBySymbol.XAUUSD.stance,'WAIT');
  assert.equal(ai.onSnapshot(safe).reason,'NO_NEW_TRIGGER');
@@ -75,6 +78,16 @@ test('broker spread is independently capped and cannot be justified by model out
  assert.equal(called.length,0);
  assert.equal(ai.report().lastBySymbol.XAUUSD.reason,'BROKER_SPREAD_TOO_WIDE');
 });
+test('a signed 2-bar heartbeat is accepted but never spends an AI call',async()=>{
+ const called=[],ai=runner({brains:{XAUUSD:fakeBrain(called)}});
+ const heartbeat=snapshot();
+ for(const frame of ['M5','M15','H1','H4'])
+  heartbeat['candles'+frame]=heartbeat['candles'+frame].slice(-2);
+ assert.equal(ai.onSnapshot(heartbeat).reason,'WAITING_DEEP_CLOSED_BARS');
+ assert.equal(ai.onSnapshot(snapshot()).scheduled,true);
+ await ai.flush();assert.equal(called.length,1);
+});
+
 test('invalid LIVE provenance never schedules model calls',async()=>{
  const ai=runner({brains:{XAUUSD:fakeBrain([])}});
  assert.equal(ai.onSnapshot({...snapshot(),accountType:'LIVE'}).reason,'INVALID_BROKER_SNAPSHOT');
