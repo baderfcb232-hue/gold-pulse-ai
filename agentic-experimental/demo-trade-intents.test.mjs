@@ -79,11 +79,53 @@ test('audit ACK is signed, bound to selected DEMO account and idempotent',()=>{
  assert.equal(d.ack(signed({...body,accountType:'LIVE'})).status,'REJECTED');
  assert.equal(d.ack(signed(body)).status,'RECORDED');
  assert.equal(d.ack(signed(body)).status,'DUPLICATE');
- assert.equal(d.report().filledAcks,1);
+ assert.equal(d.report().filledAcks,0);
+ assert.equal(d.report().eaUnverifiedFillClaims,1);
+ assert.equal(d.report().brokerIndependentlyVerifiedFills,0);
 });
 test('false, missing execution flag or key never issues commands',()=>{
  assert.equal(createDemoTradeIntents({enabled:false,secret,clock:()=>now,
  quoteProvider:full}).consider(proposal).created,false);
  assert.equal(createDemoTradeIntents({enabled:true,secret:'',clock:()=>now,
  quoteProvider:full}).consider(proposal).reason,'SECRET_NOT_CONFIGURED');
+});
+
+test('executorRegistered is historical; executorOnline requires recent authenticated polls',()=>{
+ let t=now;
+ const d=create({clock:()=>t,quoteProvider:()=>({...full(),timestamp:t-1})});
+ assert.equal(d.report().executorRegistered,false);
+ assert.equal(d.report().executorOnline,false);
+ assert.equal(d.pull(pull).status,'NO_INTENT');
+ assert.equal(d.report().executorOnline,true);
+ assert.ok(d.report().lastExecutorSeenAt);
+ t+=16;
+ assert.equal(d.report().executorRegistered,true);
+ assert.equal(d.report().executorOnline,false);
+ const refresh=signed({...JSON.parse(pull.body),capturedAt:t});
+ assert.equal(d.pull({...refresh,timestamp:String(t),mac:sha(t+'\n'+refresh.body)}).status,'NO_INTENT');
+ assert.equal(d.report().executorOnline,true);
+});
+test('foreign Demo broker account never receives a pending order',()=>{
+ const d=create(); assert.equal(d.consider(proposal).created,true);
+ const foreign=signed({...JSON.parse(pull.body),brokerServer:'OtherBroker-Demo'});
+ assert.equal(d.pull(foreign).status,'NO_INTENT');
+ assert.equal(d.report().brokerFeedMismatch,1);
+ assert.equal(d.report().delivered,0);
+ assert.equal(d.report().queued.length,0);
+});
+test('an ACK with a validated deal reference is EA-reported, never independent broker proof',()=>{
+ const d=create();d.consider(proposal);d.pull(pull);
+ const body={id:'XAUUSD-'+(now-300),status:'FILLED',accountType:'DEMO',
+   accountLogin:1234567,occurredAt:now,brokerDealTicket:102402,
+   tradeRetcode:10009,executedVolume:0.02};
+ assert.equal(d.ack(signed(body)).status,'RECORDED');
+ assert.equal(d.report().filledAcks,1);
+ assert.equal(d.report().eaUnverifiedFillClaims,0);
+ assert.equal(d.report().brokerIndependentlyVerifiedFills,0);
+});
+test('an impossible ACK time cannot be accepted',()=>{
+ const d=create();d.consider(proposal);d.pull(pull);
+ const claim={id:'XAUUSD-'+(now-300),status:'FILLED',accountType:'DEMO',
+   accountLogin:1234567,occurredAt:now-31};
+ assert.equal(d.ack(signed(claim)).status,'REJECTED');
 });
