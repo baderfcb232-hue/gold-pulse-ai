@@ -18,6 +18,7 @@ export function createDemoTradeIntents({
 }={}){
  const keyReady=typeof secret==='string'&&Buffer.byteLength(secret,'utf8')>=32;
  const queue=new Map(),seen=new Set(),delivered=new Map(),acks=new Map();
+ let registeredDemoLogin=null,registeredDemoServer=null;
  let created=0,pulled=0,rejected=0;
  const lastBySymbol={};
  function audit(symbol,state,reason=null){
@@ -104,6 +105,37 @@ export function createDemoTradeIntents({
   }
   return null;
  }
+
+ // A separate trading-capable EA must authenticate itself. The old read-only
+ // observer never requests and never receives execution instructions.
+ function pull({body,timestamp,mac,secure=false}={}){
+  if(!enabled||!keyReady||!secure)return {status:'DISABLED',wire:null};
+  if(typeof body!=='string'||body.length>2000||
+     typeof timestamp!=='string'||!/^\d{10}$/.test(timestamp)||
+     Math.abs(clock()-Number(timestamp))>10||typeof mac!=='string'||
+     !/^[a-f0-9]{64}$/.test(mac))return {status:'REJECTED',wire:null};
+  const expected=signature(secret,timestamp+'\n'+body);
+  if(!timingSafeEqual(Buffer.from(expected,'hex'),Buffer.from(mac,'hex')))
+    return {status:'REJECTED',wire:null};
+  let x;try{x=JSON.parse(body)}catch{return {status:'REJECTED',wire:null}}
+  if(!x||x.source!=='ISOLATED_DEMO_TRADE_EXECUTOR'||
+     x.accountType!=='DEMO'||!Number.isSafeInteger(x.accountLogin)||
+     x.accountLogin<=0||typeof x.brokerServer!=='string'||
+     x.brokerServer.length>100||!x.brokerServer.toLowerCase().includes('demo')||
+     !Array.isArray(x.symbols)||x.symbols.length!==2||
+     x.symbols[0]!=='XAUUSD'||x.symbols[1]!=='BTCUSD'||
+     x.capturedAt!==Number(timestamp))
+    return {status:'REJECTED',wire:null};
+  if(registeredDemoLogin!==null&&
+     (registeredDemoLogin!==x.accountLogin||registeredDemoServer!==x.brokerServer))
+    return {status:'WRONG_DEMO_ACCOUNT',wire:null};
+  if(registeredDemoLogin===null){
+    registeredDemoLogin=x.accountLogin;registeredDemoServer=x.brokerServer;
+  }
+  const wire=take(x.symbols);
+  return {status:wire?'INTENT_DELIVERED':'NO_INTENT',wire,liveTrading:false};
+ }
+
  // Signed HTTP ACK is audit-only; this method never authorizes any additional trade.
  function ack({body,timestamp,mac,secure=false}={}){
   if(!enabled||!keyReady||!secure)return {status:'REJECTED'};
@@ -118,7 +150,8 @@ export function createDemoTradeIntents({
   if(!parsed||typeof parsed.id!=='string'||!delivered.has(parsed.id)||
      !['FILLED','REJECTED'].includes(parsed.status)||
      parsed.accountType!=='DEMO'||!Number.isSafeInteger(parsed.accountLogin)||
-     parsed.accountLogin<=0||!Number.isSafeInteger(parsed.occurredAt)||
+     parsed.accountLogin<=0||parsed.accountLogin!==registeredDemoLogin||
+     !Number.isSafeInteger(parsed.occurredAt)||
      Math.abs(parsed.occurredAt-clock())>30)return {status:'REJECTED'};
   if(acks.has(parsed.id))return {status:'DUPLICATE'};
   acks.set(parsed.id,{status:parsed.status,at:clock()});
@@ -129,8 +162,9 @@ export function createDemoTradeIntents({
   return {enabled:enabled&&keyReady,status:!enabled?'OFF':!keyReady?'SECRET_NOT_CONFIGURED':'DEMO_INTENTS_ARMED',
    mode:'ISOLATED_DEMO_ONLY',created,delivered:pulled,rejected,
    brokerAcks:acks.size,filledAcks:[...acks.values()].filter(x=>x.status==='FILLED').length,
-   queued:[...queue.keys()],lastBySymbol,tradeCountVerifiedByBroker:false,
+   queued:[...queue.keys()],lastBySymbol,executorRegistered:registeredDemoLogin!==null,
+   tradeCountVerifiedByBroker:false,
    liveTrading:false,serverPlacesOrders:false,dailyLimitsEnforcedByEA:true};
  }
- return {consider,take,ack,report};
+ return {consider,pull,ack,report};
 }
