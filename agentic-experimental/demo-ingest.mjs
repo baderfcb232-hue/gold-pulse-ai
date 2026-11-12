@@ -76,5 +76,10 @@ export function createDemoIngest({secret='',clock=safeNow}={}){
   return {status:'OBSERVED',symbols:entries.map(x=>x.symbol),ordersCreated:0,
    modelCalled:false,tradeAllowed:false};
  }
- return {receive,report};
+ // Return only the validated research snapshot; never expose this over public GET.
+ function getLatest(symbol){
+  const safe=latest.get(symbol);
+  return safe?structuredClone({...safe,executionEnabled:false}):null;
+ }
+ return {receive,report,getLatest};
 }
