@@ -80,3 +80,14 @@ test('production MT5 and unverified demo payload are rejected',()=>{
  assert.equal(validateIsolatedDemoSnapshot({...sample,brokerServer:'JustMarkets-Live'},now).status,'REJECTED');
  assert.equal(validateIsolatedDemoSnapshot({...sample,timestamp:now-30},now).status,'REJECTED');
 });
+
+test('M5 observation rejects an open or unordered candle and malformed bar',()=>{
+ const openBar={...candle(now-299)};
+ const unclosed=validateIsolatedDemoSnapshot({...sample,candlesM5:[candle(now-600),openBar]},now);
+ assert.equal(unclosed.status,'REJECTED');
+ assert.ok(unclosed.errors.includes('INVALID_DEMO_CANDLES'));
+ const unordered=validateIsolatedDemoSnapshot({...sample,candlesM5:[candle(now-300),candle(now-600)]},now);
+ assert.equal(unordered.status,'REJECTED');
+ const malformed=validateIsolatedDemoSnapshot({...sample,candlesM5:[null,candle(now-300)]},now);
+ assert.equal(malformed.status,'REJECTED');
+});
