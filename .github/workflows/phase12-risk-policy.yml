@@ -1,0 +1,20 @@
+name: NABD phase 12 isolated risk policy
+on:
+  pull_request:
+    paths:
+      - 'automatic-risk.mjs'
+      - 'automatic-risk.test.mjs'
+      - 'risk-control-policy.mjs'
+      - 'risk-control-policy.test.mjs'
+      - '.github/workflows/phase12-risk-policy.yml'
+  workflow_dispatch:
+jobs:
+  isolated-risk-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - run: node --test automatic-risk.test.mjs risk-control-policy.test.mjs
