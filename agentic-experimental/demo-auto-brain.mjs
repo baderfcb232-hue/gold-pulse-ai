@@ -82,6 +82,12 @@ export function createDemoAutoBrain({
    blocked++;record(symbol,'BLOCKED',{reason:'INVALID_BROKER_SNAPSHOT'});
    return {scheduled:false,reason:'INVALID_BROKER_SNAPSHOT',...noOrders};
   }
+  const depth=checked.safe;
+  // The MT5 EA sends a tiny signed heartbeat between complete M5 snapshots.
+  // A heartbeat must never spend AI tokens on 2-16 bars or consume a candle trigger.
+  if(depth.candlesM5.length<205||depth.candlesM15.length<30||
+     depth.candlesH1.length<30||depth.candlesH4.length<25)
+   return {scheduled:false,reason:'WAITING_DEEP_CLOSED_BARS',...noOrders};
   if(active.has(symbol))return {scheduled:false,reason:'MODEL_BUSY_FOR_SYMBOL',...noOrders};
   const clean=checked.safe;
   const bars=Object.fromEntries(Object.keys(durations).map(tf=>[tf,clean['candles'+tf]]));
