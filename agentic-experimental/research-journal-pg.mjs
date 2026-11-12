@@ -48,7 +48,26 @@ export function createResearchJournal({query}={}){
    [provider,id,scheduledAt,observedAt,raw,numeric,unit,'VENDOR_FIRST_OBSERVED_NOT_OFFICIAL_RELEASE']);
   return {inserted:result?.rowCount===1};
  }
- return {verify,saveForecast,firstForecast,firstActual,saveActual,status:()=>({verified,database:verified?ISOLATED_DB_NAME:null,
+
+ async function saveAnalysis({symbol,closedBarAt,analyzedAt,trigger,status,stance=null,
+  confidence=null,reasonCodes=[]}={}){
+  ensure();
+  if(!['XAUUSD','BTCUSD'].includes(symbol)||
+     !Number.isSafeInteger(closedBarAt)||closedBarAt<=0||
+     !Number.isSafeInteger(analyzedAt)||analyzedAt<closedBarAt||
+     typeof trigger!=='string'||trigger.length<1||trigger.length>64||
+     typeof status!=='string'||status.length<1||status.length>80||
+     (stance!==null&&!['BUY_WATCH','SELL_WATCH','WAIT'].includes(stance))||
+     (confidence!==null&&(!Number.isFinite(confidence)||confidence<0||confidence>1))||
+     !Array.isArray(reasonCodes)||reasonCodes.length>10||
+     reasonCodes.some(x=>typeof x!=='string'||x.length>100))
+   throw Error('INVALID_ISOLATED_ANALYSIS');
+  const r=await query(
+   'INSERT INTO agentic_research.shadow_analysis_decisions (symbol,closed_bar_at,analyzed_at,trigger,analysis_status,stance,confidence,reason_codes) VALUES ($1,to_timestamp($2),to_timestamp($3),$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING RETURNING symbol',
+   [symbol,closedBarAt,analyzedAt,trigger,status,stance,confidence,reasonCodes]);
+  return {inserted:r?.rowCount===1};
+ }
+ return {verify,saveForecast,firstForecast,firstActual,saveActual,saveAnalysis,status:()=>({verified,database:verified?ISOLATED_DB_NAME:null,
    writesAllowed:verified,persistenceConnected:verified})};
 }
 export async function connectResearchJournal({url=process.env.NABD_TEST_RESEARCH_DATABASE_URL}={}){
