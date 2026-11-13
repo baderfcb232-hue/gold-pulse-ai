@@ -653,7 +653,9 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
             nabd_member_mt5_accounts: ['id','user_id','broker','server_name','login','environment','status','created_at'],
             nabd_mt5_hosting_requests: ['account_id','status','requested_at','reviewed_at','reviewed_by'],
             nabd_member_alert_preferences: ['user_id','gold_enabled','btc_enabled','signals_enabled','execution_enabled','system_enabled','updated_at'],
-            nabd_member_telegram: ['user_id','chat_id','linked_at','last_test_at']};
+            nabd_member_telegram: ['user_id','chat_id','linked_at','last_test_at'],
+            nabd_admin_plan_drafts: ['id','code','name_ar','name_en','currency','price_minor','duration_days',
+              'features_json','state','created_by','created_at','updated_at']};
           for (const table of backupTables) for (const row of data.tables[table]) {
             const columns = allowed[table];
             await q(`INSERT INTO ${table}(${columns.join(',')}) VALUES(${columns.map(() => '?').join(',')})`, columns.map(name => row[name] ?? null));
