@@ -7,6 +7,8 @@ on:
       - 'notification-center-http.test.mjs'
       - 'notification-monitor-events.mjs'
       - 'notification-monitor-events.test.mjs'
+      - 'notification-monitor-telegram.mjs'
+      - 'notification-monitor-telegram.test.mjs'
       - 'auth-store.mjs'
       - 'auth.mjs'
       - 'auth-backup.mjs'
@@ -26,4 +28,4 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci --ignore-scripts
-      - run: node --test notification-center.test.mjs notification-center-http.test.mjs notification-monitor-events.test.mjs tests/accounts.test.mjs tests/subscriber-alerts.test.mjs tests/subscriber-alerts-http.test.mjs
+      - run: node --test notification-center.test.mjs notification-center-http.test.mjs notification-monitor-events.test.mjs notification-monitor-telegram.test.mjs tests/accounts.test.mjs tests/subscriber-alerts.test.mjs tests/subscriber-alerts-http.test.mjs
