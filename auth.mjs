@@ -208,7 +208,8 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
     const swept=await createMonitorStaleSweep({store,clock})().catch(error=>{onError(error);return {events:[]};});
     if (env.NABD_PHASE13_SYSTEM_TELEGRAM_ENABLED==='true')
       for(const event of swept.events.slice(0,40))
-        await monitorTelegram().publish(event.ownerId,event.eventKey).catch(onError);
+        // Never hold the account maintenance loop behind optional Telegram I/O.
+        void monitorTelegram().publish(event.ownerId,event.eventKey).catch(onError);
     if (backup.key && backup.storage && (!lastBackup || clock() - lastBackup >= 86400)) await runBackup();
   }
   async function runBackup() {
@@ -296,7 +297,8 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
         if(workerOutcome.mismatch)fail(409,'MT5 Demo identity does not match the registered account');
         const {ownerId,notificationKey,initialObservation,...safeResponse}=workerOutcome;
         if(notificationKey&&!initialObservation&&env.NABD_PHASE13_SYSTEM_TELEGRAM_ENABLED==='true')
-          await monitorTelegram().publish(ownerId,notificationKey).catch(onError);
+          // The authenticated monitor heartbeat must never wait on Telegram.
+          void monitorTelegram().publish(ownerId,notificationKey).catch(onError);
         return result(safeResponse);
       }
       const adminPrincipal = path.startsWith('/api/admin/') ? await authenticated(req, req.method === 'POST', true) : null;
