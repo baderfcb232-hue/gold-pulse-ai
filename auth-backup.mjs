@@ -24,7 +24,7 @@ const v2BackupTables = [...legacyBackupTables, 'nabd_member_mt5_accounts'];
 const v3BackupTables = [...v2BackupTables, 'nabd_mt5_hosting_requests'];
 const v4BackupTables = [...v3BackupTables, 'nabd_member_alert_preferences', 'nabd_member_telegram'];
 const v5BackupTables = [...v4BackupTables, 'nabd_member_notifications'];
-export const backupTables = [...v5BackupTables, 'nabd_member_mt5_monitor_state', 'nabd_member_telegram_monitor_deliveries'];
+export const backupTables = [...v5BackupTables, 'nabd_member_mt5_monitor_state', 'nabd_member_telegram_monitor_deliveries', 'nabd_member_telegram_deliveries'];
 export async function exportAuthBackup(store, key, clock) {
   if (!key) throw Object.assign(Error('مفتاح النسخ الاحتياطي غير مضبوط.'), {status: 503});
   return store.transaction(async query => {
@@ -44,7 +44,7 @@ export function readAuthBackup(value, key) {
   if (data.version <= 2) data.tables.nabd_mt5_hosting_requests = [];
   if (data.version <= 3) { data.tables.nabd_member_alert_preferences = []; data.tables.nabd_member_telegram = []; }
   if (data.version <= 4) data.tables.nabd_member_notifications = [];
-  if (data.version <= 5) {data.tables.nabd_member_mt5_monitor_state = []; data.tables.nabd_member_telegram_monitor_deliveries = [];}
+  if (data.version <= 5) {data.tables.nabd_member_mt5_monitor_state = []; data.tables.nabd_member_telegram_monitor_deliveries = []; data.tables.nabd_member_telegram_deliveries = [];}
   return data;
 }
 export function backupConfig(env) {
