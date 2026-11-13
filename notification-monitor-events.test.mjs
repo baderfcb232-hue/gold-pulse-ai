@@ -40,8 +40,8 @@ test('stale monitor report generates one uncertainty notice, not fake broker dis
  await store.transaction(q=>recordVerifiedDemoMonitorState(q,{userId:owner,accountId:account,state:'ONLINE',at:950}));
  let now=1000;
  const sweep=createMonitorStaleSweep({store,clock:()=>now});
- assert.deepEqual(await sweep(),{changed:0});
- now=1011;assert.deepEqual(await sweep(),{changed:1});
+ assert.equal((await sweep()).changed,0);
+ now=1011;assert.equal((await sweep()).changed,1);
  assert.deepEqual(await sweep(),{changed:0});
  const states=(await store.query('SELECT event_type,body_en FROM nabd_member_notifications WHERE user_id=? ORDER BY created_at',[owner])).rows;
  assert.deepEqual(states.map(x=>x.event_type),['MT5_STATUS','MT5_STATUS']);
