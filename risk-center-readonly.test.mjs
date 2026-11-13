@@ -12,7 +12,8 @@ test('risk page is read-only with separate gold and BTC cards',()=>{
  assert.match(server,/['"]\/risk-control['"]\s*:\s*['"]risk-control-center\.html['"]/);
  assert.match(js,/fetch\('\/api\/state'/);
  assert.doesNotMatch(js,/fetch\(['"]\/api\/(?:commands|bridge|auth\/profile)/);
- assert.doesNotMatch(html,/<form\b/i);
+ assert.match(html,/<form id="prefs-form" hidden>/);
+ assert.doesNotMatch(src('./public/risk-preferences-ui.js'),/\/api\/(?:commands|bridge\/control-next|bridge\/next)/);
 });
 test('risk monitoring uses independent market source and fails closed on missing data',()=>{
  const now=1000;
