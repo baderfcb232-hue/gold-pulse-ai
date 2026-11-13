@@ -59,12 +59,12 @@ export function createMonitorStaleSweep({store,clock=()=>Date.now()/1000}){
      WHERE s.status='ONLINE' AND h.status='APPROVED'
      AND w.last_seen_at<? AND w.last_seen_at<=?
      ORDER BY w.last_seen_at ASC LIMIT 250`,[now-60,now])).rows;
-   let changed=0;
+   let changed=0;const events=[];
    for(const item of stale) {
      const result=await recordVerifiedDemoMonitorState(q,{userId:item.user_id,accountId:item.account_id,state:'STALE',at:now});
-     if(result.changed)changed++;
+     if(result.changed){changed++;events.push({ownerId:item.user_id,eventKey:'MT5MON:'+item.account_id+':'+result.revision});}
    }
-   return {changed};
+   return {changed,events};
   });
  }
 }
