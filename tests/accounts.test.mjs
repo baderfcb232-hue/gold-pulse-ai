@@ -522,6 +522,9 @@ test('Phase14 protected admin API requires MFA and rejects member/CSRF/origin ac
  assert.equal((await h.request('/api/admin/plan-drafts',undefined,member)).status,403);
  const archived=await h.request('/api/admin/plan-drafts',{action:'archive',id:saved.body.id},admin);
  assert.equal(archived.status,200);assert.equal(archived.body.state,'ARCHIVED');
+ // This acceptance suite deliberately exercises invalid inputs; respect the
+ // existing 4-attempt/15-minute admin-write rate limit before final assertion.
+ h.advance(901);
  assert.equal((await h.request('/api/admin/plan-drafts',{...draft,action:'update',id:saved.body.id},admin)).status,409);
  const audit=await h.request('/api/admin/audit',undefined,admin);
  assert.ok(audit.body.events.some(x=>x.event==='ADMIN_PLAN_DRAFT_CREATED'));
