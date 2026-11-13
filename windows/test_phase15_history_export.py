@@ -41,7 +41,7 @@ class FakeMT5:
         step=TIMEFRAMES[tf]
         limit=int(end.timestamp())
         last=(limit//step)*step-step
-        count=600 if tf=="M5" else 330
+        count=2000 if tf=="M5" else 330
         return [dict(time=last-(count-i-1)*step,open=2000.,
             close=2000.1,high=2000.2,low=1999.9,tick_volume=12)
                 for i in range(count)]
@@ -49,7 +49,7 @@ class FakeMT5:
 
 def params(path):
     return SimpleNamespace(market="XAUUSD",symbol="XAUUSD.m",
-        from_date=datetime(2024,1,1,tzinfo=timezone.utc),
+        from_date=datetime(2024,12,28,tzinfo=timezone.utc),
         to_date=datetime(2025,1,1,tzinfo=timezone.utc),
         spread_points=12.,commission_per_lot=6.,slippage_points=2.,
         margin_per_lot=450.,terminal_path=None,output=Path(path))
