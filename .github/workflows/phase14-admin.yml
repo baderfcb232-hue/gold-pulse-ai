@@ -1,0 +1,24 @@
+name: NABD phase 14 isolated admin operations
+on:
+  pull_request:
+    paths:
+      - 'admin-operations.mjs'
+      - 'admin-operations.test.mjs'
+      - 'auth.mjs'
+      - 'server.mjs'
+      - 'tests/accounts.test.mjs'
+      - 'public/accounts.html'
+      - 'public/admin-operations-ui.js'
+      - 'public/admin-operations.css'
+      - '.github/workflows/phase14-admin.yml'
+  workflow_dispatch:
+jobs:
+  admin-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - run: node --test admin-operations.test.mjs tests/accounts.test.mjs
