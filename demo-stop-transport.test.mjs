@@ -38,6 +38,11 @@ test('separate Demo PAUSE transport rejects disabled mode, wrong identity and ot
  assert.equal(ack.stopConfirmed,false);assert.equal(ack.resumeAllowed,false);
  await bridge.acknowledge(token,{...packet,requestId:intent.requestId,symbol:'BTCUSD',persistedPaused:true});
  assert.equal((await store.query('SELECT count(*) AS n FROM nabd_mt5_stop_reports')).rows[0].n,1);
+ const memberView=(await createRiskStopIntents({store,clock:()=>1001}).list(user))[0];
+ assert.equal(memberView.status,'EA_PAUSE_REPORTED_UNVERIFIED');
+ assert.equal(memberView.confirmedByMT5,false);
+ assert.equal(memberView.brokerConfirmed,false);
+ assert.equal(memberView.executionStopped,false);
  await store.transaction(q=>bridge.revoke(q,account));
  await assert.rejects(()=>bridge.poll(token,packet),e=>e.status===401);
 });
