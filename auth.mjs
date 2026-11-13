@@ -205,7 +205,7 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
   }
 
   async function handle(req, path, url, body) {
-    if (!path.startsWith('/api/auth/') && !path.startsWith('/api/admin/') && !path.startsWith('/api/worker/risk-stop/') && !path.startsWith('/api/worker/risk-stop/') && path !== '/api/worker/mt5-heartbeat' && path !== '/api/telegram/subscriber-webhook') return null;
+    if (!path.startsWith('/api/auth/') && !path.startsWith('/api/admin/') && !path.startsWith('/api/worker/risk-stop/') && path !== '/api/worker/mt5-heartbeat' && path !== '/api/telegram/subscriber-webhook') return null;
     await ready;
     if (path === '/api/auth/status' && req.method === 'GET') {
       if (!online) await ensureOnline();
@@ -216,7 +216,7 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
     if (online && !healthy) await probeDatabase();
     if (!online || !healthy)
       return result({error: 'خدمة الحسابات غير متاحة مؤقتًا؛ جارٍ إعادة الاتصال بقاعدة البيانات.', ...status()}, 503);
-    if (req.method === 'POST' && path !== '/api/worker/mt5-heartbeat' && path !== '/api/telegram/subscriber-webhook' && req.headers.origin !== new URL(base).origin) return result({error: 'Origin rejected'}, 403);
+    if (req.method === 'POST' && !path.startsWith('/api/worker/risk-stop/') && path !== '/api/worker/mt5-heartbeat' && path !== '/api/telegram/subscriber-webhook' && req.headers.origin !== new URL(base).origin) return result({error: 'Origin rejected'}, 403);
     try {
       if (path === '/api/telegram/subscriber-webhook' && req.method === 'POST') {
         const secret=req.headers['x-telegram-bot-api-secret-token'];
