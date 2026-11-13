@@ -382,7 +382,7 @@ test('encrypted backups include central hosting requests and v2 archives still d
   const archive=await exportAuthBackup(h.store,h.backup.key,h.now);
   assert.equal(archive.includes('55557777'),false);
   const decoded=readAuthBackup(archive,h.backup.key);
-  assert.equal(decoded.version,4);
+  assert.equal(decoded.version,5);
   assert.equal(decoded.tables.nabd_mt5_hosting_requests.length,1);
   assert.deepEqual(decoded.tables.nabd_member_alert_preferences,[]);
   assert.deepEqual(decoded.tables.nabd_member_telegram,[]);
