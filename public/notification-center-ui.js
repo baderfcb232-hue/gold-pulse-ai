@@ -41,7 +41,7 @@ const dictionary={
    SUBSCRIPTION_EXPIRING:'Subscription expiring',SUBSCRIPTION_EXPIRED:'Subscription expired',
    statusRead:'Read',statusUnread:'Unread',detail:'Details'}
 };
-let csrf='',signedIn=false,items=[],offset=0,nextOffset=null,busy=false;
+let csrf='',signedIn=false,userId=null,sessionGeneration=0,items=[],offset=0,nextOffset=null,busy=false;
 const currentLang=()=>document.documentElement.lang?.toLowerCase().startsWith('en')?'en':'ar';
 const tr=key=>(dictionary[currentLang()][key]||key);
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!=null)n.textContent=text;return n;};
@@ -51,6 +51,15 @@ async function request(path,payload){
  ...(payload===undefined?{}:{body:JSON.stringify(payload)})});
  if(!res.ok)throw Object.assign(Error('HTTP '+res.status),{status:res.status});
  return res.json();
+}
+async function refreshSession(){
+ const me=await request('/api/auth/me');
+ const next=me.user?.id&&me.csrf?me.user.id:null;
+ if(next!==userId){
+   items=[];offset=0;nextOffset=null;updateCount(0);
+   userId=next;sessionGeneration++;render();
+ }
+ signedIn=Boolean(next);csrf=next?me.csrf:'';
 }
 function translate(){
  ui.button.setAttribute('aria-label',tr('bell'));
@@ -107,7 +116,9 @@ async function load(reset=true){
  try{
    const params=new URLSearchParams({type:ui.type.value,market:ui.market.value,
      state:ui.state.value,limit:'20',offset:String(reset?0:offset)});
+   const generation=sessionGeneration;
    const data=await request('/api/auth/notifications?'+params.toString());
+   if(generation!==sessionGeneration)return;
    if(!Array.isArray(data.items))throw Error('Invalid inbox response');
    items=reset?data.items:items.concat(data.items);
    nextOffset=data.nextOffset;
@@ -117,7 +128,7 @@ async function load(reset=true){
    render();
  }catch(error){
    status(error.status===401?tr('login'):tr('unavailable'));
-   if(error.status===401){signedIn=false;items=[];updateCount(0);render();}
+   if(error.status===401){signedIn=false;userId=null;csrf='';sessionGeneration++;items=[];updateCount(0);render();}
  }finally{busy=false;ui.more.disabled=false;}
 }
 async function mutate(id,action){
@@ -133,7 +144,16 @@ function toggle(open){
  if(open){translate();if(signedIn)void load(true);else status(tr('login'));}
  else ui.button.focus();
 }
-ui.button.onclick=()=>toggle(ui.panel.hidden);
+ui.button.onclick=async()=>{
+ if(!ui.panel.hidden){toggle(false);return;}
+ // Do not display cached private data while session identity is rechecked.
+ signedIn=false;items=[];nextOffset=null;updateCount(0);render();
+ toggle(true);
+ try{
+   await refreshSession();
+   if(signedIn)await load(true);else status(tr('login'));
+ }catch{status(tr('unavailable'));}
+};
 ui.close.onclick=()=>toggle(false);
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!ui.panel.hidden)toggle(false);});
 document.addEventListener('pointerdown',e=>{
@@ -144,15 +164,14 @@ ui.more.onclick=()=>void load(false);
 document.addEventListener('nabd:language-change',translate);
 async function init(){
  translate();
- try{
-   const me=await request('/api/auth/me');
-   signedIn=Boolean(me.user&&me.csrf);
-   csrf=signedIn?me.csrf:'';
-   if(signedIn){
-     await load(true);
-     // Poll only the authenticated inbox; no simulated notifications.
-     setInterval(()=>{if(signedIn&&!document.hidden)void load(true);},30000);
-   }
- }catch{status(tr('unavailable'));}
+ try{await refreshSession();if(signedIn)await load(true);}
+ catch{status(tr('unavailable'));}
+ // Refetch session on every tick to avoid exposing the previous account's inbox
+ // after login/logout in a different tab.
+ setInterval(async()=>{
+   if(document.hidden)return;
+   try{await refreshSession();if(signedIn)await load(true);}
+   catch{signedIn=false;userId=null;csrf='';sessionGeneration++;items=[];updateCount(0);render();}
+ },30000);
 }
 void init();
