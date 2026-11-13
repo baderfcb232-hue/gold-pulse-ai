@@ -1,0 +1,27 @@
+name: NABD phase 15 isolated Strategy Lab
+on:
+  pull_request:
+    paths:
+      - 'strategy-lab.mjs'
+      - 'strategy-lab-cli.mjs'
+      - 'strategy-lab.test.mjs'
+      - 'strategy-lab-static.test.mjs'
+      - 'backtest.mjs'
+      - 'server.mjs'
+      - 'public/strategy-lab*'
+      - 'public/index.html'
+      - 'scripts/phase15-browser-qa.mjs'
+      - '.github/workflows/phase15-strategy-lab.yml'
+  workflow_dispatch:
+jobs:
+  offline-backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - run: node --test strategy-lab.test.mjs strategy-lab-static.test.mjs tests/backtest.test.mjs tests/engine.test.mjs tests/flex-strategy.test.mjs
+      - run: node --check public/strategy-lab-ui.js && node --check strategy-lab-cli.mjs
