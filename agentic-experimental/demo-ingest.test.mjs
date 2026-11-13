@@ -62,3 +62,52 @@ test('sensor report goes stale after ten seconds instead of claiming broker conn
  assert.equal(ingest.report().markets.XAUUSD.status,'STALE');
  assert.equal(ingest.report().allowTrading,false);
 });
+
+test('bad gold quote cannot discard independently verified Bitcoin in the same signed envelope',()=>{
+ const ingest=createDemoIngest({secret,clock:()=>now});
+ const data=JSON.stringify({source:'ISOLATED_MT5_DEMO_SENSOR',
+  capturedAt:now,ordersSupported:false,symbols:{
+   XAUUSD:{...snapshot,timestamp:now-3},
+   BTCUSD:{...snapshot,symbol:'BTCUSD'}
+  }});
+ const r=ingest.receive(signed(data));
+ assert.equal(r.status,'OBSERVED');
+ assert.deepEqual(r.symbols,['BTCUSD']);
+ assert.deepEqual(r.skippedSymbols,['XAUUSD']);
+ assert.equal(ingest.getLatest('XAUUSD'),null);
+ assert.equal(ingest.getLatest('BTCUSD').symbol,'BTCUSD');
+ const status=ingest.report();
+ assert.equal(status.rejected,0);
+ assert.equal(status.partialMarketSkips,1);
+ assert.equal(status.invalidSnapshotCounts.QUOTE_TOO_OLD,1);
+ assert.deepEqual(status.lastInvalidSnapshot.reasons,['QUOTE_TOO_OLD']);
+ assert.equal(status.lastInvalidSnapshot.symbol,'XAUUSD');
+ assert.equal(status.lastInvalidSnapshot.at,new Date(now*1000).toISOString());
+ assert.equal(status.allowTrading,false);
+ assert.equal(status.brokerOrderRoutes,false);
+});
+
+test('fully invalid market payload still fails closed with diagnostic reason',()=>{
+ const ingest=createDemoIngest({secret,clock:()=>now});
+ const r=ingest.receive(signed(body({...snapshot,timestamp:now-3})));
+ assert.equal(r.status,'REJECTED');
+ assert.equal(r.code,'MARKET_SNAPSHOT_INVALID');
+ assert.equal(ingest.report().accepted,0);
+ assert.equal(ingest.report().rejected,1);
+ assert.equal(ingest.getLatest('XAUUSD'),null);
+ assert.deepEqual(ingest.report().lastInvalidSnapshot.reasons,['QUOTE_TOO_OLD']);
+ assert.equal(ingest.report().rejectCounts.MARKET_SNAPSHOT_INVALID,1);
+ assert.equal(ingest.report().partialMarketSkips,0);
+});
+
+test('successful observation clears lastReject but preserves last invalid snapshot evidence',()=>{
+ const ingest=createDemoIngest({secret,clock:()=>now});
+ assert.equal(ingest.receive(signed(body({...snapshot,timestamp:now-3}))).code,'MARKET_SNAPSHOT_INVALID');
+ assert.equal(ingest.receive(signed(body())).status,'OBSERVED');
+ const report=ingest.report();
+ assert.equal(report.lastReject,null);
+ assert.equal(report.lastInvalidSnapshot.symbol,'XAUUSD');
+ assert.deepEqual(report.lastInvalidSnapshot.reasons,['QUOTE_TOO_OLD']);
+ assert.equal(report.accepted,1);
+ assert.equal(report.rejected,1);
+});
