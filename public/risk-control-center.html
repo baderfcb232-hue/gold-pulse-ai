@@ -7,6 +7,7 @@
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/risk-control-center.css">
 <script src="/risk-control-center.js" type="module"></script>
+<script src="/risk-preferences-ui.js" type="module"></script>
 </head>
 <body>
 <header><a href="/dashboard" class="brand"><img src="/nabd-logo.svg" width="115" height="42" alt="NABD"></a>
@@ -20,4 +21,23 @@
 <article class="market" data-market="BTCUSD"><h2>Bitcoin · BTCUSD</h2><dl><dt data-key="bridgeLabel">حالة الجسر</dt><dd data-field="bridge">—</dd><dt data-key="quoteLabel">حالة الأسعار</dt><dd data-field="quote">—</dd><dt data-key="pauseLabel">حالة إيقاف EA</dt><dd data-field="pause">—</dd><dt data-key="riskLabel">نسبة مخاطرة EA المعلنة</dt><dd data-field="risk">—</dd></dl></article>
 </section>
 <section class="footer-card"><h2 id="limitsHeading">حدود التداول الفعلية</h2><p id="limitsText">الحدود والحالة المعروضة هنا ليست إعدادات شخصية مُعتمدة. تعديل الإعدادات أو إيقاف التداول يتطلب مسار صلاحيات وحفظ مستمر وتأكيدًا من EA قبل تفعيل الأزرار.</p></section>
+<section class="footer-card" id="risk-settings" aria-labelledby="prefs-heading">
+<h2 id="prefs-heading">تفضيلات المخاطر لكل مشترك — تجريبية فقط / Staged preferences</h2>
+<p>الحفظ لا يوقف MT5 ولا يغيّر حدود التنفيذ. لا تُدخل كلمات مرور الوسيط. Requires account login; saved values are NOT trading controls.</p>
+<p id="prefs-status" role="status" aria-live="polite">سجّل الدخول لعرض حسابات Demo الخاصة بك.</p>
+<form id="prefs-form" hidden>
+<label>حساب Demo / Account <select name="accountId" required></select></label>
+<label>السوق / Market <select name="symbol" required><option value="XAUUSD">XAUUSD</option><option value="BTCUSD">BTCUSD</option></select></label>
+<label>مخاطرة الصفقة % / Risk % <input name="riskPercent" type="number" min="0.01" max="2" step="0.01" required></label>
+<label>الخسارة اليومية % / Daily loss % <input name="maxDailyLoss" type="number" min="0.01" max="10" step="0.01" required></label>
+<label>صفقات اليوم / Daily trades <input name="maxDailyTrades" type="number" min="1" max="100" step="1" required></label>
+<label>أقصى مراكز / Open positions <input name="maxOpenPositions" type="number" min="1" max="20" step="1" required></label>
+<label>حد السبريد (نقاط) / Spread points <input name="maxSpread" type="number" min="0" max="100000" step="0.01" required></label>
+<label>حد الانزلاق (نقاط) / Slippage points <input name="maxSlippage" type="number" min="0" max="100000" step="0.01" required></label>
+<label>أقصى عمر للسعر (ثوانٍ) / Quote age (sec) <input name="quoteMaxAgeSeconds" type="number" min="0.1" max="60" step="0.1" required></label>
+<label class="pause-pref"><input name="paused" type="checkbox"> حفظ تفضيل الإيقاف فقط — لا يوقف الصفقات / Save stop preference ONLY</label>
+<button type="submit" id="prefs-save">حفظ التفضيلات التجريبية / Save staged preferences</button>
+</form>
+<p id="prefs-warning" class="notice">لا تعتمد على هذه الصفحة لإيقاف تداول قائم. استخدم ضوابط MT5 الفعلية لإيقاف الدخول عند الحاجة.</p>
+</section>
 </main></body></html>
