@@ -6,6 +6,7 @@ import {backupConfig, exportAuthBackup, readAuthBackup, backupTables} from './au
 import {createSubscriberAlerts} from './subscriber-alerts.mjs';
 import {createSubscriberSignalDispatch} from './subscriber-signal-dispatch.mjs';
 import {subscriberTelegramReadiness} from './subscriber-telegram-readiness.mjs';
+import {createNotificationCenter} from './notification-center.mjs';
 
 const fail = (status, message) => {throw Object.assign(Error(message), {status});};
 const result = (data = {ok: true}, status = 200, headers = {}) => ({data, status, headers});
@@ -36,11 +37,21 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
   env = process.env, encryptionKey, adminEmail, backup: injectedBackup, operationalStatus = () => ({}), onError = () => {}, telegramFetch = fetch} = {}) {
   const key = encryptionKey || parseKey(env.AUTH_ENCRYPTION_KEY), owner = (adminEmail || env.AUTH_ADMIN_EMAIL || '').trim().toLowerCase();
   const secure = publicBase?.startsWith('https://'), base = publicBase?.replace(/\/$/, '') || '';
+  let notificationInbox = null;
+  const memberInbox = () => {
+    if (!notificationInbox) notificationInbox=createNotificationCenter({store,clock});
+    return notificationInbox;
+  };
   let privateSignalDispatch = null;
   const publishSubscriberSignal = async signal => {
     await ready;
-    if (!online || !healthy || closed ||
-      env.NABD_SUBSCRIBER_TELEGRAM_AUTO_SIGNALS !== 'true')
+    if (!online || !healthy || closed) return {attempted:0,enabled:false};
+    // Store a deduplicated account inbox entry when a real, verified public
+    // reference signal is published. This never claims an MT5 fill.
+    try {await memberInbox().publishSignal(signal);} catch(error) {onError(error);}
+    // Existing Telegram delivery retains its separate opt-in, owner consent and
+    // unique (member,signal) claim. The inbox never sends Telegram itself.
+    if (env.NABD_SUBSCRIBER_TELEGRAM_AUTO_SIGNALS !== 'true')
       return {attempted:0,enabled:false};
     if (!privateSignalDispatch) privateSignalDispatch=createSubscriberSignalDispatch({
       store,clock,enabled:true,botToken:env.NABD_SUBSCRIBER_TELEGRAM_BOT_TOKEN||'',
@@ -439,6 +450,23 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
         await audit(store.query,u.id,'ALERT_PREFERENCES_UPDATED',u.id);
         return result({preferences});
       }
+      // Phase 13 private notifications: authenticated read/mark/archive/delete.
+      // No public endpoint may publish or forge a trade/MT5 result.
+      if (path === '/api/auth/notifications' && req.method === 'GET') {
+        return result(await memberInbox().list(u.id,{
+          type:url.searchParams.get('type') || 'ALL',
+          market:url.searchParams.get('market') || 'ALL',
+          state:url.searchParams.get('state') || 'active',
+          limit:Number(url.searchParams.get('limit') || 30),
+          offset:Number(url.searchParams.get('offset') || 0)
+        }));
+      }
+      if (path === '/api/auth/notifications/update' && req.method === 'POST') {
+        if (!b || typeof b !== 'object' || Array.isArray(b) ||
+            Object.keys(b).sort().join(',')!=='action,id')
+          fail(400,'Invalid notification update');
+        return result(await memberInbox().update(u.id,b));
+      }
       if (path === '/api/auth/telegram/link' && req.method === 'POST') {
         await rate(req,'telegram-link',u.email);
         const response=await subscriberBot().startLink(u.id);
@@ -641,7 +669,9 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
             nabd_member_mt5_accounts: ['id','user_id','broker','server_name','login','environment','status','created_at'],
             nabd_mt5_hosting_requests: ['account_id','status','requested_at','reviewed_at','reviewed_by'],
             nabd_member_alert_preferences: ['user_id','gold_enabled','btc_enabled','signals_enabled','execution_enabled','system_enabled','updated_at'],
-            nabd_member_telegram: ['user_id','chat_id','linked_at','last_test_at']};
+            nabd_member_telegram: ['user_id','chat_id','linked_at','last_test_at'],
+            nabd_member_notifications: ['id','user_id','event_key','event_type','symbol','title_ar','title_en',
+              'body_ar','body_en','created_at','read_at','archived_at','deleted_at']};
           for (const table of backupTables) for (const row of data.tables[table]) {
             const columns = allowed[table];
             await q(`INSERT INTO ${table}(${columns.join(',')}) VALUES(${columns.map(() => '?').join(',')})`, columns.map(name => row[name] ?? null));
