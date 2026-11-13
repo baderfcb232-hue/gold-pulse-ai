@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,randomBytes} from 'node:crypto';
+import {exportAuthBackup,readAuthBackup} from './auth-backup.mjs';
 import {sqliteAuthStore} from './auth-store.mjs';
 import {recordVerifiedDemoMonitorState} from './notification-monitor-events.mjs';
 import {createMonitorTelegramAlerts} from './notification-monitor-telegram.mjs';
@@ -60,4 +61,23 @@ test('unlink and system notification opt-out prevent private sends',async t=>{
  [f.owner,1,1,1,0,0,100]);
  assert.equal((await notify.publish(f.owner,f.key(1))).attempted,false);
  assert.equal((await f.store.query('SELECT COUNT(*) AS n FROM nabd_member_telegram_monitor_deliveries')).rows[0].n,0);
+});
+
+test('encrypted backup v6 preserves both signal and monitor Telegram deduplication ledgers',async t=>{
+ const f=await fixture(t);
+ await f.state('OFFLINE');
+ await f.store.query(`INSERT INTO nabd_member_telegram_deliveries
+   (user_id,signal_id,symbol,status,claimed_at,completed_at,telegram_message_id)
+   VALUES(?,?,'BTCUSD','SENT',?,?,?)`,[f.owner,'BTC-ALERT-1',1000,1001,123]);
+ const notify=createMonitorTelegramAlerts({store:f.store,clock:f.clock,enabled:true,botToken:'TESTTOKEN',
+   fetcher:async()=>({ok:true,json:async()=>({ok:true,result:{message_id:456}})})});
+ assert.equal((await notify.publish(f.owner,f.key(1))).sent,true);
+ const backupKey=randomBytes(32);
+ const encrypted=await exportAuthBackup(f.store,backupKey,f.clock);
+ const decoded=readAuthBackup(encrypted,backupKey);
+ assert.equal(decoded.version,6);
+ assert.equal(decoded.tables.nabd_member_telegram_deliveries[0].signal_id,'BTC-ALERT-1');
+ assert.equal(decoded.tables.nabd_member_telegram_deliveries[0].status,'SENT');
+ assert.equal(decoded.tables.nabd_member_telegram_monitor_deliveries[0].event_key,f.key(1));
+ assert.equal(decoded.tables.nabd_member_telegram_monitor_deliveries[0].status,'SENT');
 });
