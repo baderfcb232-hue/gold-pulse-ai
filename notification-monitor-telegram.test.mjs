@@ -21,10 +21,10 @@ async function fixture(t){
 test('Telegram monitoring requires explicit opt in and deduplicates authenticated reports',async t=>{
  const f=await fixture(t),sends=[];
  await f.state('OFFLINE');
- const off=createMonitorTelegramAlerts({store:f.store,clock:f.clock,botToken:'TEST'});
+ const off=createMonitorTelegramAlerts({store:f.store,clock:f.clock,botToken:'TESTTOKEN'});
  assert.equal((await off.publish(f.owner,f.key(1))).attempted,false);
  const enabled=createMonitorTelegramAlerts({store:f.store,clock:f.clock,
-  enabled:true,botToken:'TEST',fetcher:async(_url,req)=>{
+  enabled:true,botToken:'TESTTOKEN',fetcher:async(_url,req)=>{
    sends.push(JSON.parse(req.body));
    return {ok:true,json:async()=>({ok:true,result:{message_id:21}})};
   }});
@@ -42,7 +42,7 @@ test('Telegram monitoring requires explicit opt in and deduplicates authenticate
 test('uncertain Telegram outcome cannot be automatically retried',async t=>{
  const f=await fixture(t);await f.state('OFFLINE');let sent=0;
  const notify=createMonitorTelegramAlerts({store:f.store,clock:f.clock,enabled:true,
-  botToken:'TEST',fetcher:async()=>{sent++;throw Error('network unavailable')}});
+  botToken:'TESTTOKEN',fetcher:async()=>{sent++;throw Error('network unavailable')}});
  assert.deepEqual(await notify.publish(f.owner,f.key(1)),{attempted:true,enabled:true,sent:false});
  assert.equal((await f.store.query("SELECT status FROM nabd_member_telegram_monitor_deliveries")).rows[0].status,'UNCERTAIN');
  assert.equal((await notify.publish(f.owner,f.key(1))).attempted,false);
@@ -51,7 +51,7 @@ test('uncertain Telegram outcome cannot be automatically retried',async t=>{
 test('unlink and system notification opt-out prevent private sends',async t=>{
  const f=await fixture(t);await f.state('OFFLINE');
  await f.store.query('DELETE FROM nabd_member_telegram WHERE user_id=?',[f.owner]);
- const notify=createMonitorTelegramAlerts({store:f.store,clock:f.clock,enabled:true,botToken:'TEST',
+ const notify=createMonitorTelegramAlerts({store:f.store,clock:f.clock,enabled:true,botToken:'TESTTOKEN',
   fetcher:async()=>{throw Error('should never send')}});
  assert.equal((await notify.publish(f.owner,f.key(1))).attempted,false);
  await f.store.query('INSERT INTO nabd_member_telegram(user_id,chat_id,linked_at) VALUES(?,?,?)',
