@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {randomBytes} from 'node:crypto';
+import {randomBytes,randomUUID,createHash} from 'node:crypto';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -63,4 +63,36 @@ test('phase 13 authenticated HTTP inbox rejects cross-member access, CSRF bypass
  assert.match(html,/nabd-inbox-bell/);
  assert.equal((await fetch(base+'/notification-center-ui.js')).status,200);
  assert.equal((await fetch(base+'/notification-center.css')).status,200);
+ // This monitor is a separate read-only worker (NEVER an order executor).
+ const accountId=randomUUID(),workerId=randomUUID(),monitorToken=randomBytes(32).toString('base64url');
+ await store.query('INSERT INTO nabd_member_mt5_accounts(id,user_id,broker,server_name,login,environment,created_at) VALUES(?,?,?,?,?,?,?)',
+ [accountId,a.id,'JustMarkets','JustMarkets-Demo2','44556677','demo',100]);
+ await store.query("INSERT INTO nabd_mt5_hosting_requests(account_id,status,requested_at) VALUES(?,'APPROVED',?)",[accountId,100]);
+ await store.query('INSERT INTO nabd_mt5_monitor_workers(account_id,token_hash,worker_id,issued_at) VALUES(?,?,?,?)',
+ [accountId,createHash('sha256').update(monitorToken).digest('hex'),workerId,100]);
+ const packet={account_id:accountId,worker_id:workerId,broker:'JustMarkets',
+   server:'JustMarkets-Demo2',login:'44556677',environment:'demo',
+   terminal_connected:true,demo_mode:true};
+ const heartbeat=async(token,data)=>{
+   const res=await fetch(base+'/api/worker/mt5-heartbeat',{
+     method:'POST',headers:{'Content-Type':'application/json','X-NABD-Worker-Token':token},
+     body:JSON.stringify(data)});
+   return {status:res.status,data:await res.json()};
+ };
+ assert.equal((await heartbeat('not-a-valid-worker-token',packet)).status,401);
+ assert.equal((await heartbeat(monitorToken,{...packet,login:'88888888'})).status,409);
+ assert.equal((await heartbeat(monitorToken,packet)).status,200);
+ assert.equal((await heartbeat(monitorToken,packet)).status,200);
+ const afterOnline=await request('/api/auth/notifications?type=MT5_STATUS',undefined,a.cookie);
+ assert.equal(afterOnline.data.items.length,1);
+ assert.equal((await request('/api/auth/notifications',undefined,b.cookie)).data.items.length,0);
+ assert.equal((await heartbeat(monitorToken,{...packet,terminal_connected:false})).status,200);
+ assert.equal((await heartbeat(monitorToken,{...packet,terminal_connected:false})).status,200);
+ const disconnected=await request('/api/auth/notifications?type=MT5_DISCONNECTED',undefined,a.cookie);
+ assert.equal(disconnected.data.items.length,1);
+ assert.match(disconnected.data.items[0].bodyEn,/monitoring report/i);
+ assert.equal((await heartbeat(monitorToken,packet)).status,200);
+ assert.equal((await request('/api/auth/notifications?type=MT5_RECONNECTED',undefined,a.cookie)).data.items.length,1);
+ assert.equal((await request('/api/auth/notifications',undefined,b.cookie)).data.items.length,0);
+
 });
