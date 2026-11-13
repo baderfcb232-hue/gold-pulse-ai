@@ -1,6 +1,7 @@
 // Authenticated MT5 Demo read-only monitor events. State here represents the
 // monitor's observation, NEVER an independently broker-verified trade/connection.
 // Must be invoked with a transaction query AFTER worker token + account verification.
+import {randomUUID} from 'node:crypto';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const STATES=new Set(['ONLINE','OFFLINE','STALE']);
 const error=(status,message)=>{throw Object.assign(Error(message),{status});};
@@ -37,15 +38,14 @@ export async function recordVerifiedDemoMonitorState(query,{userId,accountId,sta
  const eventKey='MT5MON:'+accountId+':'+revision;
  await query(`INSERT INTO nabd_member_notifications
   (id,user_id,event_key,event_type,symbol,title_ar,title_en,body_ar,body_en,created_at)
-  SELECT ?,u.id,?,?,?,?,NULL,?,?,?,? FROM nabd_users u
+  SELECT ?,u.id,?,?,NULL,?,?,?,?,? FROM nabd_users u
   LEFT JOIN nabd_member_alert_preferences prefs ON prefs.user_id=u.id
   WHERE u.id=? AND u.status='active' AND u.verified_at IS NOT NULL
   AND u.notifications=1 AND COALESCE(prefs.system_enabled,1)=1
   ON CONFLICT(user_id,event_key) DO NOTHING`,
-  [crypto.randomUUID(),eventKey,e.type,e.titleAr,e.titleEn,e.bodyAr,e.bodyEn,at,userId]);
+  [randomUUID(),eventKey,e.type,e.titleAr,e.titleEn,e.bodyAr,e.bodyEn,at,userId]);
  return {changed:true,state,revision};
 }
-import * as crypto from 'node:crypto';
 export function createMonitorStaleSweep({store,clock=()=>Date.now()/1000}){
  if(!store?.transaction)throw Error('Persistent monitor store required');
  return async function sweep(){
