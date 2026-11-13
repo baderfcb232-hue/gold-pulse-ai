@@ -17,6 +17,8 @@ on:
       - 'mt5/NABD_BTC_FUSION_V2_4_06_Demo.mq5'
       - 'mt5/NABD_GOLD_4_01.mq5'
       - 'mt5/NABD_Phase12_DemoPauseOnly.mq5'
+      - 'mt5/NABD_Phase12_LocalPauseProbe.mq5'
+      - 'mt5/PHASE12_DEMO_PAUSE_PROTOCOL_AR.md'
       - 'risk-center-readonly.test.mjs'
       - 'public/risk-control-center.html'
       - 'public/risk-control-center.js'
