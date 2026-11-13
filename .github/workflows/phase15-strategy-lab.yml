@@ -25,3 +25,24 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: node --test strategy-lab.test.mjs strategy-lab-static.test.mjs tests/backtest.test.mjs tests/engine.test.mjs tests/flex-strategy.test.mjs
       - run: node --check public/strategy-lab-ui.js && node --check strategy-lab-cli.mjs
+
+  browser-report:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - run: npm install --no-save --package-lock=false playwright@1.56.1
+      - run: node scripts/phase15-browser-qa.mjs
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nabd-phase15-lab-browser
+          path: qa-artifacts/phase15/
+          if-no-files-found: ignore
+          retention-days: 7
