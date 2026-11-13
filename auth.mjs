@@ -6,6 +6,7 @@ import {backupConfig, exportAuthBackup, readAuthBackup, backupTables} from './au
 import {createSubscriberAlerts} from './subscriber-alerts.mjs';
 import {createSubscriberSignalDispatch} from './subscriber-signal-dispatch.mjs';
 import {subscriberTelegramReadiness} from './subscriber-telegram-readiness.mjs';
+import {createAdminOperations} from './admin-operations.mjs';
 
 const fail = (status, message) => {throw Object.assign(Error(message), {status});};
 const result = (data = {ok: true}, status = 200, headers = {}) => ({data, status, headers});
@@ -500,6 +501,14 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
           await q('DELETE FROM nabd_sessions WHERE user_id=?', [u.id]); await audit(q, u.id, 'DELETION_REQUESTED', u.id);});
         return result({ok: true}, 200, {'Set-Cookie': clearCookies()});
       }
+      // Phase 14 report endpoints inherit the existing admin+MFA session gate.
+      // These are read-only and never grant MT5 permissions or expose worker tokens.
+      if (path === '/api/admin/operations' && req.method === 'GET')
+        return result(await createAdminOperations({store,clock}).overview());
+      if (path === '/api/admin/operations/audit' && req.method === 'GET')
+        return result(await createAdminOperations({store,clock}).audit(url.searchParams));
+      if (path === '/api/admin/operations/hosting' && req.method === 'GET')
+        return result(await createAdminOperations({store,clock}).hosting(url.searchParams));
       if (path === '/api/admin/overview' && req.method === 'GET') return result({accounts: status(),
         counts: (await store.query('SELECT status,COUNT(*) AS count FROM nabd_users GROUP BY status')).rows, operational: operationalStatus()});
       if (path === '/api/admin/users' && req.method === 'GET') {
