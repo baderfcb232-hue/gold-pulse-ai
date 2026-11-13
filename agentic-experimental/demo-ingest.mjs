@@ -13,7 +13,22 @@ export function createDemoIngest({secret='',clock=safeNow}={}){
  const configured=typeof secret==='string'&&Buffer.byteLength(secret,'utf8')>=32;
  const recent=new Map(),latest=new Map();
  let accepted=0,rejected=0,lastReceipt=null,lastReject=null;
- const deny=(code)=>{rejected++;lastReject=code;return {status:'REJECTED',code}};
+ // Keep only fixed validator reason codes and market names; never expose quotes,
+ // account logins, payloads, signatures or credentials on a public status URL.
+ const rejectCounts=Object.create(null),invalidSnapshotCounts=Object.create(null);
+ let lastInvalidSnapshot=null,partialMarketSkips=0;
+ const noteInvalid=(items,at)=>{
+  for(const {symbol,errors} of items){
+   if(!['XAUUSD','BTCUSD'].includes(symbol))continue;
+   const reasons=errors.filter(x=>typeof x==='string'&&/^[A-Z0-9_]{1,64}$/.test(x)).slice(0,8);
+   for(const reason of reasons)invalidSnapshotCounts[reason]=(invalidSnapshotCounts[reason]||0)+1;
+   lastInvalidSnapshot={symbol,reasons,at:new Date(at*1000).toISOString()};
+  }
+ };
+ const deny=(code)=>{
+  rejected++;lastReject=code;rejectCounts[code]=(rejectCounts[code]||0)+1;
+  return {status:'REJECTED',code};
+ };
  function report(){
   const now=clock(),markets={};
   for(const [symbol,s] of latest){
@@ -28,6 +43,8 @@ export function createDemoIngest({secret='',clock=safeNow}={}){
   return {status:!configured?'AUTH_SECRET_NOT_CONFIGURED':fresh?'OBSERVING_ISOLATED_DEMO':accepted?'STALE_SENSOR':'AWAITING_SENSOR',
    authentication:configured?'HMAC_SHA256_CONFIGURED':'DISABLED',
    transport:'TLS_REQUIRED',maxBytes:120000,accepted,rejected,lastReceipt,lastReject,
+   rejectCounts:{...rejectCounts},invalidSnapshotCounts:{...invalidSnapshotCounts},
+   lastInvalidSnapshot,partialMarketSkips,
    markets,brokerOrderRoutes:false,allowTrading:false,aiAutoInvocation:false};
  }
  function receive({body,timestamp,signature,secure=true}={}){
@@ -54,26 +71,33 @@ export function createDemoIngest({secret='',clock=safeNow}={}){
      Object.keys(record.symbols).some(x=>!['XAUUSD','BTCUSD'].includes(x)))
    return deny('ISOLATION_PROVENANCE_INVALID');
   let count=0;
-  const entries=[];
+  const entries=[],invalid=[];
   for(const symbol of Object.keys(record.symbols)){
    const snapshot=record.symbols[symbol];
    if(snapshot?.status==='BLOCKED')continue;
    if(snapshot?.symbol!==symbol||snapshot?.brokerServer==='SYNTHETIC-Demo')
     return deny('BROKER_IDENTITY_UNVERIFIED');
    const result=validateIsolatedDemoSnapshot(snapshot,now);
-   if(result.status!=='VALIDATED_RESEARCH_SENSOR'||!result.safe.multiTimeframeVerified)
-    return deny('MARKET_SNAPSHOT_INVALID');
+   if(result.status!=='VALIDATED_RESEARCH_SENSOR'||!result.safe?.multiTimeframeVerified){
+    invalid.push({symbol,errors:result.errors?.length?result.errors:['MULTI_TIMEFRAME_NOT_VERIFIED']});
+    // Never promote the invalid symbol, but do not discard a different,
+    // independently validated market in the same signed DEMO envelope.
+    continue;
+   }
    const old=latest.get(symbol);
    if(old&&snapshot.timestamp<old.timestamp)return deny('OUT_OF_ORDER_BROKER_QUOTE');
    entries.push({symbol,safe:result.safe});count++;
   }
-  if(count===0)return deny('NO_VALID_MARKET_SNAPSHOTS');
+  if(invalid.length)noteInvalid(invalid,now);
+  if(count===0)return deny(invalid.length?'MARKET_SNAPSHOT_INVALID':'NO_VALID_MARKET_SNAPSHOTS');
+  if(invalid.length)partialMarketSkips+=invalid.length;
   recent.set(digest,now+20);
   for(const {symbol,safe} of entries){
    latest.set(symbol,{...safe,receivedAt:now});
   }
   accepted++;lastReceipt=new Date(now*1000).toISOString();lastReject=null;
-  return {status:'OBSERVED',symbols:entries.map(x=>x.symbol),ordersCreated:0,
+  return {status:'OBSERVED',symbols:entries.map(x=>x.symbol),
+   skippedSymbols:invalid.map(x=>x.symbol),ordersCreated:0,
    modelCalled:false,tradeAllowed:false};
  }
  // Return only the validated research snapshot; never expose this over public GET.
