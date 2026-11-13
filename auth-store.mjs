@@ -55,6 +55,20 @@ CREATE TABLE IF NOT EXISTS nabd_member_risk_stop_intents (
  PRIMARY KEY(account_id,symbol)
 );
 CREATE INDEX IF NOT EXISTS nabd_member_risk_stop_owner ON nabd_member_risk_stop_intents(user_id);
+-- Separate narrow Demo executor identity: NEVER reuse read-only monitor tokens.
+-- Pause-only endpoints require an explicit opt-in flag and MFA admin provisioning.
+CREATE TABLE IF NOT EXISTS nabd_mt5_stop_executors (
+ account_id TEXT PRIMARY KEY REFERENCES nabd_member_mt5_accounts(id) ON DELETE CASCADE,
+ token_hash TEXT NOT NULL UNIQUE,
+ provisioned_at DOUBLE PRECISION NOT NULL
+);
+-- Report from a scoped Demo executor, NOT broker-confirmed pause.
+CREATE TABLE IF NOT EXISTS nabd_mt5_stop_reports (
+ request_id TEXT PRIMARY KEY REFERENCES nabd_member_risk_stop_intents(id) ON DELETE CASCADE,
+ account_id TEXT NOT NULL REFERENCES nabd_member_mt5_accounts(id) ON DELETE CASCADE,
+ symbol TEXT NOT NULL CHECK(symbol IN ('XAUUSD','BTCUSD')),
+ reported_at DOUBLE PRECISION NOT NULL
+);
 CREATE TABLE IF NOT EXISTS nabd_member_risk_preferences (
  account_id TEXT NOT NULL REFERENCES nabd_member_mt5_accounts(id) ON DELETE CASCADE,
  symbol TEXT NOT NULL CHECK(symbol IN ('XAUUSD','BTCUSD')),
