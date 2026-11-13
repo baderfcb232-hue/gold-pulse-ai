@@ -52,13 +52,66 @@ export function initPhase14Admin({api,message,currentLocale,date}){
   plans=id('phase14-plan-list'),status=id('phase14-plan-status'),
   readiness=id('phase14-readiness'),form=id('phase14-plan-form'),
   refresh=id('phase14-refresh');
- let rows=[];
+ let rows=[],lastOverview=null;
+ const staticText={
+  ar:{
+   '#phase14-title':'لوحة متابعة المنصة',
+   '.phase14-control > .portal-note':'قراءات تشغيلية من خادم نبض. لا تؤكد اتصال الوسيط أو سلامة Render الخارجية؛ ولا تفعّل التداول أو صلاحيات أي مشترك.',
+   '.phase14-control h3':'حالة الخدمات كما يراها الخادم',
+   '#phase14-refresh':'تحديث الحالة',
+   '#phase14-plans-title':'مسودات باقات الاشتراك',
+   '.phase14-plans > .portal-note':'للتخطيط فقط: الأسعار والمدة والمميزات لا تنشئ اشتراكات مدفوعة ولا تمنح توصيات أو تداولًا. لا يوجد ربط دفع مفعّل.',
+   '#phase14-plan-details > summary':'إضافة أو تعديل مسودة باقة',
+   '.phase14-features legend':'المميزات المقترحة',
+   '#phase14-plan-form button[type="submit"]':'حفظ المسودة فقط',
+   '#phase14-plan-reset':'إلغاء التعديل'},
+  en:{
+   '#phase14-title':'Platform operations dashboard',
+   '.phase14-control > .portal-note':'Observations from the NABD server only. These do not verify broker or external Render availability, activate trading or grant permissions.',
+   '.phase14-control h3':'Services as reported by this server',
+   '#phase14-refresh':'Refresh status',
+   '#phase14-plans-title':'Subscription plan drafts',
+   '.phase14-plans > .portal-note':'Planning only. Draft prices, durations and features do not create paid subscriptions or grant trading rights. Payment integration is disabled.',
+   '#phase14-plan-details > summary':'Create or edit a plan draft',
+   '.phase14-features legend':'Proposed features',
+   '#phase14-plan-form button[type="submit"]':'Save draft only',
+   '#phase14-plan-reset':'Cancel editing'}
+ };
+ const formLabels={
+  ar:{code:'رمز الباقة (لاتيني كبير)',nameAr:'الاسم بالعربية',nameEn:'English name',
+   currency:'العملة',price:'سعر مقترح (غير مستحق)',durationDays:'المدة بالأيام'},
+  en:{code:'Plan code (uppercase)',nameAr:'Arabic name',nameEn:'English name',
+   currency:'Currency',price:'Proposed price (not payable)',durationDays:'Duration in days'}
+ };
+ const featureLabels={
+  ar:{GOLD_SIGNALS:' إشارات الذهب',BTC_SIGNALS:' إشارات البيتكوين',
+   DEMO_MT5_MONITORING:' مراقبة MT5 Demo فقط'},
+  en:{GOLD_SIGNALS:' Gold signals',BTC_SIGNALS:' Bitcoin signals',
+   DEMO_MT5_MONITORING:' Demo MT5 monitoring only'}
+ };
+ function translateStatic(){
+  const locale=lang();
+  for(const [selector,copy] of Object.entries(staticText[locale])){
+   const target=document.querySelector(selector);if(target)target.textContent=copy;
+  }
+  for(const [name,copy] of Object.entries(formLabels[locale])){
+   const target=form.elements.namedItem(name)?.closest('label');
+   if(target && target.firstChild?.nodeType===Node.TEXT_NODE)target.firstChild.nodeValue=copy;
+  }
+  for(const check of form.querySelectorAll('input[name="features"]')){
+   const label=check.closest('label');
+   const suffix=check.nextSibling;
+   if(suffix?.nodeType===Node.TEXT_NODE) suffix.nodeValue=featureLabels[locale][check.value]||'';
+  }
+  form.elements.namedItem('code').placeholder=locale==='en'?'GOLD_BASIC':'GOLD_BASIC';
+ }
  function metric(key,value){
    const card=el('div','phase14-stat');
    card.append(el('span','',tr(key)),el('strong','',Number(value).toLocaleString(lang()==='en'?'en-US':'ar-PS')));
    return card;
  }
  function showOverview(data){
+   lastOverview=data;
    const {users,hosting,mt5Monitor,telegram,audit,services:systems}=data;
    if(!data.observationOnly||data.restrictions?.liveTradingEnabledByAdmin!==false)
      throw Error('Invalid admin observation mode');
@@ -161,7 +214,8 @@ export function initPhase14Admin({api,message,currentLocale,date}){
    finally{button.disabled=false;}
  };
  id('phase14-plan-reset').onclick=()=>{form.elements.namedItem('id').value='';};
- document.addEventListener('nabd:language-change',()=>{if(rows.length)renderPlans();});
+ document.addEventListener('nabd:language-change',()=>{translateStatic();if(lastOverview)showOverview(lastOverview);renderPlans();});
+ translateStatic();
  return Promise.all([loadOverview(),loadPlans()]).catch(e=>{
    status.textContent=tr('unavailable');message(e.message,true);
  });
