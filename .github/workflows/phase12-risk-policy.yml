@@ -6,6 +6,8 @@ on:
       - 'automatic-risk.test.mjs'
       - 'risk-control-policy.mjs'
       - 'risk-control-policy.test.mjs'
+      - 'risk-stop-status.mjs'
+      - 'risk-stop-status.test.mjs'
       - 'risk-center-readonly.test.mjs'
       - 'public/risk-control-center.html'
       - 'public/risk-control-center.js'
@@ -30,4 +32,4 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci --ignore-scripts
-      - run: node --test automatic-risk.test.mjs risk-control-policy.test.mjs risk-center-readonly.test.mjs risk-preferences.test.mjs risk-preferences-ui.test.mjs tests/accounts.test.mjs
+      - run: node --test automatic-risk.test.mjs risk-stop-status.test.mjs risk-control-policy.test.mjs risk-center-readonly.test.mjs risk-preferences.test.mjs risk-preferences-ui.test.mjs tests/accounts.test.mjs
