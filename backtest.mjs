@@ -19,6 +19,9 @@ export function backtest(dataset,{allowMissingNews=false,timeframePolicy='STRICT
   if(!hasNews&&!allowMissingNews)throw new Error('Complete historical news coverage required, or explicitly pass --without-news-filter');
   const spread=dataset.spread_points*dataset.spec.point,slip=Math.max(0,Number(dataset.slippage_points)||0)*dataset.spec.point;
   const events=hasNews?dataset.calendar.events||[]:[],trades=[],seen=new Set();let active=null,skipped=0;
+  // Rolling closed-bar cursors: linear across multi-year exports rather than
+  // re-filtering all earlier candles on every M5 bar (quadratic).
+  const historyCursor=Object.fromEntries(Object.keys(TF_SECONDS).map(tf=>[tf,0]));
   function settle(exit,status,when){
     const sign=active.side==='BUY'?1:-1,netMovement=sign*(exit-active.actual_entry);
     const oneLotProfit=netMovement/dataset.spec.tick_size*dataset.spec.tick_value_loss-dataset.commission_per_lot;
@@ -29,7 +32,14 @@ export function backtest(dataset,{allowMissingNews=false,timeframePolicy='STRICT
     const bar=m5[i],at=bar.time;
     if(active&&at>=active.expires_at)settle(active.side==='BUY'?bar.open-slip:bar.open+spread+slip,'TIME_EXIT',at);
     if(!active){
-      const candles={};for(const[tf,step]of Object.entries(TF_SECONDS))candles[tf]=dataset.candles[tf].filter(c=>c.time+step<=at).slice(-320);
+      const candles={};
+      for(const [tf,step] of Object.entries(TF_SECONDS)){
+        const rows=dataset.candles[tf];
+        let cursor=historyCursor[tf];
+        while(cursor<rows.length && rows[cursor].time+step<=at)cursor++;
+        historyCursor[tf]=cursor;
+        candles[tf]=rows.slice(Math.max(0,cursor-320),cursor);
+      }
       const raw={symbol:dataset.symbol||'XAUUSD',account_ref:'OFFLINE_BACKTEST',broker:dataset.broker||'Historical broker data',
         bid:bar.open,ask:bar.open+spread,quote_at:at,terminal_connected:true,spec:dataset.spec,candles,
         calendar:{status:'ok',updated_at:at,events:events.filter(ev=>ev.time>at-6*3600&&ev.time<at+86400)},execution:{}};
