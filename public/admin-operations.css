@@ -1,0 +1,15 @@
+/* Phase 14: built on existing authenticated admin portal */
+#admin-ops-panel{margin-block:16px}
+#admin-ops-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+#admin-ops-kpis .summary-tile{display:flex;flex-direction:column;gap:6px;min-width:0}
+#admin-ops-kpis .summary-tile strong{overflow-wrap:anywhere;font-size:1.2rem}
+#admin-ops-kpis .summary-tile small{font-size:.72rem;opacity:.7}
+.admin-ops-reports{margin-top:14px}
+.admin-ops-reports summary{cursor:pointer;padding:10px 0;font-weight:600}
+.admin-ops-reports h3{font-size:1rem;margin-block:16px 8px}
+.admin-ops-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin-block:12px 18px}
+.admin-ops-filters label{display:grid;gap:6px;font-size:.78rem}
+.admin-ops-filters input,.admin-ops-filters select{width:100%;min-width:0;border:1px solid var(--border,#7d7d7d55);border-radius:9px;padding:9px;background:var(--surface,#fff);color:inherit}
+.admin-ops-filters button{align-self:end}
+.admin-ops-list{max-width:100%;overflow-x:auto}
+@media(max-width:560px){#admin-ops-kpis{grid-template-columns:1fr 1fr}.admin-ops-filters{grid-template-columns:1fr 1fr}}
