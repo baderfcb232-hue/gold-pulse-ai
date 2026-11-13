@@ -6,6 +6,9 @@ import {backupConfig, exportAuthBackup, readAuthBackup, backupTables} from './au
 import {createSubscriberAlerts} from './subscriber-alerts.mjs';
 import {createSubscriberSignalDispatch} from './subscriber-signal-dispatch.mjs';
 import {subscriberTelegramReadiness} from './subscriber-telegram-readiness.mjs';
+import {createRiskPreferences} from './risk-preferences.mjs';
+import {createRiskStopIntents} from './risk-stop-intents.mjs';
+import {createDemoStopTransport} from './demo-stop-transport.mjs';
 
 const fail = (status, message) => {throw Object.assign(Error(message), {status});};
 const result = (data = {ok: true}, status = 200, headers = {}) => ({data, status, headers});
@@ -48,6 +51,9 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
     });
     return privateSignalDispatch.publish(signal);
   };
+  const riskPreferences = () => createRiskPreferences({store,clock});
+  const riskStopIntents = () => createRiskStopIntents({store,clock});
+  const demoStop = () => createDemoStopTransport({store,clock,enabled:env.NABD_PHASE12_DEMO_STOP_BRIDGE_ENABLED==='true'});
   let subscriberAlerts = null;
   const subscriberBot = () => {
     if (!subscriberAlerts) subscriberAlerts = createSubscriberAlerts({
@@ -199,7 +205,7 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
   }
 
   async function handle(req, path, url, body) {
-    if (!path.startsWith('/api/auth/') && !path.startsWith('/api/admin/') && path !== '/api/worker/mt5-heartbeat' && path !== '/api/telegram/subscriber-webhook') return null;
+    if (!path.startsWith('/api/auth/') && !path.startsWith('/api/admin/') && !path.startsWith('/api/worker/risk-stop/') && path !== '/api/worker/mt5-heartbeat' && path !== '/api/telegram/subscriber-webhook') return null;
     await ready;
     if (path === '/api/auth/status' && req.method === 'GET') {
       if (!online) await ensureOnline();
@@ -210,7 +216,7 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
     if (online && !healthy) await probeDatabase();
     if (!online || !healthy)
       return result({error: 'خدمة الحسابات غير متاحة مؤقتًا؛ جارٍ إعادة الاتصال بقاعدة البيانات.', ...status()}, 503);
-    if (req.method === 'POST' && path !== '/api/worker/mt5-heartbeat' && path !== '/api/telegram/subscriber-webhook' && req.headers.origin !== new URL(base).origin) return result({error: 'Origin rejected'}, 403);
+    if (req.method === 'POST' && !path.startsWith('/api/worker/risk-stop/') && path !== '/api/worker/mt5-heartbeat' && path !== '/api/telegram/subscriber-webhook' && req.headers.origin !== new URL(base).origin) return result({error: 'Origin rejected'}, 403);
     try {
       if (path === '/api/telegram/subscriber-webhook' && req.method === 'POST') {
         const secret=req.headers['x-telegram-bot-api-secret-token'];
@@ -218,6 +224,12 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
         await subscriberBot().acceptWebhook(secret,packet);
         return result({ok:true});
       }
+      // Dedicated PAUSE-only Demo worker, disabled by default. Monitor tokens
+      // are never accepted. No RESUME, trade or close endpoint exists.
+      if (path === '/api/worker/risk-stop/poll' && req.method === 'POST')
+        return result(await demoStop().poll(req.headers['x-nabd-stop-token'],await body(req)));
+      if (path === '/api/worker/risk-stop/ack' && req.method === 'POST')
+        return result(await demoStop().acknowledge(req.headers['x-nabd-stop-token'],await body(req)));
       if (path === '/api/worker/mt5-heartbeat' && req.method === 'POST') {
         // This endpoint is limited to read-only account presence. A worker token
         // can NEVER call operator trade APIs, poll signals or dispatch orders.
@@ -439,6 +451,25 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
         await audit(store.query,u.id,'ALERT_PREFERENCES_UPDATED',u.id);
         return result({preferences});
       }
+      // Staged per-member risk preferences. These endpoints never dispatch MT5
+      // commands or authorize trading. POST has existing CSRF and Origin guards.
+      if (path === '/api/auth/risk-preferences' && req.method === 'GET')
+        return result({preferences:await riskPreferences().list(u.id),connectedToExecution:false});
+      if (path === '/api/auth/risk-preferences' && req.method === 'POST') {
+        await rate(req,'risk-preferences',u.id);
+        return result(await riskPreferences().save(u.id,b));
+      }
+      // Explicit account-owned staged intent only; NOT a broker stop command.
+      if (path === '/api/auth/risk-stop-requests' && req.method === 'GET')
+        return result({requests:await riskStopIntents().list(u.id),connectedToMT5:false});
+      if (path === '/api/auth/risk-stop-requests' && req.method === 'POST') {
+        await rate(req,'risk-stop-intent',u.id);
+        if (!b || typeof b !== 'object' || Array.isArray(b) ||
+            Object.keys(b).some(k=>!['accountId','symbol','acknowledgeUnconfirmed'].includes(k)) ||
+            b.acknowledgeUnconfirmed !== true)
+          fail(400,'Explicit unconfirmed stop intent acknowledgment required');
+        return result(await riskStopIntents().request(u.id,b),202);
+      }
       if (path === '/api/auth/telegram/link' && req.method === 'POST') {
         await rate(req,'telegram-link',u.email);
         const response=await subscriberBot().startLink(u.id);
@@ -545,6 +576,31 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
             ? monitorStatus({worker_id,mt5_online,last_seen_at:a.last_seen_at},clock()) : 'NOT_APPROVED'
         }));
         return result({accounts,workerConnected:false,tradingEnabled:false,phase:'READ_ONLY_MONITORING'});
+      }
+      // Provision once using MFA admin session. This grants PAUSE-only Demo
+      // delivery, not trading, and the token never enters logs or DB plaintext.
+      if (path === '/api/admin/risk-stop/provision' && req.method === 'POST') {
+        if (!b || typeof b !== 'object' || Array.isArray(b) ||
+            Object.keys(b).some(k=>!['id','confirm'].includes(k)) ||
+            b.confirm!=='ISSUE_DEMO_PAUSE_ONLY' ||
+            typeof b.id!=='string' || !/^[a-f0-9-]{36}$/.test(b.id))
+          fail(400,'Explicit Demo stop-only provisioning required');
+        const token=opaque();
+        await store.transaction(async q=>{
+          await demoStop().provision(q,b.id,token);
+          await audit(q,u.id,'DEMO_STOP_TOKEN_ROTATED',b.id);
+        });
+        return result({token,accountId:b.id,pauseOnly:true,tradingEnabled:false,
+          brokerStopConfirmed:false,resumeAllowed:false});
+      }
+      if (path === '/api/admin/risk-stop/revoke' && req.method === 'POST') {
+        if (!b || typeof b !== 'object' || Array.isArray(b) ||
+            Object.keys(b).some(k=>k!=='id'))fail(400,'Invalid revocation');
+        await store.transaction(async q=>{
+          await demoStop().revoke(q,b.id);
+          await audit(q,u.id,'DEMO_STOP_TOKEN_REVOKED',b.id);
+        });
+        return result({revoked:true,tradeAllowed:false});
       }
       if (path === '/api/admin/mt5-monitor/provision' && req.method === 'POST') {
         if (!b || typeof b !== 'object' || Array.isArray(b) ||

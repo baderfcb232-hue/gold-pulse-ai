@@ -1,0 +1,46 @@
+name: NABD phase 12 isolated risk policy
+on:
+  pull_request:
+    paths:
+      - 'automatic-risk.mjs'
+      - 'automatic-risk.test.mjs'
+      - 'risk-control-policy.mjs'
+      - 'risk-control-policy.test.mjs'
+      - 'risk-stop-status.mjs'
+      - 'risk-stop-status.test.mjs'
+      - 'risk-stop-intents.mjs'
+      - 'risk-stop-intents.test.mjs'
+      - 'demo-stop-transport.mjs'
+      - 'demo-stop-transport.test.mjs'
+      - 'phase12-mt5-static.test.mjs'
+      - 'mt5/NABD_BTC_4_01.mq5'
+      - 'mt5/NABD_BTC_FUSION_V2_4_06_Demo.mq5'
+      - 'mt5/NABD_GOLD_4_01.mq5'
+      - 'mt5/NABD_Phase12_DemoPauseOnly.mq5'
+      - 'mt5/NABD_Phase12_LocalPauseProbe.mq5'
+      - 'mt5/PHASE12_DEMO_PAUSE_PROTOCOL_AR.md'
+      - 'risk-center-readonly.test.mjs'
+      - 'public/risk-control-center.html'
+      - 'public/risk-control-center.js'
+      - 'public/risk-control-center.css'
+      - 'server.mjs'
+      - 'risk-preferences.mjs'
+      - 'risk-preferences.test.mjs'
+      - 'risk-preferences-ui.test.mjs'
+      - 'public/risk-preferences-ui.js'
+      - 'auth-store.mjs'
+      - 'auth.mjs'
+      - 'auth-backup.mjs'
+      - 'tests/accounts.test.mjs'
+      - '.github/workflows/phase12-risk-policy.yml'
+  workflow_dispatch:
+jobs:
+  isolated-risk-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - run: node --test automatic-risk.test.mjs risk-stop-status.test.mjs risk-stop-intents.test.mjs demo-stop-transport.test.mjs phase12-mt5-static.test.mjs risk-control-policy.test.mjs risk-center-readonly.test.mjs risk-preferences.test.mjs risk-preferences-ui.test.mjs tests/accounts.test.mjs

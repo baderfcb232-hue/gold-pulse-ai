@@ -36,7 +36,7 @@ test('session buffers apply to native and dashboard entries',()=>{
   assert.match(gold,/InpAfterSessionOpenMinutes = 30/);
   assert.match(gold,/InpBeforeSessionCloseMinutes = 60/);
   assert.match(gold,/SymbolInfoSessionTrade\(/);
-  assert.match(gold,/if\(!ExecutionPermissionsAvailable\(\) \|\| !IsWithinTradingHours\(\) \|\|/);
+  assert.match(gold,/if\(Phase12EntryBlocked\(\) \|\| !ExecutionPermissionsAvailable\(\) \|\| !IsWithinTradingHours\(\) \|\|/);
   assert.match(gold,/if\(!IsWithinTradingHours\(\)\)\{NABDWebsiteBlocked/);
 });
 test('gold unlimited-entry demo never bypasses daily loss budget',()=>{
