@@ -42,6 +42,22 @@ CREATE TABLE IF NOT EXISTS nabd_member_mt5_accounts (
  UNIQUE(broker,server_name,login)
 );
 CREATE INDEX IF NOT EXISTS nabd_member_mt5_owner ON nabd_member_mt5_accounts(user_id);
+-- Staged user preferences, NOT an MT5 permission or executable risk limit.
+-- A paused preference must never be misrepresented as a confirmed EA pause.
+CREATE TABLE IF NOT EXISTS nabd_member_risk_preferences (
+ account_id TEXT NOT NULL REFERENCES nabd_member_mt5_accounts(id) ON DELETE CASCADE,
+ symbol TEXT NOT NULL CHECK(symbol IN ('XAUUSD','BTCUSD')),
+ paused INTEGER NOT NULL CHECK(paused IN (0,1)),
+ risk_percent DOUBLE PRECISION NOT NULL,
+ max_daily_loss DOUBLE PRECISION NOT NULL,
+ max_daily_trades INTEGER NOT NULL,
+ max_open_positions INTEGER NOT NULL,
+ max_spread DOUBLE PRECISION NOT NULL,
+ max_slippage DOUBLE PRECISION NOT NULL,
+ quote_max_age_seconds DOUBLE PRECISION NOT NULL,
+ updated_at DOUBLE PRECISION NOT NULL,
+ PRIMARY KEY(account_id,symbol)
+);
 -- Central Windows MT5 hosting requests. An approved request is NOT broker verification
 -- and never enables MT5 connectivity, trading, signal dispatch, or account access.
 CREATE TABLE IF NOT EXISTS nabd_mt5_hosting_requests (
