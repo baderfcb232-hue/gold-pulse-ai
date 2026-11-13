@@ -27,6 +27,8 @@ jobs:
 
   browser-admin:
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -35,7 +37,6 @@ jobs:
           node-version: '24'
       - run: npm ci --ignore-scripts
       - run: npm install --no-save --package-lock=false playwright@1.56.1
-      - run: npx playwright install --with-deps chromium
       - run: node scripts/phase14-browser-qa.mjs
       - if: always()
         uses: actions/upload-artifact@v4
