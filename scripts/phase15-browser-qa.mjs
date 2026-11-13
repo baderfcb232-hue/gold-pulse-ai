@@ -29,7 +29,7 @@ async function run(width,height){
  await page.locator('#lab-file').setInputFiles({name:'fixture-report.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(report))});
  await page.locator('#lab-results').waitFor({state:'visible',timeout:10000});
  assert.match(await page.locator('#lab-result-title').innerText(),/الذهب/);
- assert.equal(await page.locator('#lab-comparison tbody tr').count(),8);
+ assert.equal(await page.locator('#lab-comparison tr').count(),8);
  await page.locator('#lab-cost').selectOption('stress');
  assert.match(await page.locator('#lab-result-title').innerText(),/تكاليف أعلى/);
  await page.locator('#lab-period').selectOption('development');
