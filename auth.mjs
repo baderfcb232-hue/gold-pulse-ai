@@ -6,6 +6,7 @@ import {backupConfig, exportAuthBackup, readAuthBackup, backupTables} from './au
 import {createSubscriberAlerts} from './subscriber-alerts.mjs';
 import {createSubscriberSignalDispatch} from './subscriber-signal-dispatch.mjs';
 import {subscriberTelegramReadiness} from './subscriber-telegram-readiness.mjs';
+import {createRiskPreferences} from './risk-preferences.mjs';
 
 const fail = (status, message) => {throw Object.assign(Error(message), {status});};
 const result = (data = {ok: true}, status = 200, headers = {}) => ({data, status, headers});
@@ -48,6 +49,7 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
     });
     return privateSignalDispatch.publish(signal);
   };
+  const riskPreferences = () => createRiskPreferences({store,clock});
   let subscriberAlerts = null;
   const subscriberBot = () => {
     if (!subscriberAlerts) subscriberAlerts = createSubscriberAlerts({
@@ -438,6 +440,14 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
         const preferences=await subscriberBot().updatePreferences(u.id,b);
         await audit(store.query,u.id,'ALERT_PREFERENCES_UPDATED',u.id);
         return result({preferences});
+      }
+      // Staged per-member risk preferences. These endpoints never dispatch MT5
+      // commands or authorize trading. POST has existing CSRF and Origin guards.
+      if (path === '/api/auth/risk-preferences' && req.method === 'GET')
+        return result({preferences:await riskPreferences().list(u.id),connectedToExecution:false});
+      if (path === '/api/auth/risk-preferences' && req.method === 'POST') {
+        await rate(req,'risk-preferences',u.id);
+        return result(await riskPreferences().save(u.id,b));
       }
       if (path === '/api/auth/telegram/link' && req.method === 'POST') {
         await rate(req,'telegram-link',u.email);
