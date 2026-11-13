@@ -7,6 +7,7 @@ import {createSubscriberAlerts} from './subscriber-alerts.mjs';
 import {createSubscriberSignalDispatch} from './subscriber-signal-dispatch.mjs';
 import {subscriberTelegramReadiness} from './subscriber-telegram-readiness.mjs';
 import {createRiskPreferences} from './risk-preferences.mjs';
+import {createRiskStopIntents} from './risk-stop-intents.mjs';
 
 const fail = (status, message) => {throw Object.assign(Error(message), {status});};
 const result = (data = {ok: true}, status = 200, headers = {}) => ({data, status, headers});
@@ -50,6 +51,7 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
     return privateSignalDispatch.publish(signal);
   };
   const riskPreferences = () => createRiskPreferences({store,clock});
+  const riskStopIntents = () => createRiskStopIntents({store,clock});
   let subscriberAlerts = null;
   const subscriberBot = () => {
     if (!subscriberAlerts) subscriberAlerts = createSubscriberAlerts({
@@ -448,6 +450,17 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
       if (path === '/api/auth/risk-preferences' && req.method === 'POST') {
         await rate(req,'risk-preferences',u.id);
         return result(await riskPreferences().save(u.id,b));
+      }
+      // Explicit account-owned staged intent only; NOT a broker stop command.
+      if (path === '/api/auth/risk-stop-requests' && req.method === 'GET')
+        return result({requests:await riskStopIntents().list(u.id),connectedToMT5:false});
+      if (path === '/api/auth/risk-stop-requests' && req.method === 'POST') {
+        await rate(req,'risk-stop-intent',u.id);
+        if (!b || typeof b !== 'object' || Array.isArray(b) ||
+            Object.keys(b).some(k=>!['accountId','symbol','acknowledgeUnconfirmed'].includes(k)) ||
+            b.acknowledgeUnconfirmed !== true)
+          fail(400,'Explicit unconfirmed stop intent acknowledgment required');
+        return result(await riskStopIntents().request(u.id,b),202);
       }
       if (path === '/api/auth/telegram/link' && req.method === 'POST') {
         await rate(req,'telegram-link',u.email);
