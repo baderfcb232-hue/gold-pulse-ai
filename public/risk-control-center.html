@@ -38,6 +38,18 @@
 <label class="pause-pref"><input name="paused" type="checkbox"> حفظ تفضيل الإيقاف فقط — لا يوقف الصفقات / Save stop preference ONLY</label>
 <button type="submit" id="prefs-save">حفظ التفضيلات التجريبية / Save staged preferences</button>
 </form>
+<section id="stop-intent-section" aria-labelledby="stop-intent-heading">
+<h3 id="stop-intent-heading">تسجيل طلب إيقاف تجريبي — لا يُرسل إلى MT5 / Stage stop request only</h3>
+<p>هذا الطلب لا يوقف أي صفقة ولا يُرسل أمرًا للـEA. استخدم MT5 مباشرة للإيقاف الفعلي عند الحاجة.</p>
+<form id="stop-intent-form" hidden>
+<label>حساب Demo / Account <select name="accountId" required></select></label>
+<label>السوق / Market <select name="symbol" required><option value="XAUUSD">XAUUSD</option><option value="BTCUSD">BTCUSD</option></select></label>
+<label class="pause-pref"><input type="checkbox" name="acknowledgeUnconfirmed" required> أفهم أن هذا مجرد طلب محفوظ ولم يُنفّذ في MT5 / I understand no MT5 stop is performed</label>
+<button type="submit">حفظ طلب الإيقاف فقط / Save stop intent only</button>
+</form>
+<p role="status" aria-live="polite" id="stop-intent-status">طلبات الإيقاف بانتظار تسجيل الدخول / Sign in to view stop requests.</p>
+<ul id="stop-intent-list" aria-label="Staged stop requests"></ul>
+</section>
 <p id="prefs-warning" class="notice">لا تعتمد على هذه الصفحة لإيقاف تداول قائم. استخدم ضوابط MT5 الفعلية لإيقاف الدخول عند الحاجة.</p>
 </section>
 </main></body></html>
