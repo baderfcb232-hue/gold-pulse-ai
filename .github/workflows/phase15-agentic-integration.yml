@@ -1,0 +1,76 @@
+name: NABD Phase15 unified offline Agentic Lab
+on:
+  pull_request:
+    paths:
+      - 'agentic-experimental/**'
+      - 'windows/NABD_Phase15_Agentic_Lab.ps1'
+      - 'windows/nabd_phase15_mt5_history_export.py'
+      - 'scripts/package-phase15-agentic-lab.py'
+      - 'scripts/phase15-browser-qa.mjs'
+      - 'public/strategy-lab*'
+      - 'strategy-lab*'
+      - 'backtest.mjs'
+      - '.github/workflows/phase15-agentic-integration.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-unified:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - name: Validate both research engines and broker-history adapters
+        run: |
+          node --check agentic-experimental/research-brain.mjs
+          node --check agentic-experimental/agentic-historical-cli.mjs
+          node --check public/strategy-lab-ui.js
+          node --test agentic-experimental/agentic-historical-lab.test.mjs strategy-lab.test.mjs strategy-lab-static.test.mjs tests/backtest.test.mjs
+          python3 -m unittest discover -s windows -p 'test_phase15_history_export.py' -v
+      - name: Assemble isolated Windows distribution
+        run: |
+          python3 scripts/package-phase15-agentic-lab.py
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          p='qa-artifacts/phase15-agentic-bundle/NABD_Phase15_Agentic_Lab_LOCAL.zip'
+          with ZipFile(p) as archive:
+              files=archive.namelist()
+              assert 'agentic-experimental/research-brain.mjs' in files
+              assert 'agentic-experimental/agentic-historical-cli.mjs' in files
+              assert 'windows/NABD_Phase15_Agentic_Lab.ps1' in files
+              view=archive.read('viewer/index.html').decode()
+              assert 'href="./strategy-lab.css"' in view
+              assert 'src="./strategy-lab-ui.js"' in view
+              assert all(not n.lower().endswith(('.env','.ex5','.mq5','.set')) for n in files)
+          print('Minimal offline package is complete and contains no executable MT5 EA')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NABD-Phase15-Agentic-Lab-Windows
+          path: qa-artifacts/phase15-agentic-bundle/NABD_Phase15_Agentic_Lab_LOCAL.zip
+          if-no-files-found: error
+          retention-days: 7
+  viewer-chromium:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - run: npm install --no-save --package-lock=false playwright@1.56.1
+      - run: node scripts/phase15-browser-qa.mjs
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NABD-Phase15-Agentic-Lab-Browser-QA
+          path: qa-artifacts/phase15/
+          if-no-files-found: ignore
+          retention-days: 7
