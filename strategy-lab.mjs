@@ -102,6 +102,14 @@ export function runStrategyLab(dataset,{from,to,timeframe='M5',trainFraction=0.7
  const rows=dataset.candles.M5,{start,end}=normalizeTimes({from,to},rows);
  const first=getIndex(rows,start),last=getIndex(rows,end);
  if(first<220||last-first<80)fail('Not enough closed M5 history for separated training and OOS evaluation');
+ // Refuse a requested two-year window when the exported broker data silently
+ // covers only a fraction of that period.
+ if((from!=null && rows[first]?.time>start+5*86400) ||
+    (to!=null && rows[last-1]?.time+300<end-5*86400))
+   fail('Requested dates are not covered by this MT5 history');
+ for(let i=first+1;i<last;i++)
+   if(rows[i].time-rows[i-1].time>7*86400)
+     fail('History gap longer than seven days; refresh broker candle archives');
  const split=first+Math.floor((last-first)*trainFraction);
  const windows={development:makeWindow(dataset,first,split),outOfSample:makeWindow(dataset,split,last)};
  const result={};
