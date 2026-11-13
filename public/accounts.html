@@ -62,6 +62,42 @@
     <section data-page="admin" hidden><div class="portal-heading"><div><span class="portal-kicker">NABD ADMINISTRATION</span><h1>إدارة نبض</h1><p class="subtle">الحسابات والصلاحيات وحالة الخدمة.</p></div><a href="/account" class="button ghost">حسابي والأمان</a></div>
       <div id="admin-guard" class="portal-card"><h2>دخول المسؤول</h2><p id="admin-guard-note">هذه الصفحة تحتاج حساب أدمن مؤكدًا وتحققًا بخطوتين.</p><a href="/auth" class="button primary">تسجيل الدخول</a><a href="/account" class="button ghost">إعداد التحقق بخطوتين</a></div>
       <div id="admin-content" hidden>
+        <article class="portal-card phase14-control" aria-labelledby="phase14-title">
+          <span class="portal-kicker">NABD ADMIN CONTROL CENTER · PHASE 14</span>
+          <h2 id="phase14-title">لوحة متابعة المنصة</h2>
+          <p class="portal-note">قراءات تشغيلية من خادم نبض. لا تؤكد اتصال الوسيط أو سلامة Render الخارجية؛ ولا تفعّل التداول أو صلاحيات أي مشترك.</p>
+          <div id="phase14-metrics" class="phase14-metrics" aria-live="polite"></div>
+          <h3>حالة الخدمات كما يراها الخادم</h3>
+          <div id="phase14-services" class="phase14-services"></div>
+          <p id="phase14-readiness" class="subtle" role="status">جارٍ تحميل البيانات الإدارية…</p>
+          <button id="phase14-refresh" type="button" class="button ghost">تحديث الحالة</button>
+        </article>
+        <article class="portal-card phase14-plans" aria-labelledby="phase14-plans-title">
+          <span class="portal-kicker">ADMIN CATALOG DRAFTS · NOT FOR SALE</span>
+          <h2 id="phase14-plans-title">مسودات باقات الاشتراك</h2>
+          <p class="portal-note">للتخطيط فقط: الأسعار والمدة والمميزات لا تنشئ اشتراكات مدفوعة ولا تمنح توصيات أو تداولًا. لا يوجد ربط دفع مفعّل.</p>
+          <div id="phase14-plan-list" class="phase14-plan-list" aria-live="polite"></div>
+          <details id="phase14-plan-details">
+            <summary>إضافة أو تعديل مسودة باقة</summary>
+            <form id="phase14-plan-form" class="phase14-plan-form">
+              <input name="id" type="hidden">
+              <label>رمز الباقة (لاتيني كبير)<input name="code" dir="ltr" pattern="[A-Z][A-Z0-9_]{2,23}" maxlength="24" placeholder="GOLD_BASIC" required></label>
+              <label>الاسم بالعربية<input name="nameAr" minlength="2" maxlength="80" required></label>
+              <label>English name<input name="nameEn" lang="en" dir="ltr" minlength="2" maxlength="80" required></label>
+              <label>العملة<select name="currency"><option value="USD">USD</option><option value="ILS">ILS</option><option value="EUR">EUR</option></select></label>
+              <label>سعر مقترح (غير مستحق)<input name="price" type="number" min="0" max="1000000" step="0.01" inputmode="decimal" required></label>
+              <label>المدة بالأيام<input name="durationDays" type="number" min="1" max="1095" step="1" required></label>
+              <fieldset class="phase14-features"><legend>المميزات المقترحة</legend>
+                <label><input type="checkbox" name="features" value="GOLD_SIGNALS"> إشارات الذهب</label>
+                <label><input type="checkbox" name="features" value="BTC_SIGNALS"> إشارات البيتكوين</label>
+                <label><input type="checkbox" name="features" value="DEMO_MT5_MONITORING"> مراقبة MT5 Demo فقط</label>
+              </fieldset>
+              <button type="submit" class="button primary">حفظ المسودة فقط</button>
+              <button type="reset" class="button ghost" id="phase14-plan-reset">إلغاء التعديل</button>
+            </form>
+          </details>
+          <p id="phase14-plan-status" class="subtle" role="status" aria-live="polite"></p>
+        </article>
         <article class="portal-card" aria-labelledby="admin-hosting-title">
           <span class="portal-kicker">CENTRAL MT5 · DEMO</span>
           <h2 id="admin-hosting-title">طلبات استضافة حسابات MT5</h2>
