@@ -1,0 +1,27 @@
+name: NABD phase 13 isolated notification center
+on:
+  pull_request:
+    paths:
+      - 'notification-center.mjs'
+      - 'notification-center.test.mjs'
+      - 'notification-center-http.test.mjs'
+      - 'auth-store.mjs'
+      - 'auth.mjs'
+      - 'auth-backup.mjs'
+      - 'server.mjs'
+      - 'public/index.html'
+      - 'public/notification-center-ui.js'
+      - 'public/notification-center.css'
+      - 'tests/accounts.test.mjs'
+      - '.github/workflows/phase13-notifications.yml'
+  workflow_dispatch:
+jobs:
+  notifications:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - run: node --test notification-center.test.mjs notification-center-http.test.mjs tests/accounts.test.mjs tests/subscriber-alerts.test.mjs tests/subscriber-alerts-http.test.mjs
