@@ -6,6 +6,7 @@ import {backupConfig, exportAuthBackup, readAuthBackup, backupTables} from './au
 import {createSubscriberAlerts} from './subscriber-alerts.mjs';
 import {createSubscriberSignalDispatch} from './subscriber-signal-dispatch.mjs';
 import {subscriberTelegramReadiness} from './subscriber-telegram-readiness.mjs';
+import {createPhase14Admin} from './admin-dashboard-phase14.mjs';
 
 const fail = (status, message) => {throw Object.assign(Error(message), {status});};
 const result = (data = {ok: true}, status = 200, headers = {}) => ({data, status, headers});
@@ -37,6 +38,7 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
   const key = encryptionKey || parseKey(env.AUTH_ENCRYPTION_KEY), owner = (adminEmail || env.AUTH_ADMIN_EMAIL || '').trim().toLowerCase();
   const secure = publicBase?.startsWith('https://'), base = publicBase?.replace(/\/$/, '') || '';
   let privateSignalDispatch = null;
+  const phase14Admin = () => createPhase14Admin({store,clock,operationalStatus});
   const publishSubscriberSignal = async signal => {
     await ready;
     if (!online || !healthy || closed ||
@@ -499,6 +501,16 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
         await store.transaction(async q => {await q("UPDATE nabd_users SET status='deletion_requested' WHERE id=?", [u.id]);
           await q('DELETE FROM nabd_sessions WHERE user_id=?', [u.id]); await audit(q, u.id, 'DELETION_REQUESTED', u.id);});
         return result({ok: true}, 200, {'Set-Cookie': clearCookies()});
+      }
+      // Phase 14: MFA/RBAC-enforced operator view and non-billable plan drafts.
+      // Never grants paid entitlements, MT5 execution or subscription rights.
+      if (path === '/api/admin/control-center' && req.method === 'GET')
+        return result(await phase14Admin().dashboard());
+      if (path === '/api/admin/plan-drafts' && req.method === 'GET')
+        return result(await phase14Admin().listPlans());
+      if (path === '/api/admin/plan-drafts' && req.method === 'POST') {
+        await rate(req,'admin-plan-draft',u.id);
+        return result(await phase14Admin().mutatePlan(u.id,b));
       }
       if (path === '/api/admin/overview' && req.method === 'GET') return result({accounts: status(),
         counts: (await store.query('SELECT status,COUNT(*) AS count FROM nabd_users GROUP BY status')).rows, operational: operationalStatus()});
