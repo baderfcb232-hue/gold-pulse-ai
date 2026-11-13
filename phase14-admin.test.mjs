@@ -31,6 +31,9 @@ test('Phase14 operations aggregates never expose credentials or imply trading',a
  assert.equal(snapshot.mt5Monitor.brokerConnectionVerified,false);
  assert.equal(snapshot.services.database,'CONNECTED');
  assert.equal(snapshot.services.render,'NOT_CHECKED');
+ assert.equal(snapshot.marketReports.XAUUSD.state,'NO_REPORT');
+ assert.equal(snapshot.marketReports.BTCUSD.analysisVerified,false);
+ assert.equal(snapshot.marketReports.BTCUSD.tradeExecutionVerified,false);
  assert.equal(snapshot.subscriptions.billingEnabled,false);
  assert.equal(snapshot.subscriptions.subscriberEntitlementsEnabled,false);
  assert.equal(snapshot.restrictions.liveTradingEnabledByAdmin,false);
