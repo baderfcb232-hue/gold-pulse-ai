@@ -113,8 +113,16 @@ void OnTimer()
                  ",\"action\":\"PAUSE_NEW_ENTRIES_ONLY\"";
    int found=StringFind(response,anchor);
    if(found<0)return;
-   int start=StringFind(response,"\"requestId\":\"",0);
-   if(start<0 || start>found)return;
+   // Find the request id in the SAME command object as the matched symbol.
+   int start=-1,search=0;
+   while(search<found)
+     {
+      int candidate=StringFind(response,"\"requestId\":\"",search);
+      if(candidate<0 || candidate>found)break;
+      start=candidate;
+      search=candidate+StringLen("\"requestId\":\"");
+     }
+   if(start<0)return;
    start+=StringLen("\"requestId\":\"");
    string requestId=StringSubstr(response,start,36);
    if(!P12Uuid(requestId))return;
