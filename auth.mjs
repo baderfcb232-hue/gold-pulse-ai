@@ -8,6 +8,7 @@ import {createSubscriberSignalDispatch} from './subscriber-signal-dispatch.mjs';
 import {subscriberTelegramReadiness} from './subscriber-telegram-readiness.mjs';
 import {createNotificationCenter} from './notification-center.mjs';
 import {recordVerifiedDemoMonitorState,createMonitorStaleSweep} from './notification-monitor-events.mjs';
+import {createMonitorTelegramAlerts} from './notification-monitor-telegram.mjs';
 
 const fail = (status, message) => {throw Object.assign(Error(message), {status});};
 const result = (data = {ok: true}, status = 200, headers = {}) => ({data, status, headers});
@@ -42,6 +43,14 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
   const memberInbox = () => {
     if (!notificationInbox) notificationInbox=createNotificationCenter({store,clock});
     return notificationInbox;
+  };
+  let monitorTelegramDispatch = null;
+  const monitorTelegram = () => {
+    if (!monitorTelegramDispatch) monitorTelegramDispatch=createMonitorTelegramAlerts({
+      store,clock,enabled:env.NABD_PHASE13_SYSTEM_TELEGRAM_ENABLED==='true',
+      botToken:env.NABD_SUBSCRIBER_TELEGRAM_BOT_TOKEN||'',fetcher:telegramFetch
+    });
+    return monitorTelegramDispatch;
   };
   let privateSignalDispatch = null;
   const publishSubscriberSignal = async signal => {
@@ -196,7 +205,10 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
     await store.query('DELETE FROM nabd_sessions WHERE expires_at<?', [clock()]);
     await store.query('DELETE FROM nabd_auth_limits WHERE expires_at<?', [clock()]);
     // Stale Demo monitor alerts mean an overdue heartbeat, NOT proved broker downtime.
-    await createMonitorStaleSweep({store,clock})().catch(onError);
+    const swept=await createMonitorStaleSweep({store,clock})().catch(error=>{onError(error);return {events:[]};});
+    if (env.NABD_PHASE13_SYSTEM_TELEGRAM_ENABLED==='true')
+      for(const event of swept.events.slice(0,40))
+        await monitorTelegram().publish(event.ownerId,event.eventKey).catch(onError);
     if (backup.key && backup.storage && (!lastBackup || clock() - lastBackup >= 86400)) await runBackup();
   }
   async function runBackup() {
@@ -273,13 +285,19 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
           await q(`UPDATE nabd_mt5_monitor_workers SET last_seen_at=?,mt5_online=?
             WHERE account_id=? AND token_hash=?`,
             [time,packet.terminal_connected?1:0,identity.account_id,digest(token)]);
-          await recordVerifiedDemoMonitorState(q,{
+          const notice=await recordVerifiedDemoMonitorState(q,{
             userId:identity.user_id,accountId:identity.account_id,
             state:packet.terminal_connected?'ONLINE':'OFFLINE',at:time});
-          return {ok:true,monitoringOnly:true,tradeAllowed:false,observed:packet.terminal_connected};
+          return {ok:true,monitoringOnly:true,tradeAllowed:false,
+            observed:packet.terminal_connected,ownerId:identity.user_id,
+            notificationKey:notice.changed?'MT5MON:'+identity.account_id+':'+notice.revision:null,
+            initialObservation:notice.revision===1};
         });
         if(workerOutcome.mismatch)fail(409,'MT5 Demo identity does not match the registered account');
-        return result(workerOutcome);
+        const {ownerId,notificationKey,initialObservation,...safeResponse}=workerOutcome;
+        if(notificationKey&&!initialObservation&&env.NABD_PHASE13_SYSTEM_TELEGRAM_ENABLED==='true')
+          await monitorTelegram().publish(ownerId,notificationKey).catch(onError);
+        return result(safeResponse);
       }
       const adminPrincipal = path.startsWith('/api/admin/') ? await authenticated(req, req.method === 'POST', true) : null;
       const b = req.method === 'POST' ? await body(req) : {};
