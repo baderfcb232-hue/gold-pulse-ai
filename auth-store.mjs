@@ -64,6 +64,27 @@ CREATE TABLE IF NOT EXISTS nabd_member_alert_preferences (
  system_enabled INTEGER NOT NULL DEFAULT 1 CHECK(system_enabled IN (0,1)),
  updated_at DOUBLE PRECISION NOT NULL
 );
+-- Phase 13: member-scoped notification inbox, no broker credentials or permissions.
+CREATE TABLE IF NOT EXISTS nabd_member_notifications (
+ id TEXT PRIMARY KEY,
+ user_id TEXT NOT NULL REFERENCES nabd_users(id) ON DELETE CASCADE,
+ event_key TEXT NOT NULL,
+ event_type TEXT NOT NULL CHECK(event_type IN
+ ('GOLD_SIGNAL','BTC_SIGNAL','TRADE_EXECUTED','TRADE_REJECTED','TP_HIT','SL_HIT',
+  'MT5_DISCONNECTED','MT5_RECONNECTED','MT5_STATUS','DAILY_LOSS',
+  'SUBSCRIPTION_EXPIRING','SUBSCRIPTION_EXPIRED')),
+ symbol TEXT CHECK(symbol IS NULL OR symbol IN ('XAUUSD','BTCUSD')),
+ title_ar TEXT NOT NULL,
+ title_en TEXT NOT NULL,
+ body_ar TEXT NOT NULL,
+ body_en TEXT NOT NULL,
+ created_at DOUBLE PRECISION NOT NULL,
+ read_at DOUBLE PRECISION,
+ archived_at DOUBLE PRECISION,
+ deleted_at DOUBLE PRECISION,
+ UNIQUE(user_id,event_key)
+);
+CREATE INDEX IF NOT EXISTS nabd_member_notifications_inbox ON nabd_member_notifications(user_id,created_at DESC);
 CREATE TABLE IF NOT EXISTS nabd_member_telegram (
  user_id TEXT PRIMARY KEY REFERENCES nabd_users(id) ON DELETE CASCADE,
  chat_id TEXT NOT NULL UNIQUE,
@@ -80,6 +101,19 @@ CREATE TABLE IF NOT EXISTS nabd_member_telegram_deliveries (
  telegram_message_id BIGINT,
  PRIMARY KEY(user_id,signal_id)
 );
+-- Independent opt-in Telegram deliveries for authenticated Demo monitor events.
+-- No trading rights and no automatic retries on uncertain outcomes.
+CREATE TABLE IF NOT EXISTS nabd_member_telegram_monitor_deliveries (
+ user_id TEXT NOT NULL REFERENCES nabd_users(id) ON DELETE CASCADE,
+ event_key TEXT NOT NULL,
+ status TEXT NOT NULL CHECK(status IN ('SENDING','SENT','FAILED','UNCERTAIN')),
+ claimed_at DOUBLE PRECISION NOT NULL,
+ completed_at DOUBLE PRECISION,
+ telegram_message_id BIGINT,
+ PRIMARY KEY(user_id,event_key)
+);
+CREATE INDEX IF NOT EXISTS nabd_member_telegram_monitor_cooldown
+ ON nabd_member_telegram_monitor_deliveries(user_id,claimed_at DESC);
 CREATE TABLE IF NOT EXISTS nabd_member_telegram_pending (
  user_id TEXT PRIMARY KEY REFERENCES nabd_users(id) ON DELETE CASCADE,
  token_hash TEXT NOT NULL UNIQUE,
@@ -94,6 +128,15 @@ CREATE TABLE IF NOT EXISTS nabd_mt5_monitor_workers (
  last_seen_at DOUBLE PRECISION,
  mt5_online INTEGER NOT NULL DEFAULT 0 CHECK(mt5_online IN (0,1))
 );
+-- Read-only Demo monitor state; never grants trade permissions.
+CREATE TABLE IF NOT EXISTS nabd_member_mt5_monitor_state (
+ account_id TEXT PRIMARY KEY REFERENCES nabd_member_mt5_accounts(id) ON DELETE CASCADE,
+ user_id TEXT NOT NULL REFERENCES nabd_users(id) ON DELETE CASCADE,
+ status TEXT NOT NULL CHECK(status IN ('ONLINE','OFFLINE','STALE')),
+ revision INTEGER NOT NULL CHECK(revision>0),
+ observed_at DOUBLE PRECISION NOT NULL
+);
+CREATE INDEX IF NOT EXISTS nabd_member_mt5_monitor_owner ON nabd_member_mt5_monitor_state(user_id);
 
 `;
 

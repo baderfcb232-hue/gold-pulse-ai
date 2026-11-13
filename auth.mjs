@@ -6,6 +6,9 @@ import {backupConfig, exportAuthBackup, readAuthBackup, backupTables} from './au
 import {createSubscriberAlerts} from './subscriber-alerts.mjs';
 import {createSubscriberSignalDispatch} from './subscriber-signal-dispatch.mjs';
 import {subscriberTelegramReadiness} from './subscriber-telegram-readiness.mjs';
+import {createNotificationCenter} from './notification-center.mjs';
+import {recordVerifiedDemoMonitorState,createMonitorStaleSweep} from './notification-monitor-events.mjs';
+import {createMonitorTelegramAlerts} from './notification-monitor-telegram.mjs';
 
 const fail = (status, message) => {throw Object.assign(Error(message), {status});};
 const result = (data = {ok: true}, status = 200, headers = {}) => ({data, status, headers});
@@ -36,11 +39,29 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
   env = process.env, encryptionKey, adminEmail, backup: injectedBackup, operationalStatus = () => ({}), onError = () => {}, telegramFetch = fetch} = {}) {
   const key = encryptionKey || parseKey(env.AUTH_ENCRYPTION_KEY), owner = (adminEmail || env.AUTH_ADMIN_EMAIL || '').trim().toLowerCase();
   const secure = publicBase?.startsWith('https://'), base = publicBase?.replace(/\/$/, '') || '';
+  let notificationInbox = null;
+  const memberInbox = () => {
+    if (!notificationInbox) notificationInbox=createNotificationCenter({store,clock});
+    return notificationInbox;
+  };
+  let monitorTelegramDispatch = null;
+  const monitorTelegram = () => {
+    if (!monitorTelegramDispatch) monitorTelegramDispatch=createMonitorTelegramAlerts({
+      store,clock,enabled:env.NABD_PHASE13_SYSTEM_TELEGRAM_ENABLED==='true',
+      botToken:env.NABD_SUBSCRIBER_TELEGRAM_BOT_TOKEN||'',fetcher:telegramFetch
+    });
+    return monitorTelegramDispatch;
+  };
   let privateSignalDispatch = null;
   const publishSubscriberSignal = async signal => {
     await ready;
-    if (!online || !healthy || closed ||
-      env.NABD_SUBSCRIBER_TELEGRAM_AUTO_SIGNALS !== 'true')
+    if (!online || !healthy || closed) return {attempted:0,enabled:false};
+    // Store a deduplicated account inbox entry when a real, verified public
+    // reference signal is published. This never claims an MT5 fill.
+    try {await memberInbox().publishSignal(signal);} catch(error) {onError(error);}
+    // Existing Telegram delivery retains its separate opt-in, owner consent and
+    // unique (member,signal) claim. The inbox never sends Telegram itself.
+    if (env.NABD_SUBSCRIBER_TELEGRAM_AUTO_SIGNALS !== 'true')
       return {attempted:0,enabled:false};
     if (!privateSignalDispatch) privateSignalDispatch=createSubscriberSignalDispatch({
       store,clock,enabled:true,botToken:env.NABD_SUBSCRIBER_TELEGRAM_BOT_TOKEN||'',
@@ -183,6 +204,12 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
     await store.query('DELETE FROM nabd_tokens WHERE expires_at<?', [clock()]);
     await store.query('DELETE FROM nabd_sessions WHERE expires_at<?', [clock()]);
     await store.query('DELETE FROM nabd_auth_limits WHERE expires_at<?', [clock()]);
+    // Stale Demo monitor alerts mean an overdue heartbeat, NOT proved broker downtime.
+    const swept=await createMonitorStaleSweep({store,clock})().catch(error=>{onError(error);return {events:[]};});
+    if (env.NABD_PHASE13_SYSTEM_TELEGRAM_ENABLED==='true')
+      for(const event of swept.events.slice(0,40))
+        // Never hold the account maintenance loop behind optional Telegram I/O.
+        void monitorTelegram().publish(event.ownerId,event.eventKey).catch(onError);
     if (backup.key && backup.storage && (!lastBackup || clock() - lastBackup >= 86400)) await runBackup();
   }
   async function runBackup() {
@@ -234,30 +261,45 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
             packet.broker !== 'JustMarkets' || packet.environment !== 'demo' ||
             typeof packet.terminal_connected !== 'boolean' || typeof packet.demo_mode !== 'boolean')
           fail(400, 'Invalid read-only MT5 monitoring report');
-        const identity = (await store.query(`SELECT w.account_id,w.worker_id,
-          a.broker,a.server_name,a.login,a.environment
-          FROM nabd_mt5_monitor_workers w
-          JOIN nabd_member_mt5_accounts a ON a.id=w.account_id
-          JOIN nabd_mt5_hosting_requests h ON h.account_id=a.id
-          JOIN nabd_users owner ON owner.id=a.user_id
-          WHERE w.account_id=? AND w.token_hash=? AND h.status='APPROVED'
-            AND owner.status='active' AND owner.verified_at IS NOT NULL`,
-          [packet.account_id, digest(token)])).rows[0];
-        if (!identity || identity.worker_id !== packet.worker_id)
-          fail(401, 'Invalid monitoring worker credentials');
-        if (identity.broker !== packet.broker || identity.server_name !== packet.server ||
-            identity.login !== packet.login || identity.environment !== packet.environment ||
-            !packet.demo_mode) {
-          // A real account or a wrong MT5 login must not appear as connected.
-          await store.query(`UPDATE nabd_mt5_monitor_workers SET last_seen_at=?, mt5_online=0
-            WHERE account_id=? AND token_hash=?`, [clock(), identity.account_id, digest(token)]);
-          fail(409, 'MT5 Demo identity does not match the registered account');
-        }
-        await store.query(`UPDATE nabd_mt5_monitor_workers SET last_seen_at=?, mt5_online=?
-          WHERE account_id=? AND token_hash=?`,
-          [clock(), packet.terminal_connected ? 1 : 0, identity.account_id, digest(token)]);
-        return result({ok:true,monitoringOnly:true,tradeAllowed:false,
-          observed:packet.terminal_connected});
+        // An authenticated read-only worker can report ONLY monitoring state.
+        // Verify token and account binding in the SAME transaction as state + inbox updates.
+        const workerOutcome = await store.transaction(async q=>{
+          const identity = (await q(`SELECT w.account_id,w.worker_id,a.user_id,
+            a.broker,a.server_name,a.login,a.environment
+            FROM nabd_mt5_monitor_workers w
+            JOIN nabd_member_mt5_accounts a ON a.id=w.account_id
+            JOIN nabd_mt5_hosting_requests h ON h.account_id=a.id
+            JOIN nabd_users owner ON owner.id=a.user_id
+            WHERE w.account_id=? AND w.token_hash=? AND h.status='APPROVED'
+              AND owner.status='active' AND owner.verified_at IS NOT NULL`,
+            [packet.account_id,digest(token)])).rows[0];
+          if(!identity || identity.worker_id!==packet.worker_id)
+            fail(401,'Invalid monitoring worker credentials');
+          if(identity.broker!==packet.broker||identity.server_name!==packet.server||
+             identity.login!==packet.login||identity.environment!==packet.environment||
+             !packet.demo_mode){
+            await q(`UPDATE nabd_mt5_monitor_workers SET last_seen_at=?,mt5_online=0
+              WHERE account_id=? AND token_hash=?`,[clock(),identity.account_id,digest(token)]);
+            return {mismatch:true};
+          }
+          const time=clock();
+          await q(`UPDATE nabd_mt5_monitor_workers SET last_seen_at=?,mt5_online=?
+            WHERE account_id=? AND token_hash=?`,
+            [time,packet.terminal_connected?1:0,identity.account_id,digest(token)]);
+          const notice=await recordVerifiedDemoMonitorState(q,{
+            userId:identity.user_id,accountId:identity.account_id,
+            state:packet.terminal_connected?'ONLINE':'OFFLINE',at:time});
+          return {ok:true,monitoringOnly:true,tradeAllowed:false,
+            observed:packet.terminal_connected,ownerId:identity.user_id,
+            notificationKey:notice.changed?'MT5MON:'+identity.account_id+':'+notice.revision:null,
+            initialObservation:notice.revision===1};
+        });
+        if(workerOutcome.mismatch)fail(409,'MT5 Demo identity does not match the registered account');
+        const {ownerId,notificationKey,initialObservation,...safeResponse}=workerOutcome;
+        if(notificationKey&&!initialObservation&&env.NABD_PHASE13_SYSTEM_TELEGRAM_ENABLED==='true')
+          // The authenticated monitor heartbeat must never wait on Telegram.
+          void monitorTelegram().publish(ownerId,notificationKey).catch(onError);
+        return result(safeResponse);
       }
       const adminPrincipal = path.startsWith('/api/admin/') ? await authenticated(req, req.method === 'POST', true) : null;
       const b = req.method === 'POST' ? await body(req) : {};
@@ -438,6 +480,23 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
         const preferences=await subscriberBot().updatePreferences(u.id,b);
         await audit(store.query,u.id,'ALERT_PREFERENCES_UPDATED',u.id);
         return result({preferences});
+      }
+      // Phase 13 private notifications: authenticated read/mark/archive/delete.
+      // No public endpoint may publish or forge a trade/MT5 result.
+      if (path === '/api/auth/notifications' && req.method === 'GET') {
+        return result(await memberInbox().list(u.id,{
+          type:url.searchParams.get('type') || 'ALL',
+          market:url.searchParams.get('market') || 'ALL',
+          state:url.searchParams.get('state') || 'active',
+          limit:Number(url.searchParams.get('limit') || 30),
+          offset:Number(url.searchParams.get('offset') || 0)
+        }));
+      }
+      if (path === '/api/auth/notifications/update' && req.method === 'POST') {
+        if (!b || typeof b !== 'object' || Array.isArray(b) ||
+            Object.keys(b).sort().join(',')!=='action,id')
+          fail(400,'Invalid notification update');
+        return result(await memberInbox().update(u.id,b));
       }
       if (path === '/api/auth/telegram/link' && req.method === 'POST') {
         await rate(req,'telegram-link',u.email);
@@ -641,7 +700,12 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
             nabd_member_mt5_accounts: ['id','user_id','broker','server_name','login','environment','status','created_at'],
             nabd_mt5_hosting_requests: ['account_id','status','requested_at','reviewed_at','reviewed_by'],
             nabd_member_alert_preferences: ['user_id','gold_enabled','btc_enabled','signals_enabled','execution_enabled','system_enabled','updated_at'],
-            nabd_member_telegram: ['user_id','chat_id','linked_at','last_test_at']};
+            nabd_member_telegram: ['user_id','chat_id','linked_at','last_test_at'],
+            nabd_member_notifications: ['id','user_id','event_key','event_type','symbol','title_ar','title_en',
+              'body_ar','body_en','created_at','read_at','archived_at','deleted_at'],
+            nabd_member_mt5_monitor_state: ['account_id','user_id','status','revision','observed_at'],
+            nabd_member_telegram_monitor_deliveries: ['user_id','event_key','status','claimed_at','completed_at','telegram_message_id'],
+            nabd_member_telegram_deliveries: ['user_id','signal_id','symbol','status','claimed_at','completed_at','telegram_message_id']};
           for (const table of backupTables) for (const row of data.tables[table]) {
             const columns = allowed[table];
             await q(`INSERT INTO ${table}(${columns.join(',')}) VALUES(${columns.map(() => '?').join(',')})`, columns.map(name => row[name] ?? null));
