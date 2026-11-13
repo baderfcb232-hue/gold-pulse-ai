@@ -4,6 +4,7 @@ on:
     paths:
       - 'admin-operations.mjs'
       - 'admin-operations.test.mjs'
+      - 'admin-operations-static.test.mjs'
       - 'auth.mjs'
       - 'server.mjs'
       - 'tests/accounts.test.mjs'
@@ -21,4 +22,4 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci --ignore-scripts
-      - run: node --test admin-operations.test.mjs tests/accounts.test.mjs
+      - run: node --test admin-operations.test.mjs admin-operations-static.test.mjs tests/accounts.test.mjs
