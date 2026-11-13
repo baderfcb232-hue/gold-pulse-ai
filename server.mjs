@@ -351,7 +351,8 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   // connectivity or independent proof that the AI analyst has completed a decision.
   const observedMarketReport = source => {
     const at=source?.received_at;
-    if(!Number.isFinite(at)||at<=0)return {
+    // A future-dated or invalid ingest cannot be promoted to fresh monitoring.
+    if(!Number.isFinite(at)||at<=0||at>clock()+5)return {
       state:'NO_REPORT',ageSeconds:null,terminalConnectedReported:null,analysisVerified:false};
     const age=Math.max(0,Math.floor(clock()-at));
     return {state:age<=45?'RECENT_REPORT':'STALE_REPORT',ageSeconds:age,
