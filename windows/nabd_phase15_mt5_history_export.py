@@ -41,7 +41,7 @@ def positive(raw):
     return value
 
 
-def closed_rates(raw, seconds, now):
+def closed_rates(raw, seconds, now, until=None):
     """No open/future candle; explicit OHLC sanity and ascending time."""
     if raw is None:
         raise ValueError("MT5 history is unavailable; check symbol and chart history")
@@ -55,7 +55,7 @@ def closed_rates(raw, seconds, now):
         if high < max(opening, closing) or low > min(opening, closing) or high < low:
             raise ValueError("Inconsistent broker OHLC data")
         last = stamp
-        if stamp + seconds <= now:
+        if stamp + seconds <= now and (until is None or stamp + seconds <= until):
             out.append({
                 "time": stamp, "open": opening, "high": high,
                 "low": low, "close": closing, "tick_volume": int(item["tick_volume"])
@@ -104,7 +104,7 @@ def run(args, mt5, now=None):
         info = mt5.symbol_info(args.symbol)
         if not info or not mt5.symbol_select(args.symbol, True):
             raise ValueError("Broker symbol unavailable in Market Watch")
-        if not all(v > 0 for v in [info.point, info.trade_tick_size, info.trade_tick_value_loss]):
+        if not all(isinstance(v,(int,float)) and v > 0 for v in [info.point, info.trade_tick_size, info.trade_tick_value_loss]):
             raise ValueError("Broker tick point, tick size and loss value required")
 
         # Pull extra history for 320 closed H4 bars and weekends/DST.
@@ -117,7 +117,7 @@ def run(args, mt5, now=None):
         }
         for name, seconds in TIMEFRAMES.items():
             raw = mt5.copy_rates_range(args.symbol, frame_keys[name], earliest, to_time)
-            histories[name] = closed_rates(raw, seconds, now)
+            histories[name] = closed_rates(raw, seconds, now, int(to_time.timestamp()))
             minimum = 530 if name == "M5" else 320
             if len(histories[name]) < minimum:
                 raise ValueError(
