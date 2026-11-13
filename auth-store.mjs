@@ -44,6 +44,17 @@ CREATE TABLE IF NOT EXISTS nabd_member_mt5_accounts (
 CREATE INDEX IF NOT EXISTS nabd_member_mt5_owner ON nabd_member_mt5_accounts(user_id);
 -- Staged user preferences, NOT an MT5 permission or executable risk limit.
 -- A paused preference must never be misrepresented as a confirmed EA pause.
+-- Stage-only owner-scoped emergency stop requests. Never a broker confirmation.
+CREATE TABLE IF NOT EXISTS nabd_member_risk_stop_intents (
+ id TEXT UNIQUE NOT NULL,
+ account_id TEXT NOT NULL REFERENCES nabd_member_mt5_accounts(id) ON DELETE CASCADE,
+ symbol TEXT NOT NULL CHECK(symbol IN ('XAUUSD','BTCUSD')),
+ user_id TEXT NOT NULL REFERENCES nabd_users(id) ON DELETE CASCADE,
+ requested_at DOUBLE PRECISION NOT NULL,
+ status TEXT NOT NULL CHECK(status='AWAITING_MT5_ACK'),
+ PRIMARY KEY(account_id,symbol)
+);
+CREATE INDEX IF NOT EXISTS nabd_member_risk_stop_owner ON nabd_member_risk_stop_intents(user_id);
 CREATE TABLE IF NOT EXISTS nabd_member_risk_preferences (
  account_id TEXT NOT NULL REFERENCES nabd_member_mt5_accounts(id) ON DELETE CASCADE,
  symbol TEXT NOT NULL CHECK(symbol IN ('XAUUSD','BTCUSD')),
