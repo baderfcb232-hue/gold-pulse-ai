@@ -61,6 +61,17 @@ export function createPhase14Admin({store,clock=()=>Date.now()/1000,operationalS
    telegram:{linkedAccounts:Number(telegram.rows[0]?.total||0),
      deliveryVerified:false},
    audit:{eventsLast24Hours:Number(audit.rows[0]?.total||0)},
+   marketReports:Object.fromEntries(['XAUUSD','BTCUSD'].map(symbol=>{
+     const report=ops.marketReports?.[symbol]||{};
+     const state=['RECENT_REPORT','STALE_REPORT','NO_REPORT'].includes(report.state)
+       ?report.state:'NO_REPORT';
+     const ageSeconds=state!=='NO_REPORT'&&Number.isFinite(report.ageSeconds)
+       ?Math.max(0,Math.floor(report.ageSeconds)):null;
+     return [symbol,{state,ageSeconds,
+       terminalConnectedReported:state==='NO_REPORT'?null:report.terminalConnectedReported===true,
+       analysisVerified:false,tradeExecutionVerified:false,
+       source:'SHARED_SERVER_INGEST'}];
+   })),
    services:{database:'CONNECTED',mt5:typeof ops.mt5==='string'?ops.mt5:'UNKNOWN',
     publication:typeof ops.publication==='string'?ops.publication:'UNKNOWN',
     telegram:typeof ops.telegram==='string'?ops.telegram:'UNKNOWN',
