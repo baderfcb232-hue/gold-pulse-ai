@@ -11,7 +11,10 @@ export function createRiskStopIntents({store,clock=()=>Date.now()/1000}={}){
   if(rows.length!==1)bad(404,'Registered Demo account not found');
  };
  const output=row=>({requestId:row.id,accountId:row.account_id,symbol:row.symbol,
-   requestedAt:Number(row.requested_at),status:'AWAITING_MT5_ACK',confirmedByMT5:false,
+   requestedAt:Number(row.requested_at),
+   status:row.reported_at!=null?'EA_PAUSE_REPORTED_UNVERIFIED':'AWAITING_MT5_ACK',
+   eaReportedAt:row.reported_at==null?null:Number(row.reported_at),
+   confirmedByMT5:false,brokerConfirmed:false,
    executionStopped:false,closePositions:false});
  return {
   async request(ownerId,{accountId,symbol}={}){
@@ -35,8 +38,10 @@ export function createRiskStopIntents({store,clock=()=>Date.now()/1000}={}){
   },
   async list(ownerId){
     if(!valid(ownerId))bad(401,'Invalid account session');
-    const rows=(await store.query(`SELECT i.id,i.account_id,i.symbol,i.requested_at FROM nabd_member_risk_stop_intents i
+    const rows=(await store.query(`SELECT i.id,i.account_id,i.symbol,i.requested_at,r.reported_at
+      FROM nabd_member_risk_stop_intents i
       JOIN nabd_member_mt5_accounts a ON a.id=i.account_id AND a.user_id=i.user_id
+      LEFT JOIN nabd_mt5_stop_reports r ON r.request_id=i.id AND r.account_id=i.account_id AND r.symbol=i.symbol
       WHERE i.user_id=? ORDER BY i.requested_at DESC`,[ownerId])).rows;
     return rows.map(output);
   }
