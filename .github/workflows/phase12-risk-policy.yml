@@ -11,6 +11,12 @@ on:
       - 'public/risk-control-center.js'
       - 'public/risk-control-center.css'
       - 'server.mjs'
+      - 'risk-preferences.mjs'
+      - 'risk-preferences.test.mjs'
+      - 'auth-store.mjs'
+      - 'auth.mjs'
+      - 'auth-backup.mjs'
+      - 'tests/accounts.test.mjs'
       - '.github/workflows/phase12-risk-policy.yml'
   workflow_dispatch:
 jobs:
@@ -22,4 +28,4 @@ jobs:
         with:
           node-version: '24'
       - run: npm ci --ignore-scripts
-      - run: node --test automatic-risk.test.mjs risk-control-policy.test.mjs risk-center-readonly.test.mjs
+      - run: node --test automatic-risk.test.mjs risk-control-policy.test.mjs risk-center-readonly.test.mjs risk-preferences.test.mjs tests/accounts.test.mjs
