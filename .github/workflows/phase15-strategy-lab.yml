@@ -1,0 +1,51 @@
+name: NABD phase 15 isolated Strategy Lab
+on:
+  pull_request:
+    paths:
+      - 'strategy-lab.mjs'
+      - 'strategy-lab-cli.mjs'
+      - 'strategy-lab.test.mjs'
+      - 'strategy-lab-static.test.mjs'
+      - 'backtest.mjs'
+      - 'server.mjs'
+      - 'public/strategy-lab*'
+      - 'public/index.html'
+      - 'scripts/phase15-browser-qa.mjs'
+      - 'windows/nabd_phase15_mt5_history_export.py'
+      - 'windows/test_phase15_history_export.py'
+      - '.github/workflows/phase15-strategy-lab.yml'
+  workflow_dispatch:
+jobs:
+  offline-backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - run: node --test strategy-lab.test.mjs strategy-lab-static.test.mjs tests/backtest.test.mjs tests/engine.test.mjs tests/flex-strategy.test.mjs
+      - run: node --check public/strategy-lab-ui.js && node --check strategy-lab-cli.mjs
+      - run: python3 -m unittest discover -s windows -p 'test_phase15_history_export.py' -v
+
+  browser-report:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - run: npm install --no-save --package-lock=false playwright@1.56.1
+      - run: node scripts/phase15-browser-qa.mjs
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nabd-phase15-lab-browser
+          path: qa-artifacts/phase15/
+          if-no-files-found: ignore
+          retention-days: 7

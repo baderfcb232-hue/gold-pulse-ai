@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NABD Strategy Lab | مختبر الاستراتيجيات</title>
+<meta name="description" content="تقرير تجريبي محلي لمقارنة نتائج الذهب والبيتكوين دون أوامر تداول">
+<link rel="stylesheet" href="/strategy-lab.css?v=phase15">
+<script src="/strategy-lab-ui.js?v=phase15" type="module"></script>
+</head>
+<body>
+<header class="lab-head">
+ <a href="/dashboard" class="lab-logo" aria-label="العودة إلى نبض">NABD<span> / STRATEGY LAB</span></a>
+ <a href="/dashboard">العودة للسوق</a>
+</header>
+<main>
+ <div class="lab-eyebrow">PHASE 15 · OFFLINE RESEARCH</div>
+ <h1>مختبر اختبار الاستراتيجيات</h1>
+ <p class="lab-subtitle">قارن استراتيجية الذهب أو البيتكوين باستخدام تقرير تاريخي مُنشأ محليًا. هذه ليست نتائج تداول حقيقي ولا يتم تفعيل أي استراتيجية من هنا.</p>
+ <section class="lab-panel lab-notice" aria-label="حدود المختبر">
+  <strong>لا تداول · لا نشر · لا بيانات أسعار مفترضة</strong>
+  <p>التقرير يأتي من ملف JSON على جهازك؛ لا يُرفع للسيرفر. مصدر بيانات MT5 يظل تصريحًا من الملف حتى يتم التحقق منه بصورة مستقلة.</p>
+ </section>
+ <section class="lab-panel" aria-labelledby="load-title">
+  <h2 id="load-title">فتح تقرير الباك تست</h2>
+  <label class="lab-file">اختر ملف تقرير JSON الناتج من أداة Strategy Lab
+    <input type="file" id="lab-file" accept=".json,application/json">
+  </label>
+  <p id="lab-status" role="status" aria-live="polite">لم يتم تحميل أي تقرير.</p>
+  <div class="lab-controls">
+   <label>السوق <select id="lab-market" disabled><option value="">—</option></select></label>
+   <label>الفترة <select id="lab-period" disabled><option value="development">تطوير الاستراتيجية</option><option value="outOfSample">اختبار خارج العينة</option></select></label>
+   <label>نوع التكلفة <select id="lab-cost" disabled><option value="normal">التكاليف الأساسية</option><option value="stress">سيناريو تكاليف أعلى</option></select></label>
+  </div>
+  <button type="button" id="lab-download" disabled>تنزيل نسخة من التقرير</button>
+ </section>
+ <section id="lab-results" hidden>
+  <div class="lab-heading"><div><h2 id="lab-result-title">نتيجة الاختبار</h2><p id="lab-range"></p></div><span class="lab-pill">Backtest · Simulated</span></div>
+  <div class="lab-metrics" id="lab-metrics"></div>
+  <section class="lab-panel"><h3>مقارنة الاستراتيجيات</h3>
+   <div class="lab-table-wrap"><table aria-label="مقارنة النسخة الحالية والتجريبية">
+    <thead><tr><th>المقياس</th><th>STRICT · الأساسية</th><th>FLEX_NEUTRAL · التجريبية</th></tr></thead><tbody id="lab-comparison"></tbody>
+   </table></div>
+  </section>
+  <section class="lab-panel"><h3>توزيع نتائج الصفقات (بوحدة R)</h3><div class="lab-distribution" id="lab-distribution"></div></section>
+  <section class="lab-panel"><h3>مصدر البيانات وتكاليف الاختبار</h3><p id="lab-source"></p><p id="lab-costs"></p>
+   <h3>تحذيرات لازمة قبل اعتماد أي استراتيجية</h3><ul id="lab-warnings"></ul></section>
+ </section>
+ <section id="lab-agentic-results" hidden aria-labelledby="lab-agentic-heading">
+  <div class="lab-heading">
+   <div><h2 id="lab-agentic-heading">فحص مخ نبض الذكي · تاريخي</h2>
+    <p>يستخدم كود محلّل NABD Agentic AI التجريبي. لا يفتح صفقات ولا يثبت ربحًا حقيقيًا.</p></div>
+   <span class="lab-pill">AI · PAPER REPLAY</span>
+  </div>
+  <section class="lab-panel lab-notice">
+   <strong>تحذير: الفحص التاريخي ليس اختبارًا نزيهًا بالكامل لقدرة AI على التنبؤ</strong>
+   <p>قد يكون النموذج تعلّم معلومات صدرت بعد تاريخ الشموع. النتائج التالية فرضيات تاريخية وتحتاج اختبارًا مستقبليًا على Demo.</p>
+  </section>
+  <div class="lab-metrics" id="lab-agentic-metrics"></div>
+  <section class="lab-panel">
+   <h3>الفترات المستقلة (Walk-Forward التشخيصي)</h3>
+   <div class="lab-table-wrap"><table>
+    <thead><tr><th>الفترة</th><th>عدد القرارات</th><th>تحليلات AI</th><th>شراء/بيع مرصود</th><th>نسبة فرضيات مواتية</th></tr></thead>
+    <tbody id="lab-agentic-folds"></tbody>
+   </table></div>
+  </section>
+  <section class="lab-panel">
+   <h3>دفتر قرارات المخ وأسبابها</h3>
+   <label>عرض فترة الاختبار
+    <select id="lab-agentic-fold-filter"><option value="ALL">كل الفترات</option></select>
+   </label>
+   <div id="lab-agentic-decisions" class="lab-agentic-decisions"></div>
+  </section>
+  <section class="lab-panel"><h3>المصدر والحدود</h3>
+   <p id="lab-agentic-source"></p>
+   <ul id="lab-agentic-warnings"></ul>
+  </section>
+ </section>
+ <p class="lab-foot">NABD Research · نتائج تاريخية افتراضية. النجاح السابق لا يضمن النتائج المستقبلية. لا يوجد اتصال بحساب MT5 في هذه الصفحة.</p>
+</main>
+</body>
+</html>

@@ -1,0 +1,30 @@
+*{box-sizing:border-box}body{margin:0;background:#10151d;color:#f0f4fa;font-family:'Segoe UI',Tahoma,Arial,sans-serif;line-height:1.65}
+a{color:#9fdfcb;text-decoration:none}a:hover{text-decoration:underline}
+.lab-head{display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:1px solid #283644;padding:15px clamp(14px,4vw,40px)}
+.lab-logo{color:#fff;font-size:1.2rem;font-weight:800;letter-spacing:1px}.lab-logo span{font-size:.72rem;font-weight:500;color:#8ea5b7}
+main{max-width:1020px;margin:auto;padding:30px 18px 60px}.lab-eyebrow{font-size:.72rem;color:#8fd6bb;font-weight:700;letter-spacing:2px}
+h1{margin:7px 0 0;font-size:clamp(1.6rem,3vw,2.2rem)}h2{margin:0;font-size:1.25rem}h3{font-size:1.1rem;margin:7px 0 12px}
+.lab-subtitle{color:#b7c8d2;max-width:760px}.lab-panel{background:#19222e;border:1px solid #2a3a49;border-radius:16px;padding:20px;margin:16px 0}
+.lab-notice{border-inline-start:4px solid #d3a65a}.lab-notice p{margin:7px 0 0;color:#b7c8d2}
+.lab-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}
+label{display:grid;gap:7px;font-size:.85rem;color:#b9d0dd}
+input,select,button{border:1px solid #465668;border-radius:8px;background:#111922;color:#fff;padding:10px 12px;font:inherit;min-width:0}
+button{background:#203d49;cursor:pointer}button:disabled,select:disabled{opacity:.5;cursor:not-allowed}
+input[type=file]{width:100%;display:block}.lab-heading{display:flex;gap:12px;justify-content:space-between;align-items:center;margin-top:30px}
+.lab-pill{border-radius:50px;background:#34566b;color:#d1f5e3;padding:4px 9px;font-size:.72rem}
+.lab-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}
+.lab-tile{background:#19222e;border:1px solid #314254;border-radius:14px;padding:18px;display:grid;gap:6px}.lab-tile span{color:#b8c8d8;font-size:.8rem}.lab-tile strong{font-size:1.4rem}
+.lab-table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.87rem;white-space:nowrap}th,td{text-align:start;border-bottom:1px solid #30404e;padding:10px}th{font-weight:600;color:#cbd8e5}
+.lab-distribution{display:grid;gap:7px}.lab-bar{display:grid;grid-template-columns:80px 1fr 48px;gap:10px;align-items:center;font-size:.83rem}.lab-bar-track{border-radius:10px;background:#263645;height:10px;overflow:hidden}.lab-bar-fill{height:100%;background:#74caaa}
+#lab-warnings{color:#bfd0db;padding-inline-start:22px}#lab-source,#lab-costs{overflow-wrap:anywhere;font-size:.85rem;color:#b7c8d2}.lab-foot{font-size:.75rem;color:#91a4b2;text-align:center;padding-top:16px}
+@media(max-width:650px){main{padding:20px 12px 42px}.lab-controls{grid-template-columns:1fr}.lab-metrics{grid-template-columns:1fr 1fr}.lab-panel{padding:14px}.lab-head{padding:12px}}
+
+/* Historical Agentic AI report: local-only and clearly paper-research labeled */
+#lab-agentic-results[hidden]{display:none}
+#lab-agentic-source,#lab-agentic-warnings{overflow-wrap:anywhere;color:#c2d0d9;font-size:.84rem}
+.lab-agentic-decisions{display:grid;gap:9px;margin-top:12px}
+.lab-agentic-decision{border:1px solid #344b5d;background:#151e28;border-radius:10px;padding:12px}
+.lab-agentic-decision summary{font-size:.84rem;font-weight:600;cursor:pointer;color:#d5f0e3}
+.lab-agentic-detail{margin:8px 0;font-size:.82rem;overflow-wrap:anywhere;line-height:1.7}
+.lab-agentic-detail strong{color:#9fd5c8}
+#lab-agentic-fold-filter{margin-block:6px 10px;max-width:300px}
