@@ -38,3 +38,11 @@ test('invalid risk percentage is never presented as valid',()=>{
  const state={controls:{XAUUSD:{terminalConnected:false,execution:{risk_percent:NaN}}}};
  assert.equal(summarizeMarket(state,'XAUUSD',1000).risk,null);
 });
+
+test('stale bridge invalidates EA pause status instead of showing safe OFF',()=>{
+ const state={controls:{XAUUSD:{terminalConnected:true,bridgeReceivedAt:900,connection:'LIVE',lastUpdate:999,
+   bot:{emergency_stop:false},execution:{risk_percent:0.5}}}};
+ assert.equal(summarizeMarket(state,'XAUUSD',1000).pause,null);
+ state.controls.XAUUSD.bridgeReceivedAt=999;
+ assert.equal(summarizeMarket(state,'XAUUSD',1000).pause,false);
+});
