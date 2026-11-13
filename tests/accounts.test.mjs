@@ -489,3 +489,33 @@ test('Windows monitor cannot spoof a member account after access is disabled',as
   assert.equal(response.status,401);
   assert.equal((await h.request('/api/admin/mt5-hosting',undefined,admin)).body.accounts[0].monitoring_status,'AWAITING_WORKER');
 });
+
+test('stage-only stop request HTTP is owner-scoped, CSRF-guarded and never claims MT5 stopped', async t => {
+ const h=await setup(t);
+ await h.verify('stop-one@example.test');
+ await h.verify('stop-two@example.test');
+ const owner=await h.login('stop-one@example.test'),other=await h.login('stop-two@example.test');
+ const reg=await h.request('/api/auth/mt5-accounts',{broker:'JustMarkets',server:'JustMarkets-Demo2',login:'23456789',environment:'demo',acknowledge:true},owner);
+ assert.equal(reg.status,201);
+ const path='/api/auth/risk-stop-requests';
+ const request={accountId:reg.body.id,symbol:'BTCUSD',acknowledgeUnconfirmed:true};
+ assert.equal((await h.request(path,request)).status,401);
+ assert.equal((await h.request(path,request,owner,{'X-NABD-CSRF':''})).status,403);
+ assert.equal((await h.request(path,request,owner,{Origin:'https://example.attacker'})).status,403);
+ assert.equal((await h.request(path,request,other)).status,404);
+ assert.equal((await h.request(path,{...request,acknowledgeUnconfirmed:false},owner)).status,400);
+ const created=await h.request(path,request,owner);
+ assert.equal(created.status,202);
+ assert.equal(created.body.status,'AWAITING_MT5_ACK');
+ assert.equal(created.body.confirmedByMT5,false);
+ assert.equal(created.body.executionStopped,false);
+ const repeated=await h.request(path,request,owner);
+ assert.equal(repeated.status,202);
+ assert.equal(repeated.body.created,false);
+ assert.equal(repeated.body.requestId,created.body.requestId);
+ const mine=await h.request(path,undefined,owner);
+ assert.equal(mine.status,200);
+ assert.equal(mine.body.requests.length,1);
+ assert.equal(mine.body.connectedToMT5,false);
+ assert.equal((await h.request(path,undefined,other)).body.requests.length,0);
+});
