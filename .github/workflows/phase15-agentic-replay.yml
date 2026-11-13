@@ -1,0 +1,26 @@
+name: NABD phase 15 historical AI research replay
+on:
+  pull_request:
+    paths:
+      - 'agentic-experimental/research-brain.mjs'
+      - 'agentic-experimental/historical-replay-context.mjs'
+      - 'agentic-experimental/agentic-historical-lab.mjs'
+      - 'agentic-experimental/agentic-historical-cli.mjs'
+      - 'agentic-experimental/agentic-historical-lab.test.mjs'
+      - '.github/workflows/phase15-agentic-replay.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  historical-paper:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --check agentic-experimental/agentic-historical-lab.mjs
+      - run: node --check agentic-experimental/research-brain.mjs
+      - run: node --check agentic-experimental/agentic-historical-cli.mjs
+      - run: node --test agentic-experimental/agentic-historical-lab.test.mjs agentic-experimental/shadow-brain-risk-demo.test.mjs agentic-experimental/demo-auto-brain.test.mjs
