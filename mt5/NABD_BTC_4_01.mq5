@@ -50,6 +50,7 @@ input int             InpMaxSpreadPoints        = 2500;
 input int             InpDeviationPoints        = 30;
 input long            InpMagicNumber            = 26092302;
 input bool            InpEnableLiveTrading      = true;       // Explicit safety switch
+input bool            InpPhase12StopRequired    = false;      // Demo stop test: fail closed; never auto resume
 
 //--- time and news protection
 input group "Trading schedule and news"
@@ -164,6 +165,8 @@ void   ReleaseIndicatorHandles();
 bool   ReadIndicatorValue(const int handle,const int shift,double &value);
 bool   IsNewEntryBar();
 bool   TradingExecutionEnabled();
+bool   Phase12EntryBlocked();
+uint   NABDHash(const string s);
 bool   BuildSignal(SignalData &signal);
 bool   PlaceSignal(const SignalData &signal);
 void   ManageOpenPositions();
@@ -390,6 +393,7 @@ void OnTick()
      }
 
    ManageOpenPositions();
+   if(Phase12EntryBlocked()){NABDClearSignal();UpdateChartPanel();return;}
 
    if(InpNABDWebsiteRecommendations)
      {NABDClearSignal();NABDCheckComplete();UpdateChartPanel();return;}
@@ -552,6 +556,16 @@ bool IsNewEntryBar()
 
 // Strategy Tester orders are simulated by MT5 and never reach a live account.
 // This keeps live execution explicitly locked while still allowing backtests.
+// Durable account+symbol stop flag; trading EA cannot reset it.
+string Phase12StopKey()
+  {return StringFormat("NB_P12_%I64d_%u",AccountInfoInteger(ACCOUNT_LOGIN),NABDHash(g_symbol));}
+bool Phase12EntryBlocked()
+  {
+   string key=Phase12StopKey();
+   if(GlobalVariableCheck(key) && GlobalVariableGet(key)>0.5)return true;
+   if(InpPhase12StopRequired)return true; // missing state is not trade permission
+   return false;
+  }
 bool TradingExecutionEnabled()
   {
    // These distributable EAs are Demo-only: never permit orders on a live account.
@@ -682,7 +696,7 @@ bool BuildSignal(SignalData &signal)
 bool PlaceSignal(const SignalData &signal)
   {
    g_website_attempt_code=0;g_website_attempt_retcode=0;g_website_attempt_deal_ticket=0;
-   if(!ExecutionPermissionsAvailable() ||
+   if(Phase12EntryBlocked() || !ExecutionPermissionsAvailable() ||
       (!DemoWebsiteNoDailyLimitsEnabled() && HasOwnPosition()) ||
       (DemoWebsiteNoDailyLimitsEnabled() && !ConcurrentWebsiteEntryAllowed()) ||
       HasOwnPendingOrder() || HasForeignNettingExposure() || g_cycle_closing)
@@ -741,7 +755,7 @@ bool PlaceSignal(const SignalData &signal)
       MqlTick tick;
       if(!SymbolInfoTick(g_symbol,tick) || tick.ask<=0.0 || tick.bid<=0.0 ||
          tick.ask<tick.bid || ServerNow()-tick.time>10 || tick.time>ServerNow()+2 ||
-         (tick.ask-tick.bid)/g_point>InpMaxSpreadPoints || IsEmergencyStopActive())
+         (tick.ask-tick.bid)/g_point>InpMaxSpreadPoints || IsEmergencyStopActive() || Phase12EntryBlocked())
         {g_website_attempt_code=119;break;}
       double price=signal.direction>0 ? tick.ask : tick.bid;
       double distance=signal.direction>0 ? tick.bid-signal.stop_loss : signal.stop_loss-tick.ask;
@@ -762,6 +776,7 @@ bool PlaceSignal(const SignalData &signal)
          break;
         }
       datetime started=ServerNow();
+      if(Phase12EntryBlocked()){g_website_attempt_code=125;break;}
       bool request_ok=signal.direction>0 ?
          g_trade.Buy(volume,g_symbol,0.0,signal.stop_loss,signal.take_profit,comment) :
          g_trade.Sell(volume,g_symbol,0.0,signal.stop_loss,signal.take_profit,comment);
@@ -1641,7 +1656,7 @@ void NABDProcessDemoApproval()
   {
    if(InpNABDWebsiteRecommendations)return;
    if(!InpNABDDemoRecommendations || AccountInfoInteger(ACCOUNT_TRADE_MODE)!=ACCOUNT_TRADE_MODE_DEMO ||
-      !IsJustMarketsAccount() || !TradingExecutionEnabled() || !InpNABDAllowRemoteControl ||
+      !IsJustMarketsAccount() || Phase12EntryBlocked() || !TradingExecutionEnabled() || !InpNABDAllowRemoteControl ||
       NABDRemotePaused() || IsEmergencyStopActive())return;
    double issued=GlobalVariableCheck(NABDKey("DA"))?GlobalVariableGet(NABDKey("DA")):0.0;
    double consumed=GlobalVariableCheck(NABDKey("DC"))?GlobalVariableGet(NABDKey("DC")):0.0;
@@ -1718,6 +1733,7 @@ void NABDProcessWebsiteApproval()
    GlobalVariableSet(NABDKey("WI"),0.0); // Result identifier is published LAST after validation/submission.
    GlobalVariableSet(NABDKey("WDT"),0.0);
    GlobalVariableSet(NABDKey("WRC"),0.0);GlobalVariableSet(NABDKey("WRT"),0.0);
+   if(Phase12EntryBlocked()){NABDWebsiteBlocked(id,"Phase 12 persisted pause / unverified state",125);return;}
    if(!TradingExecutionEnabled()){NABDWebsiteBlocked(id,"trading execution switch is off",101);return;}
    if(!ExecutionPermissionsAvailable()){NABDWebsiteBlocked(id,"terminal/account trade permissions unavailable",102);return;}
    if(!InpNABDAllowRemoteControl || NABDRemotePaused())
