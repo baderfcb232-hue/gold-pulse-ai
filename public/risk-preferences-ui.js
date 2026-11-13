@@ -23,7 +23,8 @@ if(typeof document!=='undefined'){
    const p=current();
    for(const key of numeric)form.elements.namedItem(key).value=p?.[key]??defaults[key];
    form.elements.namedItem('paused').checked=p?.paused??defaults.paused;
-   notice(p?'Saved preferences only — NOT applied to MT5 / إعدادات محفوظة وغير مطبّقة على MT5':
+   notice(p?.stopConfirmation==='STOP_REQUESTED_UNVERIFIED'?'Stop preference saved, MT5 UNCONFIRMED / تفضيل الإيقاف محفوظ ولم يؤكده MT5':
+     p?'Saved preferences only — NOT applied to MT5 / إعدادات محفوظة وغير مطبّقة على MT5':
      'New staged preferences — NOT applied to MT5 / تفضيلات جديدة غير مطبقة');
  }
  async function reload(){
@@ -63,7 +64,9 @@ if(typeof document!=='undefined'){
         body:JSON.stringify(payload)});
       if(result.saved!==true||result.connectedToExecution!==false)throw Error('Unexpected server response');
       saved=saved.filter(p=>p.accountId!==payload.accountId||p.symbol!==payload.symbol).concat(payload);
-      notice('حُفظت تفضيلات تجريبية فقط. MT5 لم يتغير / Saved STAGED only; MT5 unchanged.');
+      notice(result.stopConfirmation==='STOP_REQUESTED_UNVERIFIED'
+        ? 'تفضيل الإيقاف محفوظ، لكن MT5 لم يؤكد الإيقاف / STOP NOT CONFIRMED by MT5.'
+        : 'حُفظت تفضيلات تجريبية فقط. MT5 لم يتغير / Saved STAGED only; MT5 unchanged.');
    }catch{notice('لم يتم تأكيد الحفظ. راجع الجلسة وحاول مجددًا / Save not confirmed.');}
    finally{busy=false;form.querySelector('[type=submit]').disabled=false;}
  });
