@@ -45,6 +45,36 @@
   <section class="lab-panel"><h3>مصدر البيانات وتكاليف الاختبار</h3><p id="lab-source"></p><p id="lab-costs"></p>
    <h3>تحذيرات لازمة قبل اعتماد أي استراتيجية</h3><ul id="lab-warnings"></ul></section>
  </section>
+ <section id="lab-agentic-results" hidden aria-labelledby="lab-agentic-heading">
+  <div class="lab-heading">
+   <div><h2 id="lab-agentic-heading">فحص مخ نبض الذكي · تاريخي</h2>
+    <p>يستخدم كود محلّل NABD Agentic AI التجريبي. لا يفتح صفقات ولا يثبت ربحًا حقيقيًا.</p></div>
+   <span class="lab-pill">AI · PAPER REPLAY</span>
+  </div>
+  <section class="lab-panel lab-notice">
+   <strong>تحذير: الفحص التاريخي ليس اختبارًا نزيهًا بالكامل لقدرة AI على التنبؤ</strong>
+   <p>قد يكون النموذج تعلّم معلومات صدرت بعد تاريخ الشموع. النتائج التالية فرضيات تاريخية وتحتاج اختبارًا مستقبليًا على Demo.</p>
+  </section>
+  <div class="lab-metrics" id="lab-agentic-metrics"></div>
+  <section class="lab-panel">
+   <h3>الفترات المستقلة (Walk-Forward التشخيصي)</h3>
+   <div class="lab-table-wrap"><table>
+    <thead><tr><th>الفترة</th><th>عدد القرارات</th><th>تحليلات AI</th><th>شراء/بيع مرصود</th><th>نسبة فرضيات مواتية</th></tr></thead>
+    <tbody id="lab-agentic-folds"></tbody>
+   </table></div>
+  </section>
+  <section class="lab-panel">
+   <h3>دفتر قرارات المخ وأسبابها</h3>
+   <label>عرض فترة الاختبار
+    <select id="lab-agentic-fold-filter"><option value="ALL">كل الفترات</option></select>
+   </label>
+   <div id="lab-agentic-decisions" class="lab-agentic-decisions"></div>
+  </section>
+  <section class="lab-panel"><h3>المصدر والحدود</h3>
+   <p id="lab-agentic-source"></p>
+   <ul id="lab-agentic-warnings"></ul>
+  </section>
+ </section>
  <p class="lab-foot">NABD Research · نتائج تاريخية افتراضية. النجاح السابق لا يضمن النتائج المستقبلية. لا يوجد اتصال بحساب MT5 في هذه الصفحة.</p>
 </main>
 </body>
