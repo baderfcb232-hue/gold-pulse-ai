@@ -29,3 +29,9 @@
 - The companion is **stop-only** and deliberately blocks on arming. There is no automated resume/unblock path.
 - These guards have been added to the named EA source variants only; other legacy EAs and every independently running EA on the account remain outside this guarantee. Never interpret a stop report as account-wide broker trade protection.
 - CI performs Node tests and MQL source guards, not actual MQL5 compilation or real MT5 execution.
+
+## Local Windows Demo offline test — no staging token required
+- Use `mt5/NABD_Phase12_LocalPauseProbe.mq5` only on a separate disposable JustMarkets-Demo account. It requires deliberate `InpArmPersistentDemoPause=true`, rejects real accounts, cannot submit orders, and performs no network requests.
+- It sets the SAME `NB_P12_<login>_<symbol_hash>` terminal global flag used by the modified gold and BTC Demo EAs; removing the probe never clears the flag. The probe must be attached to the exact symbol and same MT5 terminal as the patched EA.
+- The optional read-only Python diagnostic package `nabd_phase12_readiness.py` (distributed separately) checks the current Demo broker and closed M5/M15/H1/H4 history for XAUUSD.m/BTCUSD.m. It never calls order_send.
+- These local probes do not prove authenticated Render-to-EA delivery. No full MT5 test has been run from GitHub.
