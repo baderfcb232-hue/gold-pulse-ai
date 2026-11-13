@@ -1,0 +1,29 @@
+name: NABD phase 14 isolated admin dashboard
+on:
+  pull_request:
+    paths:
+      - 'admin-dashboard-phase14.mjs'
+      - 'phase14-admin.test.mjs'
+      - 'auth-store.mjs'
+      - 'auth-backup.mjs'
+      - 'auth.mjs'
+      - 'public/accounts.html'
+      - 'public/accounts.css'
+      - 'public/accounts.js'
+      - 'public/admin-phase14.js'
+      - 'server.mjs'
+      - 'tests/accounts.test.mjs'
+      - 'PHASE14_ADMIN_DASHBOARD_AR.md'
+      - '.github/workflows/phase14-admin.yml'
+  workflow_dispatch:
+jobs:
+  admin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - run: node --check admin-dashboard-phase14.mjs && node --check auth.mjs && node --check public/admin-phase14.js && node --check public/accounts.js
+      - run: node --test phase14-admin.test.mjs tests/accounts.test.mjs tests/windows-monitor-isolation.test.mjs

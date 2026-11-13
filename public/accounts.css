@@ -16,3 +16,26 @@
 .mt5-admin-actions{display:flex;gap:8px;flex-wrap:wrap}
 .mt5-admin-actions .button{white-space:normal}
 #admin-mt5-hosting{display:grid;gap:12px;margin:16px 0}
+
+/* Phase 14: quiet, readable administrative operations cards. */
+.phase14-control,.phase14-plans{margin-bottom:20px}
+.phase14-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0}
+.phase14-stat{min-height:83px;padding:13px;border:1px solid #8883;border-radius:12px;background:var(--surface,#1b1724);display:grid;gap:5px}
+.phase14-stat span,.phase14-service span{font-size:12px;color:var(--muted,#aaa)}
+.phase14-stat strong{font-size:23px;font-variant-numeric:tabular-nums}
+.phase14-services{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:9px;margin:12px 0}
+.phase14-service{display:grid;gap:5px;min-width:0;padding:11px;border-bottom:1px solid #8884}
+.phase14-service strong{font-size:13px;overflow-wrap:anywhere}
+.phase14-plan-list{display:grid;gap:10px;margin:14px 0}
+.phase14-plan-row{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap;border:1px solid #8883;border-radius:11px;padding:14px}
+.phase14-plan-copy{display:grid;gap:5px;min-width:0}
+.phase14-plan-copy small,.phase14-plan-copy p{font-size:12px;overflow-wrap:anywhere;margin:0}
+.phase14-plan-actions{display:flex;gap:7px;flex-wrap:wrap}
+.phase14-plan-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:12px;margin-top:14px}
+.phase14-plan-form label{display:grid;gap:5px;min-width:0}
+.phase14-plan-form input,.phase14-plan-form select{width:100%;min-width:0}
+.phase14-features{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px 20px;border:1px solid #8883;border-radius:10px;padding:10px}
+.phase14-features legend{padding:0 8px}
+.phase14-features label{display:flex;align-items:center;gap:6px}
+.phase14-features input{width:auto}
+@media(max-width:700px){.phase14-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.phase14-plan-form{grid-template-columns:1fr}}

@@ -95,6 +95,24 @@ CREATE TABLE IF NOT EXISTS nabd_mt5_monitor_workers (
  mt5_online INTEGER NOT NULL DEFAULT 0 CHECK(mt5_online IN (0,1))
 );
 
+
+-- Phase 14: admin-authored package catalog DRAFTS, never purchasable or entitled.
+CREATE TABLE IF NOT EXISTS nabd_admin_plan_drafts (
+ id TEXT PRIMARY KEY,
+ code TEXT UNIQUE NOT NULL,
+ name_ar TEXT NOT NULL,
+ name_en TEXT NOT NULL,
+ currency TEXT NOT NULL CHECK(currency IN ('USD','ILS','EUR')),
+ price_minor INTEGER NOT NULL CHECK(price_minor>=0 AND price_minor<=100000000),
+ duration_days INTEGER NOT NULL CHECK(duration_days BETWEEN 1 AND 1095),
+ features_json TEXT NOT NULL,
+ state TEXT NOT NULL CHECK(state IN ('DRAFT','ARCHIVED')),
+ created_by TEXT REFERENCES nabd_users(id) ON DELETE SET NULL,
+ created_at DOUBLE PRECISION NOT NULL,
+ updated_at DOUBLE PRECISION NOT NULL
+);
+CREATE INDEX IF NOT EXISTS nabd_admin_plans_status ON nabd_admin_plan_drafts(state,updated_at);
+
 `;
 
 // The in-memory adapter is deliberately limited to injected tests/development.

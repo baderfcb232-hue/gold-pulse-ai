@@ -347,9 +347,23 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   };
   const bearer = req => (req.headers.authorization ?? '').replace(/^Bearer /, '');
   const operator = req => cookieSession(req) || exactSecret(bearer(req), dashboardToken);
+  // Phase 14: freshness of the SHARED server's MT5 ingest, not member trading
+  // connectivity or independent proof that the AI analyst has completed a decision.
+  const observedMarketReport = source => {
+    const at=source?.received_at;
+    // A future-dated or invalid ingest cannot be promoted to fresh monitoring.
+    if(!Number.isFinite(at)||at<=0||at>clock()+5)return {
+      state:'NO_REPORT',ageSeconds:null,terminalConnectedReported:null,analysisVerified:false};
+    const age=Math.max(0,Math.floor(clock()-at));
+    return {state:age<=45?'RECENT_REPORT':'STALE_REPORT',ageSeconds:age,
+      terminalConnectedReported:source.terminal_connected===true,
+      analysisVerified:false};
+  };
   const accounts = createAccounts({publicBase, clock, operationalStatus: () => ({mt5: publicState().connection,
     storage: storagePersistent ? 'persistent' : 'ephemeral', publication: publicationReview().reason,
-    telegram: telegram.status().verification.state}), ...accountOptions});
+    telegram: telegram.status().verification.state,
+    marketReports:{XAUUSD:observedMarketReport(snapshot),BTCUSD:observedMarketReport(btcSnapshot)}
+  }), ...accountOptions});
   const bridge = req => exactSecret(bearer(req), ingestToken);
   function ownOrigin(req) {
     const origin = req.headers.origin;
@@ -1060,7 +1074,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       }
       const files = {'/':'landing.html','/index.html':'index.html','/dashboard':'index.html','/onboarding':'onboarding.html','/charts/gold':'chart-gold.html','/charts/bitcoin':'chart-bitcoin.html','/performance-center':'performance-center.html','/analysis-history':'analysis-history.html',
         '/welcome':'landing.html','/en':'landing-en.html','/landing.css':'landing.css','/landing-live.js':'landing-live.js','/premium-fintech.css':'premium-fintech.css','/marketing-i18n.css':'marketing-i18n.css','/market-motion.css':'market-motion.css','/language-pref.js':'language-pref.js','/dashboard-terminal.css':'dashboard-terminal.css','/dashboard-sidebar-fix.css':'dashboard-sidebar-fix.css','/news-ticker.js':'news-ticker.js','/news-ticker.css':'news-ticker.css','/analysis-ribbon.js':'analysis-ribbon.js','/analysis-ribbon.css':'analysis-ribbon.css','/recommendation-explainer.js':'recommendation-explainer.js','/recommendation-explainer.css':'recommendation-explainer.css','/dashboard-member.js':'dashboard-member.js','/dashboard-themes.css':'dashboard-themes.css','/dashboard-fixes.css':'dashboard-fixes.css','/dashboard-contrast-v2.css':'dashboard-contrast-v2.css','/market-loaders.css':'market-loaders.css','/market-loaders.js':'market-loaders.js','/toast-ui.js':'toast-ui.js','/price-feedback.js':'price-feedback.js','/live-feedback.css':'live-feedback.css','/dashboard-locale.js':'dashboard-locale.js','/mini-spark.js':'mini-spark.js','/signal-date-filter.js':'signal-date-filter.js','/theme-init.js':'theme-init.js','/app.js':'app.js','/http.js':'http.js','/live.js':'live.js','/broker-chart.js':'broker-chart.js','/chart-pages.js':'chart-pages.js','/chart-pages.css':'chart-pages.css','/performance-center.js':'performance-center.js','/performance-center.css':'performance-center.css','/analysis-history.js':'analysis-history.js','/analysis-history.css':'analysis-history.css','/state-connection.js':'state-connection.js','/control-readiness.js':'control-readiness.js','/command-feedback.js':'command-feedback.js','/styles.css':'styles.css','/manifest.webmanifest':'manifest.webmanifest','/sw.js':'sw.js','/pwa-register.js':'pwa-register.js','/offline.html':'offline.html','/nabd-apple-touch-180.png':'nabd-apple-touch-180.png','/nabd-app-icon-192.png':'nabd-app-icon-192.png','/nabd-app-icon-512.png':'nabd-app-icon-512.png','/icon.svg':'icon.svg','/nabd-mark.svg':'nabd-mark.svg','/nabd-logo.svg':'nabd-logo.svg','/nabd-logo-en.svg':'nabd-logo-en.svg','/nabd-logo-dark.svg':'nabd-logo-dark.svg','/nabd-brand-20261109.css':'nabd-brand-20261109.css','/nabd-global-logo.css':'nabd-global-logo.css','/nabd-ltr-brand.css':'nabd-ltr-brand.css','/mobile-polish.css':'mobile-polish.css','/nabd-locale-init.js':'nabd-locale-init.js','/i18n-core.js':'i18n-core.js','/dashboard-static-en.js':'dashboard-static-en.js','/account-static-en.js':'account-static-en.js','/attribute-static-en.js':'attribute-static-en.js','/runtime-status-en.js':'runtime-status-en.js','/live-status-en.js':'live-status-en.js','/app-extra-en.js':'app-extra-en.js','/safety-status-en.js':'safety-status-en.js','/server-status-en.js':'server-status-en.js','/i18n-dom.js':'i18n-dom.js','/account-language.js':'account-language.js','/brand-logo.png':'brand-logo.png',
-        '/auth':'accounts.html','/account':'accounts.html','/admin':'accounts.html','/privacy':'accounts.html','/accounts.js':'accounts.js','/accounts.css':'accounts.css','/onboarding.js':'onboarding.js','/onboarding-flow.js':'onboarding-flow.js','/onboarding.css':'onboarding.css','/portal-premium.css':'portal-premium.css'};
+        '/auth':'accounts.html','/account':'accounts.html','/admin':'accounts.html','/privacy':'accounts.html','/accounts.js':'accounts.js','/accounts.css':'accounts.css','/admin-phase14.js':'admin-phase14.js','/onboarding.js':'onboarding.js','/onboarding-flow.js':'onboarding-flow.js','/onboarding.css':'onboarding.css','/portal-premium.css':'portal-premium.css'};
       if (req.method === 'GET' && files[path]) {
         const type = path.endsWith('.js') ? 'text/javascript; charset=utf-8' : path.endsWith('.css') ? 'text/css; charset=utf-8'
           : path.endsWith('.webmanifest') ? 'application/manifest+json' : path.endsWith('.svg') ? 'image/svg+xml' : path.endsWith('.png') ? 'image/png' : 'text/html; charset=utf-8';

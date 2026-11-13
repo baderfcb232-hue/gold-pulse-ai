@@ -6,6 +6,7 @@ import {backupConfig, exportAuthBackup, readAuthBackup, backupTables} from './au
 import {createSubscriberAlerts} from './subscriber-alerts.mjs';
 import {createSubscriberSignalDispatch} from './subscriber-signal-dispatch.mjs';
 import {subscriberTelegramReadiness} from './subscriber-telegram-readiness.mjs';
+import {createPhase14Admin} from './admin-dashboard-phase14.mjs';
 
 const fail = (status, message) => {throw Object.assign(Error(message), {status});};
 const result = (data = {ok: true}, status = 200, headers = {}) => ({data, status, headers});
@@ -37,6 +38,7 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
   const key = encryptionKey || parseKey(env.AUTH_ENCRYPTION_KEY), owner = (adminEmail || env.AUTH_ADMIN_EMAIL || '').trim().toLowerCase();
   const secure = publicBase?.startsWith('https://'), base = publicBase?.replace(/\/$/, '') || '';
   let privateSignalDispatch = null;
+  const phase14Admin = () => createPhase14Admin({store,clock,operationalStatus});
   const publishSubscriberSignal = async signal => {
     await ready;
     if (!online || !healthy || closed ||
@@ -500,6 +502,16 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
           await q('DELETE FROM nabd_sessions WHERE user_id=?', [u.id]); await audit(q, u.id, 'DELETION_REQUESTED', u.id);});
         return result({ok: true}, 200, {'Set-Cookie': clearCookies()});
       }
+      // Phase 14: MFA/RBAC-enforced operator view and non-billable plan drafts.
+      // Never grants paid entitlements, MT5 execution or subscription rights.
+      if (path === '/api/admin/control-center' && req.method === 'GET')
+        return result(await phase14Admin().dashboard());
+      if (path === '/api/admin/plan-drafts' && req.method === 'GET')
+        return result(await phase14Admin().listPlans());
+      if (path === '/api/admin/plan-drafts' && req.method === 'POST') {
+        await rate(req,'admin-plan-draft',u.id);
+        return result(await phase14Admin().mutatePlan(u.id,b));
+      }
       if (path === '/api/admin/overview' && req.method === 'GET') return result({accounts: status(),
         counts: (await store.query('SELECT status,COUNT(*) AS count FROM nabd_users GROUP BY status')).rows, operational: operationalStatus()});
       if (path === '/api/admin/users' && req.method === 'GET') {
@@ -641,7 +653,9 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
             nabd_member_mt5_accounts: ['id','user_id','broker','server_name','login','environment','status','created_at'],
             nabd_mt5_hosting_requests: ['account_id','status','requested_at','reviewed_at','reviewed_by'],
             nabd_member_alert_preferences: ['user_id','gold_enabled','btc_enabled','signals_enabled','execution_enabled','system_enabled','updated_at'],
-            nabd_member_telegram: ['user_id','chat_id','linked_at','last_test_at']};
+            nabd_member_telegram: ['user_id','chat_id','linked_at','last_test_at'],
+            nabd_admin_plan_drafts: ['id','code','name_ar','name_en','currency','price_minor','duration_days',
+              'features_json','state','created_by','created_at','updated_at']};
           for (const table of backupTables) for (const row of data.tables[table]) {
             const columns = allowed[table];
             await q(`INSERT INTO ${table}(${columns.join(',')}) VALUES(${columns.map(() => '?').join(',')})`, columns.map(name => row[name] ?? null));
