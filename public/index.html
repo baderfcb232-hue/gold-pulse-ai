@@ -15,6 +15,7 @@
   <script src="/pwa-register.js?v=pwa-1" defer></script>
   <link rel="stylesheet" href="/dashboard-sidebar-fix.css?v=20261106"><link rel="stylesheet" href="/news-ticker.css?v=short-iphone-20261106"><link rel="stylesheet" href="/analysis-ribbon.css?v=phase6-1"><link rel="stylesheet" href="/recommendation-explainer.css?v=phase9-1">
   <link rel="stylesheet" href="/nabd-brand-20261109.css?v=3">
+  <link rel="stylesheet" href="/notification-center.css?v=phase13-staging-1"><script src="/notification-center-ui.js?v=phase13-staging-1" type="module"></script>
 </head>
 <body>
   <a href="#main" class="skip">انتقل للمحتوى</a>
@@ -28,6 +29,24 @@
       <button class="nav-button" data-view="results"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h17M7 16v-5M12 16V4M17 16V8"/></svg><span>النتائج</span></button>
       <button class="nav-button" data-view="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 .5l3-3a5 5 0 0 0-7-7l-2 2M14 11a5 5 0 0 0-7-.5l-3 3a5 5 0 0 0 7 7l2-2"/></svg><span>الربط</span></button>
     </nav>
+    <div class="nabd-inbox-host" id="nabd-inbox-host">
+      <button type="button" class="nabd-inbox-bell" id="nabd-inbox-bell" aria-label="الإشعارات" aria-expanded="false" aria-controls="nabd-inbox-panel">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 8-3 9h18c0-1-3-2-3-9ZM10 21h4"/></svg>
+        <span id="nabd-inbox-count" class="nabd-inbox-count" hidden></span>
+      </button>
+      <aside class="nabd-inbox-panel" id="nabd-inbox-panel" aria-labelledby="nabd-inbox-title" hidden>
+        <div class="nabd-inbox-head"><h2 id="nabd-inbox-title">مركز الإشعارات</h2><button type="button" class="nabd-inbox-close" id="nabd-inbox-close" aria-label="إغلاق">×</button></div>
+        <p id="nabd-inbox-subtitle" class="nabd-inbox-subtitle">إشعارات الحساب الخاصة فقط، بدون ادعاء تنفيذ صفقات.</p>
+        <div class="nabd-inbox-filters">
+          <label><span>النوع</span><select id="nabd-inbox-type" aria-label="نوع الإشعار"><option value="ALL">الكل</option></select></label>
+          <label><span>السوق</span><select id="nabd-inbox-market" aria-label="السوق"><option value="ALL">الكل</option></select></label>
+          <label><span>الحالة</span><select id="nabd-inbox-state" aria-label="الحالة"><option value="active">الحديثة</option></select></label>
+        </div>
+        <p id="nabd-inbox-status" class="nabd-inbox-status" role="status" aria-live="polite"></p>
+        <div class="nabd-inbox-list" id="nabd-inbox-list"></div>
+        <button type="button" class="nabd-inbox-more" id="nabd-inbox-more" hidden>عرض المزيد</button>
+      </aside>
+    </div>
     <a class="button primary" href="/account">حسابي / الدخول</a>
     <button class="button ghost login-trigger" id="login-open">دخول المشغّل</button>
       <div class="nav-footer" role="group" aria-label="Appearance and language"><div class="theme-picker"><label for="dashboard-theme-choice">المظهر</label><select id="dashboard-theme-choice" tabindex="-1" aria-hidden="true" aria-label="اختيار مظهر لوحة التداول"><option value="light">فاتح</option><option value="dark">داكن</option><option value="system">النظام</option></select></div><div class="language-picker"><label for="dashboard-language-choice">اللغة / Language</label><select id="dashboard-language-choice" tabindex="-1" aria-hidden="true" aria-label="لغة واجهة نبض"><option value="ar">العربية</option><option value="en">English</option></select></div><button class="nabd-quick-button" id="nabd-theme-quick" type="button" aria-label="Switch to dark mode" aria-pressed="false" title="Dark mode"><span class="nabd-quick-icon" aria-hidden="true">☾</span></button><button class="nabd-quick-button" id="nabd-language-quick" type="button" aria-label="Switch language to English" title="English"><span class="nabd-language-globe" aria-hidden="true">◎</span><span class="nabd-quick-language" aria-hidden="true">EN</span><span class="nabd-language-chevron" aria-hidden="true">⌄</span></button></div>
