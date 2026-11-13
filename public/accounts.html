@@ -6,7 +6,7 @@
   <title>حسابات نبض | NABD</title><link rel="icon" href="/icon.svg?v=official-20261109-2" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script src="/theme-init.js?v=light-default-1"></script><script src="/nabd-locale-init.js?v=v2-1"></script><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/accounts.css"><link rel="stylesheet" href="/portal-premium.css?v=20261104"><script src="/accounts.js?v=phase11-tg-readiness" type="module"></script><script src="/account-language.js?v=v2-i18n-5" type="module"></script>
+  <script src="/theme-init.js?v=light-default-1"></script><script src="/nabd-locale-init.js?v=v2-1"></script><link rel="stylesheet" href="/styles.css"><link rel="stylesheet" href="/accounts.css"><link rel="stylesheet" href="/portal-premium.css?v=20261104"><script src="/accounts.js?v=phase11-tg-readiness" type="module"></script><link rel="stylesheet" href="/admin-operations.css?v=phase14"><script src="/admin-operations-ui.js?v=phase14" type="module"></script><script src="/account-language.js?v=v2-i18n-5" type="module"></script>
   <link rel="manifest" href="/manifest.webmanifest?v=official-20261109-2">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="NABD">
@@ -77,6 +77,27 @@
           <p id="admin-subscriber-tg-status" class="portal-note" role="status" aria-live="polite">لم يتم الفحص بعد.</p>
           <p id="admin-subscriber-tg-details" class="subtle">نجاح فحص البوت والـWebhook لا يؤكد وصول رسالة إلى مشترك؛ يلزم اختبار من صفحة إعداد المشترك.</p>
           <button type="button" id="admin-subscriber-tg-check" class="button ghost">فحص جاهزية Telegram الخاص</button>
+        </article>
+        <article class="portal-card" id="admin-ops-panel" aria-labelledby="admin-ops-title">
+          <span class="portal-kicker">PHASE 14 · ADMIN OBSERVABILITY</span>
+          <div class="portal-heading"><h2 id="admin-ops-title">مركز العمليات والمراقبة</h2>
+            <button class="button ghost" id="admin-ops-refresh" type="button">تحديث الحالة</button></div>
+          <p class="subtle">المؤشرات تخص التسجيل وطلبات الاستضافة وعامل مراقبة MT5 التجريبي فقط. لا تؤكد اتصال الوسيط أو فتح الصفقات.</p>
+          <div class="admin-summary" id="admin-ops-kpis" aria-live="polite"></div>
+          <p id="admin-ops-status" class="subtle" role="status">جارٍ التحقق من صلاحيات المسؤول…</p>
+          <details class="admin-ops-reports">
+            <summary>التقارير والسجل الزمني</summary>
+            <div class="admin-ops-filters">
+              <label>من تاريخ <input type="date" id="admin-ops-from"></label>
+              <label>إلى تاريخ <input type="date" id="admin-ops-to"></label>
+              <label>نوع الحدث <input id="admin-ops-event" placeholder="ALL / USER_UPDATED" maxlength="64"></label>
+              <label>حالة الاستضافة <select id="admin-ops-hosting"><option value="ALL">الكل</option><option value="REQUESTED">بانتظار المراجعة</option><option value="APPROVED">موافق للتجهيز</option><option value="REJECTED">مرفوض</option></select></label>
+              <button id="admin-ops-apply" class="button ghost" type="button">تطبيق الفلاتر</button>
+              <button id="admin-ops-csv" class="button ghost" type="button">تنزيل التقرير CSV</button>
+            </div>
+            <h3>سجل الإجراءات</h3><div id="admin-ops-audit" class="admin-ops-list"></div>
+            <h3>طلبات الاستضافة التجريبية</h3><div id="admin-ops-requests" class="admin-ops-list"></div>
+          </details>
         </article>
         <div id="admin-summary" class="admin-summary"></div><article class="portal-card"><div class="portal-heading"><h2>المستخدمون</h2><span class="subtle">50 حسابًا في الصفحة</span></div><form id="user-search" class="search-form"><label>البحث بالاسم أو البريد<input name="search" type="search" maxlength="100"></label><label>الحالة<select name="status"><option value="all">كل الحالات</option><option value="active">مفعّل</option><option value="disabled">معطّل</option><option value="deletion_requested">طلب حذف</option></select></label><button class="button primary">بحث</button></form><div id="admin-users"></div><div class="form-links"><button id="users-prev" class="button ghost">السابق</button><span id="users-page"></span><button id="users-next" class="button ghost">التالي</button></div></article>
         <div class="portal-grid"><article class="portal-card"><h2>سجل الإدارة والأمان</h2><div id="admin-audit"></div><button id="refresh-audit" class="text-button">تحديث السجل</button></article><article class="portal-card"><h2>النسخ الاحتياطي</h2><p id="backup-state" class="subtle"></p><p class="subtle">نسخة حسابات مشفرة يوميًا إلى تخزين مستقل عند ضبط الوجهة. تشمل معلومات التسجيل التجريبي لحسابات MT5 وطلبات استضافتها. لا تشمل سجل التداول ولا جلسات الدخول وروابط الاستعادة.</p><button id="backup-now" class="button ghost">نسخ إلى الوجهة الخارجية الآن</button><form id="backup-download"><label>كلمة المرور لتصدير نسخة مشفرة<input name="password" type="password" autocomplete="current-password" required></label><button class="button ghost">تنزيل نسخة الحسابات</button></form><details><summary>استعادة نسخة حسابات</summary><p class="subtle">تستبدل بيانات الحسابات بالنسخة المختارة وتنهي جميع الجلسات. يلزم رمز تحقق جديد ونسخة أمان خارجية ناجحة أولًا.</p><form id="restore-form"><label>النسخة المشفرة<input name="file" type="file" accept=".enc" required></label><label>كلمة المرور<input name="password" type="password" autocomplete="current-password" required></label><label>رمز مصادقة جديد<input name="code" autocomplete="one-time-code" required dir="ltr"></label><label>اكتب RESTORE للتأكيد<input name="confirm" required pattern="RESTORE" dir="ltr"></label><button class="button danger">استعادة الحسابات وإنهاء الجلسات</button></form></details></article></div>
