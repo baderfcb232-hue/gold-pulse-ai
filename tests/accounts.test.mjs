@@ -503,6 +503,8 @@ test('Phase14 protected admin API requires MFA and rejects member/CSRF/origin ac
  assert.equal(dashboard.body.users.total,2);
  assert.equal(dashboard.body.services.database,'CONNECTED');
  assert.equal(dashboard.body.services.render,'NOT_CHECKED');
+ assert.equal(dashboard.body.marketReports.XAUUSD.state,'NO_REPORT');
+ assert.equal(dashboard.body.marketReports.BTCUSD.tradeExecutionVerified,false);
  assert.equal(dashboard.body.mt5Monitor.brokerConnectionVerified,false);
  assert.equal(dashboard.body.subscriptions.billingEnabled,false);
  const draft={action:'create',code:'P14_GOLD',nameAr:'باقة تجريبية',nameEn:'Preview Gold',
