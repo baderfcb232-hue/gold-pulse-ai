@@ -84,7 +84,7 @@ int OnInit()
       StringLen(InpPauseOnlyToken)!=43 || InpStopPollSeconds<2 ||
       InpStopPollSeconds>60 || InpStopHttpTimeoutMs<1000 ||
       InpStopHttpTimeoutMs>10000 || StringFind(InpStagingHttpsBase,"https://")!=0 ||
-      StringFind(InpStagingHttpsBase,"onrender.com")>=0 ||
+      StringFind(InpStagingHttpsBase,"gold-pulse-ai.onrender.com")>=0 ||
       StringFind(InpStagingHttpsBase,"qaffel.com")>=0 ||
       StringFind(InpStagingHttpsBase,"nabdtrading.com")>=0)
      {
