@@ -31,12 +31,24 @@ export function createNotificationCenter({store,clock=()=>Date.now()/1000,maxSub
   const id=randomUUID(),now=clock();
   const inserted=await store.query(`INSERT INTO nabd_member_notifications
      (id,user_id,event_key,event_type,symbol,title_ar,title_en,body_ar,body_en,created_at)
-     SELECT ?,u.id,?,?,?,?,?,?,?,? FROM nabd_users u WHERE u.id=?
-       AND u.status='active' AND u.verified_at IS NOT NULL
-       AND u.notifications=1
+     SELECT ?,u.id,?,?,?,?,?,?,?,? FROM nabd_users u
+     LEFT JOIN nabd_member_alert_preferences p ON p.user_id=u.id
+     WHERE u.id=? AND u.status='active' AND u.verified_at IS NOT NULL AND u.notifications=1
+       AND (
+         (? IN ('GOLD_SIGNAL','BTC_SIGNAL') AND u.recommendations=1
+           AND COALESCE(p.signals_enabled,1)=1
+           AND ((?='XAUUSD' AND COALESCE(p.gold_enabled,1)=1)
+             OR (?='BTCUSD' AND COALESCE(p.btc_enabled,1)=1)))
+         OR (? IN ('TRADE_EXECUTED','TRADE_REJECTED','TP_HIT','SL_HIT')
+            AND COALESCE(p.execution_enabled,0)=1)
+         OR (? IN ('MT5_DISCONNECTED','MT5_RECONNECTED','MT5_STATUS','DAILY_LOSS',
+             'SUBSCRIPTION_EXPIRING','SUBSCRIPTION_EXPIRED')
+            AND COALESCE(p.system_enabled,1)=1)
+       )
      ON CONFLICT(user_id,event_key) DO NOTHING RETURNING id`,
      [id,event.eventKey,event.eventType,event.market||null,trim(event.titleAr,160),
-       trim(event.titleEn,160),trim(event.bodyAr,350),trim(event.bodyEn,350),now,userId]);
+       trim(event.titleEn,160),trim(event.bodyAr,350),trim(event.bodyEn,350),now,userId,
+       event.eventType,event.market,event.market,event.eventType,event.eventType]);
   return {created:inserted.rows.length===1};
  }
  async function publishSignal(signal){
