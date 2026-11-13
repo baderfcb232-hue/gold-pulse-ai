@@ -22,13 +22,15 @@ test('saved Demo risk preferences persist, are owner-isolated and audited',async
  const risk=createRiskPreferences({store,clock:()=>2000});
  assert.deepEqual(await risk.list(other),[]);
  await assert.rejects(()=>risk.save(other,p),e=>e.status===404);
- assert.deepEqual(await risk.save(owner,p),{saved:true,connectedToExecution:false,pausedPreference:true});
+ assert.deepEqual(await risk.save(owner,p),{saved:true,connectedToExecution:false,pausedPreference:true,stopConfirmation:'STOP_REQUESTED_UNVERIFIED'});
  assert.equal((await risk.list(owner))[0].riskPercent,0.4);
+ assert.equal((await risk.list(owner))[0].stopConfirmation,'STOP_REQUESTED_UNVERIFIED');
  assert.equal((await risk.list(other)).length,0);
  const changed={...p,paused:false,riskPercent:0.3};
  await risk.save(owner,changed);
  const values=await risk.list(owner);assert.equal(values.length,1);
  assert.equal(values[0].paused,false);assert.equal(values[0].riskPercent,0.3);
  assert.equal(values[0].connectedToExecution,false);
+ assert.equal(values[0].stopConfirmation,'PREFERENCE_SAVED');
  assert.equal((await store.query("SELECT COUNT(*) AS n FROM nabd_auth_audit WHERE actor=?",[owner])).rows[0].n,2);
 });
