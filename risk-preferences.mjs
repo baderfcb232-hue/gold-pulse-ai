@@ -1,3 +1,4 @@
+import {stopStatus} from './risk-stop-status.mjs';
 // Phase 12: owner/account-scoped, persisted DEMO policy preferences.
 // Staging only. No entry dispatcher or MT5 EA consumes these settings yet.
 const fail=(status,message)=>{throw Object.assign(Error(message),{status});};
@@ -35,7 +36,8 @@ export function createRiskPreferences({store,clock=()=>Date.now()/1000}){
         maxDailyTrades:Number(row.max_daily_trades),maxOpenPositions:Number(row.max_open_positions),
         maxSpread:Number(row.max_spread),maxSlippage:Number(row.max_slippage),
         quoteMaxAgeSeconds:Number(row.quote_max_age_seconds),updatedAt:Number(row.updated_at),
-        connectedToExecution:false}));
+        connectedToExecution:false,
+        stopConfirmation:stopStatus({preference:{ownerId:userId,accountId:row.account_id,symbol:row.symbol,paused:Boolean(row.paused)},ownerId:userId,accountId:row.account_id,symbol:row.symbol}).status}));
     },
     async save(userId,input){
       const p=validateRiskPreferences(input);
@@ -52,7 +54,8 @@ export function createRiskPreferences({store,clock=()=>Date.now()/1000}){
           [p.accountId,p.symbol,p.paused?1:0,p.riskPercent,p.maxDailyLoss,p.maxDailyTrades,p.maxOpenPositions,p.maxSpread,p.maxSlippage,p.quoteMaxAgeSeconds,clock()]);
         await q('INSERT INTO nabd_auth_audit(id,time,actor,event,subject) VALUES(?,?,?,?,?)',
           [cryptoRandom(),clock(),userId,p.paused?'RISK_PREFS_STAGED_PAUSED':'RISK_PREFS_STAGED_UPDATED',p.accountId]);
-        return {saved:true,connectedToExecution:false,pausedPreference:p.paused};
+        return {saved:true,connectedToExecution:false,pausedPreference:p.paused,
+          stopConfirmation:stopStatus({preference:{ownerId:userId,accountId:p.accountId,symbol:p.symbol,paused:p.paused},ownerId:userId,accountId:p.accountId,symbol:p.symbol}).status};
       });
     }
   };
