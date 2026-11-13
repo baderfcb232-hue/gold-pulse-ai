@@ -47,7 +47,7 @@ async function visit(width,height,authorized){
  });
  await page.goto(base+'/admin',{waitUntil:'domcontentloaded'});
  if(authorized){
-   await page.locator('#admin-ops-status').getByText('آخر تحديث:',{exact:false}).waitFor({timeout:12000});
+   await page.waitForFunction(()=>document.getElementById('admin-ops-status')?.textContent?.includes('آخر تحديث:'),{timeout:12000});
    assert.equal(await page.locator('#admin-ops-panel').isVisible(),true);
    const text=await page.locator('#admin-ops-kpis').innerText();
    assert.match(text,/حسابات مفعلة/);assert.match(text,/غير مفعّل/);
@@ -69,7 +69,7 @@ async function visit(width,height,authorized){
    assert.equal(await page.locator('#admin-content').isVisible(),false);
    assert.equal(await page.locator('#admin-guard').isVisible(),true);
  }
- assert.equal(errors.filter(x=>x.includes('admin-operations')),0,errors.join('; '));
+ assert.deepEqual(errors.filter(x=>x.includes('admin-operations')),[],errors.join('; '));
  await context.close();
 }
 try{
