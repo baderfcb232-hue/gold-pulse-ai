@@ -64,6 +64,27 @@ CREATE TABLE IF NOT EXISTS nabd_member_alert_preferences (
  system_enabled INTEGER NOT NULL DEFAULT 1 CHECK(system_enabled IN (0,1)),
  updated_at DOUBLE PRECISION NOT NULL
 );
+-- Phase 13: member-scoped notification inbox, no broker credentials or permissions.
+CREATE TABLE IF NOT EXISTS nabd_member_notifications (
+ id TEXT PRIMARY KEY,
+ user_id TEXT NOT NULL REFERENCES nabd_users(id) ON DELETE CASCADE,
+ event_key TEXT NOT NULL,
+ event_type TEXT NOT NULL CHECK(event_type IN
+ ('GOLD_SIGNAL','BTC_SIGNAL','TRADE_EXECUTED','TRADE_REJECTED','TP_HIT','SL_HIT',
+  'MT5_DISCONNECTED','MT5_RECONNECTED','MT5_STATUS','DAILY_LOSS',
+  'SUBSCRIPTION_EXPIRING','SUBSCRIPTION_EXPIRED')),
+ symbol TEXT CHECK(symbol IS NULL OR symbol IN ('XAUUSD','BTCUSD')),
+ title_ar TEXT NOT NULL,
+ title_en TEXT NOT NULL,
+ body_ar TEXT NOT NULL,
+ body_en TEXT NOT NULL,
+ created_at DOUBLE PRECISION NOT NULL,
+ read_at DOUBLE PRECISION,
+ archived_at DOUBLE PRECISION,
+ deleted_at DOUBLE PRECISION,
+ UNIQUE(user_id,event_key)
+);
+CREATE INDEX IF NOT EXISTS nabd_member_notifications_inbox ON nabd_member_notifications(user_id,created_at DESC);
 CREATE TABLE IF NOT EXISTS nabd_member_telegram (
  user_id TEXT PRIMARY KEY REFERENCES nabd_users(id) ON DELETE CASCADE,
  chat_id TEXT NOT NULL UNIQUE,
