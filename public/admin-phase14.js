@@ -24,7 +24,9 @@ const labels={
   BTC_SIGNALS:'إشارات البيتكوين',DEMO_MT5_MONITORING:'مراقبة MT5 Demo',
   rejectedData:'أدخل أسماء صحيحة واختر ميزة واحدة على الأقل',
   confirmArchive:'أرشفة هذه المسودة؟ لا تُفعّل أي اشتراك.',
-  note:'ملخص داخلي فقط؛ حالة اتصال الوسيط والدفع والنشر Live غير مؤكدة.'},
+  note:'ملخص داخلي فقط؛ حالة اتصال الوسيط والدفع والنشر Live غير مؤكدة.',
+  RECENT_REPORT:'تقرير حديث',STALE_REPORT:'تقرير متأخر',NO_REPORT:'لم يصل تقرير',
+  notVerified:'لم يثبت اكتمال تحليل AI أو تنفيذ صفقات',ageSeconds:'عمر التقرير بالثواني'},
  en:{users:'Users',active:'Active accounts',disabled:'Disabled accounts',
   deletionRequested:'Deletion requests',requested:'Hosting requests awaiting review',
   approved:'Approved hosting requests',rejected:'Rejected hosting requests',
@@ -42,7 +44,9 @@ const labels={
   BTC_SIGNALS:'Bitcoin signals',DEMO_MT5_MONITORING:'Demo MT5 monitoring',
   rejectedData:'Enter valid names and choose at least one feature',
   confirmArchive:'Archive this draft? No subscription will be activated.',
-  note:'Server observations only; broker, payment and Live deployment are not verified.'}
+  note:'Server observations only; broker, payment and Live deployment are not verified.',
+  RECENT_REPORT:'Recent ingest report',STALE_REPORT:'Stale ingest report',NO_REPORT:'No ingest report',
+  notVerified:'AI analysis and execution unverified',ageSeconds:'Report age in seconds'}
 };
 export function initPhase14Admin({api,message,currentLocale,date}){
  const id=n=>document.getElementById(n);
@@ -59,6 +63,8 @@ export function initPhase14Admin({api,message,currentLocale,date}){
    '.phase14-control > .portal-note':'قراءات تشغيلية من خادم نبض. لا تؤكد اتصال الوسيط أو سلامة Render الخارجية؛ ولا تفعّل التداول أو صلاحيات أي مشترك.',
    '.phase14-control h3':'حالة الخدمات كما يراها الخادم',
    '#phase14-refresh':'تحديث الحالة',
+   '#phase14-market-title':'تحديثات بيانات الذهب والبيتكوين',
+   '#phase14-market-note':'حالة آخر بيانات مشتركة وصلت للخادم، وليست إثباتًا لجاهزية تحليل الذكاء الاصطناعي أو تنفيذ صفقات أي مشترك.',
    '#phase14-plans-title':'مسودات باقات الاشتراك',
    '.phase14-plans > .portal-note':'للتخطيط فقط: الأسعار والمدة والمميزات لا تنشئ اشتراكات مدفوعة ولا تمنح توصيات أو تداولًا. لا يوجد ربط دفع مفعّل.',
    '#phase14-plan-details > summary':'إضافة أو تعديل مسودة باقة',
@@ -70,6 +76,8 @@ export function initPhase14Admin({api,message,currentLocale,date}){
    '.phase14-control > .portal-note':'Observations from the NABD server only. These do not verify broker or external Render availability, activate trading or grant permissions.',
    '.phase14-control h3':'Services as reported by this server',
    '#phase14-refresh':'Refresh status',
+   '#phase14-market-title':'Gold and Bitcoin data freshness',
+   '#phase14-market-note':'Last shared MT5 data observed by the server. This does not prove AI analysis readiness or any member trade execution.',
    '#phase14-plans-title':'Subscription plan drafts',
    '.phase14-plans > .portal-note':'Planning only. Draft prices, durations and features do not create paid subscriptions or grant trading rights. Payment integration is disabled.',
    '#phase14-plan-details > summary':'Create or edit a plan draft',
@@ -126,6 +134,18 @@ export function initPhase14Admin({api,message,currentLocale,date}){
    services.replaceChildren(...['database','mt5','publication','telegram','render'].map(key=>{
      const card=el('div','phase14-service');
      card.append(el('span','',tr(key)),el('strong','',tr(systems[key]||'UNKNOWN')));
+     return card;
+   }));
+   const marketBox=document.getElementById('phase14-market-reports');
+   marketBox.replaceChildren(...['XAUUSD','BTCUSD'].map(symbol=>{
+     const report=data.marketReports?.[symbol]||{};
+     const card=el('div','phase14-service');
+     const age=typeof report.ageSeconds==='number'
+       ?tr('ageSeconds')+': '+report.ageSeconds:'—';
+     card.append(el('span','',symbol),
+       el('strong','',tr(report.state||'NO_REPORT')),
+       el('small','',age),
+       el('small','',tr('notVerified')));
      return card;
    }));
    readiness.textContent=tr('note')+' · '+date(data.generatedAt);
