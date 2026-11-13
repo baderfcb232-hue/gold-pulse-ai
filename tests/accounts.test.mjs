@@ -519,3 +519,51 @@ test('stage-only stop request HTTP is owner-scoped, CSRF-guarded and never claim
  assert.equal(mine.body.connectedToMT5,false);
  assert.equal((await h.request(path,undefined,other)).body.requests.length,0);
 });
+
+test('Demo stop executor HTTP is disabled by default, requires MFA admin, and never confirms broker',async t=>{
+ const h=await setup(t),admin=await h.owner();
+ await h.verify('pause-worker@example.test');const member=await h.login('pause-worker@example.test');
+ const reg=await h.request('/api/auth/mt5-accounts',{broker:'JustMarkets',server:'JustMarkets-Demo2',login:'34567890',environment:'demo',acknowledge:true},member);
+ assert.equal(reg.status,201);
+ const stop=await h.request('/api/auth/risk-stop-requests',{accountId:reg.body.id,symbol:'BTCUSD',acknowledgeUnconfirmed:true},member);
+ assert.equal(stop.status,202);
+ // Explicit opt-in absent even for fully authorized admin.
+ const disabled=await h.request('/api/admin/risk-stop/provision',
+   {id:reg.body.id,confirm:'ISSUE_DEMO_PAUSE_ONLY'},admin);
+ assert.equal(disabled.status,503);
+ const noAccess=await h.request('/api/admin/risk-stop/provision',
+   {id:reg.body.id,confirm:'ISSUE_DEMO_PAUSE_ONLY'},member);
+ assert.equal(noAccess.status,403);
+ const packet={accountId:reg.body.id,broker:'JustMarkets',server:'JustMarkets-Demo2',
+   login:'34567890',environment:'demo',demo_mode:true};
+ const response=await fetch(h.base+'/api/worker/risk-stop/poll',{method:'POST',
+   headers:{'Content-Type':'application/json','x-nabd-worker-token':'bad'},body:JSON.stringify(packet)});
+ assert.equal(response.status,503);
+});
+test('Demo stop worker HTTP needs distinct provisioned token and accepts PAUSE only',async t=>{
+ const h=await setup(t,{env:{NABD_PHASE12_DEMO_STOP_BRIDGE_ENABLED:'true'}}),admin=await h.owner();
+ await h.verify('stop-exec@example.test');const member=await h.login('stop-exec@example.test');
+ const r=await h.request('/api/auth/mt5-accounts',{broker:'JustMarkets',server:'JustMarkets-Demo2',
+  login:'45678901',environment:'demo',acknowledge:true},member);
+ await h.request('/api/auth/mt5-hosting/request',{id:r.body.id,consent:true},member);
+ assert.equal((await h.request('/api/admin/mt5-hosting/review',{id:r.body.id,decision:'APPROVE'},admin)).status,200);
+ const provision=await h.request('/api/admin/risk-stop/provision',{id:r.body.id,confirm:'ISSUE_DEMO_PAUSE_ONLY'},admin);
+ assert.equal(provision.status,200);assert.equal(provision.body.pauseOnly,true);
+ const intent=await h.request('/api/auth/risk-stop-requests',{accountId:r.body.id,symbol:'XAUUSD',acknowledgeUnconfirmed:true},member);
+ const packet={accountId:r.body.id,broker:'JustMarkets',server:'JustMarkets-Demo2',
+   login:'45678901',environment:'demo',demo_mode:true};
+ const call=(path,token,payload)=>fetch(h.base+path,{method:'POST',
+   headers:{'Content-Type':'application/json','x-nabd-stop-token':token},body:JSON.stringify(payload)});
+ assert.equal((await call('/api/worker/risk-stop/poll','bad',packet)).status,401);
+ const poll=await call('/api/worker/risk-stop/poll',provision.body.token,packet);
+ assert.equal(poll.status,200);const body=await poll.json();
+ assert.deepEqual(body.commands,[{requestId:intent.body.requestId,symbol:'XAUUSD',action:'PAUSE_NEW_ENTRIES_ONLY'}]);
+ assert.equal(body.allowOrders,false);
+ const acknowledged=await call('/api/worker/risk-stop/ack',provision.body.token,
+   {...packet,requestId:intent.body.requestId,symbol:'XAUUSD',persistedPaused:true});
+ assert.equal(acknowledged.status,200);
+ const ack=await acknowledged.json();assert.equal(ack.brokerConfirmed,false);
+ assert.equal(ack.stopConfirmed,false);
+ assert.equal((await h.request('/api/admin/risk-stop/revoke',{id:r.body.id},admin)).status,200);
+ assert.equal((await call('/api/worker/risk-stop/poll',provision.body.token,packet)).status,401);
+});
