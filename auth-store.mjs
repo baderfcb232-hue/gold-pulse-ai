@@ -101,6 +101,19 @@ CREATE TABLE IF NOT EXISTS nabd_member_telegram_deliveries (
  telegram_message_id BIGINT,
  PRIMARY KEY(user_id,signal_id)
 );
+-- Independent opt-in Telegram deliveries for authenticated Demo monitor events.
+-- No trading rights and no automatic retries on uncertain outcomes.
+CREATE TABLE IF NOT EXISTS nabd_member_telegram_monitor_deliveries (
+ user_id TEXT NOT NULL REFERENCES nabd_users(id) ON DELETE CASCADE,
+ event_key TEXT NOT NULL,
+ status TEXT NOT NULL CHECK(status IN ('SENDING','SENT','FAILED','UNCERTAIN')),
+ claimed_at DOUBLE PRECISION NOT NULL,
+ completed_at DOUBLE PRECISION,
+ telegram_message_id BIGINT,
+ PRIMARY KEY(user_id,event_key)
+);
+CREATE INDEX IF NOT EXISTS nabd_member_telegram_monitor_cooldown
+ ON nabd_member_telegram_monitor_deliveries(user_id,claimed_at DESC);
 CREATE TABLE IF NOT EXISTS nabd_member_telegram_pending (
  user_id TEXT PRIMARY KEY REFERENCES nabd_users(id) ON DELETE CASCADE,
  token_hash TEXT NOT NULL UNIQUE,
