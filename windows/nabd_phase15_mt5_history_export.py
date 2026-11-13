@@ -125,6 +125,22 @@ def run(args, mt5, now=None):
                     "In MT5 Tools > Options > Charts increase Max bars in chart, reload history and try again."
                 )
 
+        # Do not report a two-year test from a handful of recent bars.
+        # Require 220 M5 warmup bars, date coverage, and no week-long holes.
+        requested_start = int(args.from_date.timestamp())
+        requested_end = int(args.to_date.timestamp())
+        m5 = histories["M5"]
+        prehistory = sum(bar["time"] < requested_start for bar in m5)
+        selected = [bar for bar in m5 if requested_start <= bar["time"] < requested_end]
+        if prehistory < 220 or not selected:
+            raise ValueError("Missing 220 M5 warmup bars or requested historical dates")
+        if selected[0]["time"] > requested_start + 5 * 86400 or (
+                selected[-1]["time"] + 300 < requested_end - 5 * 86400):
+            raise ValueError("MT5 history does not cover the requested start/end dates")
+        if any(right["time"] - left["time"] > 7 * 86400
+               for left, right in zip(selected, selected[1:])):
+            raise ValueError("MT5 history has a gap longer than seven days")
+
         data = {
             "symbol": args.market,
             "broker_symbol": args.symbol,
