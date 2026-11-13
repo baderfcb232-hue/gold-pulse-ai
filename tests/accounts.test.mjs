@@ -489,3 +489,26 @@ test('Windows monitor cannot spoof a member account after access is disabled',as
   assert.equal(response.status,401);
   assert.equal((await h.request('/api/admin/mt5-hosting',undefined,admin)).body.accounts[0].monitoring_status,'AWAITING_WORKER');
 });
+
+test('phase14 operational reports require MFA admin and are strictly read-only',async t=>{
+ const h=await setup(t);
+ await h.verify('report-reader@example.test');
+ const member=await h.login('report-reader@example.test');
+ assert.equal((await h.request('/api/admin/operations')).status,401);
+ assert.equal((await h.request('/api/admin/operations',undefined,member)).status,403);
+ assert.equal((await h.request('/api/admin/operations/audit',undefined,member)).status,403);
+ const owner=await h.owner();
+ const overview=await h.request('/api/admin/operations',undefined,owner);
+ assert.equal(overview.status,200);
+ assert.equal(overview.body.monitor.tradeExecutionEnabled,false);
+ assert.equal(overview.body.monitor.verifiedBrokerConnections,null);
+ const report=await h.request('/api/admin/operations/audit?event=LOGIN&limit=5',undefined,owner);
+ assert.equal(report.status,200);
+ assert.ok(Array.isArray(report.body.events));
+ assert.equal((await h.request('/api/admin/operations/audit?limit=1001',undefined,owner)).status,400);
+ assert.equal((await h.request('/api/admin/operations/hosting?status=INVALID',undefined,owner)).status,400);
+ assert.equal((await h.request('/api/admin/operations',{action:'ENABLE_LIVE'},owner)).status,404);
+ const listing=await h.request('/api/admin/operations/hosting',undefined,owner);
+ assert.equal(listing.status,200);
+ assert.ok(Array.isArray(listing.body.requests));
+});
