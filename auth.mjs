@@ -7,6 +7,7 @@ import {createSubscriberAlerts} from './subscriber-alerts.mjs';
 import {createSubscriberSignalDispatch} from './subscriber-signal-dispatch.mjs';
 import {subscriberTelegramReadiness} from './subscriber-telegram-readiness.mjs';
 import {createNotificationCenter} from './notification-center.mjs';
+import {recordVerifiedDemoMonitorState,createMonitorStaleSweep} from './notification-monitor-events.mjs';
 
 const fail = (status, message) => {throw Object.assign(Error(message), {status});};
 const result = (data = {ok: true}, status = 200, headers = {}) => ({data, status, headers});
@@ -194,6 +195,8 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
     await store.query('DELETE FROM nabd_tokens WHERE expires_at<?', [clock()]);
     await store.query('DELETE FROM nabd_sessions WHERE expires_at<?', [clock()]);
     await store.query('DELETE FROM nabd_auth_limits WHERE expires_at<?', [clock()]);
+    // Stale Demo monitor alerts mean an overdue heartbeat, NOT proved broker downtime.
+    await createMonitorStaleSweep({store,clock})().catch(onError);
     if (backup.key && backup.storage && (!lastBackup || clock() - lastBackup >= 86400)) await runBackup();
   }
   async function runBackup() {
@@ -245,30 +248,38 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
             packet.broker !== 'JustMarkets' || packet.environment !== 'demo' ||
             typeof packet.terminal_connected !== 'boolean' || typeof packet.demo_mode !== 'boolean')
           fail(400, 'Invalid read-only MT5 monitoring report');
-        const identity = (await store.query(`SELECT w.account_id,w.worker_id,
-          a.broker,a.server_name,a.login,a.environment
-          FROM nabd_mt5_monitor_workers w
-          JOIN nabd_member_mt5_accounts a ON a.id=w.account_id
-          JOIN nabd_mt5_hosting_requests h ON h.account_id=a.id
-          JOIN nabd_users owner ON owner.id=a.user_id
-          WHERE w.account_id=? AND w.token_hash=? AND h.status='APPROVED'
-            AND owner.status='active' AND owner.verified_at IS NOT NULL`,
-          [packet.account_id, digest(token)])).rows[0];
-        if (!identity || identity.worker_id !== packet.worker_id)
-          fail(401, 'Invalid monitoring worker credentials');
-        if (identity.broker !== packet.broker || identity.server_name !== packet.server ||
-            identity.login !== packet.login || identity.environment !== packet.environment ||
-            !packet.demo_mode) {
-          // A real account or a wrong MT5 login must not appear as connected.
-          await store.query(`UPDATE nabd_mt5_monitor_workers SET last_seen_at=?, mt5_online=0
-            WHERE account_id=? AND token_hash=?`, [clock(), identity.account_id, digest(token)]);
-          fail(409, 'MT5 Demo identity does not match the registered account');
-        }
-        await store.query(`UPDATE nabd_mt5_monitor_workers SET last_seen_at=?, mt5_online=?
-          WHERE account_id=? AND token_hash=?`,
-          [clock(), packet.terminal_connected ? 1 : 0, identity.account_id, digest(token)]);
-        return result({ok:true,monitoringOnly:true,tradeAllowed:false,
-          observed:packet.terminal_connected});
+        // An authenticated read-only worker can report ONLY monitoring state.
+        // Verify token and account binding in the SAME transaction as state + inbox updates.
+        const workerOutcome = await store.transaction(async q=>{
+          const identity = (await q(`SELECT w.account_id,w.worker_id,a.user_id,
+            a.broker,a.server_name,a.login,a.environment
+            FROM nabd_mt5_monitor_workers w
+            JOIN nabd_member_mt5_accounts a ON a.id=w.account_id
+            JOIN nabd_mt5_hosting_requests h ON h.account_id=a.id
+            JOIN nabd_users owner ON owner.id=a.user_id
+            WHERE w.account_id=? AND w.token_hash=? AND h.status='APPROVED'
+              AND owner.status='active' AND owner.verified_at IS NOT NULL`,
+            [packet.account_id,digest(token)])).rows[0];
+          if(!identity || identity.worker_id!==packet.worker_id)
+            fail(401,'Invalid monitoring worker credentials');
+          if(identity.broker!==packet.broker||identity.server_name!==packet.server||
+             identity.login!==packet.login||identity.environment!==packet.environment||
+             !packet.demo_mode){
+            await q(`UPDATE nabd_mt5_monitor_workers SET last_seen_at=?,mt5_online=0
+              WHERE account_id=? AND token_hash=?`,[clock(),identity.account_id,digest(token)]);
+            return {mismatch:true};
+          }
+          const time=clock();
+          await q(`UPDATE nabd_mt5_monitor_workers SET last_seen_at=?,mt5_online=?
+            WHERE account_id=? AND token_hash=?`,
+            [time,packet.terminal_connected?1:0,identity.account_id,digest(token)]);
+          await recordVerifiedDemoMonitorState(q,{
+            userId:identity.user_id,accountId:identity.account_id,
+            state:packet.terminal_connected?'ONLINE':'OFFLINE',at:time});
+          return {ok:true,monitoringOnly:true,tradeAllowed:false,observed:packet.terminal_connected};
+        });
+        if(workerOutcome.mismatch)fail(409,'MT5 Demo identity does not match the registered account');
+        return result(workerOutcome);
       }
       const adminPrincipal = path.startsWith('/api/admin/') ? await authenticated(req, req.method === 'POST', true) : null;
       const b = req.method === 'POST' ? await body(req) : {};
