@@ -347,9 +347,22 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   };
   const bearer = req => (req.headers.authorization ?? '').replace(/^Bearer /, '');
   const operator = req => cookieSession(req) || exactSecret(bearer(req), dashboardToken);
+  // Phase 14: freshness of the SHARED server's MT5 ingest, not member trading
+  // connectivity or independent proof that the AI analyst has completed a decision.
+  const observedMarketReport = source => {
+    const at=source?.received_at;
+    if(!Number.isFinite(at)||at<=0)return {
+      state:'NO_REPORT',ageSeconds:null,terminalConnectedReported:null,analysisVerified:false};
+    const age=Math.max(0,Math.floor(clock()-at));
+    return {state:age<=45?'RECENT_REPORT':'STALE_REPORT',ageSeconds:age,
+      terminalConnectedReported:source.terminal_connected===true,
+      analysisVerified:false};
+  };
   const accounts = createAccounts({publicBase, clock, operationalStatus: () => ({mt5: publicState().connection,
     storage: storagePersistent ? 'persistent' : 'ephemeral', publication: publicationReview().reason,
-    telegram: telegram.status().verification.state}), ...accountOptions});
+    telegram: telegram.status().verification.state,
+    marketReports:{XAUUSD:observedMarketReport(snapshot),BTCUSD:observedMarketReport(btcSnapshot)}
+  }), ...accountOptions});
   const bridge = req => exactSecret(bearer(req), ingestToken);
   function ownOrigin(req) {
     const origin = req.headers.origin;
