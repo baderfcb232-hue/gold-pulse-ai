@@ -115,6 +115,15 @@ CREATE TABLE IF NOT EXISTS nabd_mt5_monitor_workers (
  last_seen_at DOUBLE PRECISION,
  mt5_online INTEGER NOT NULL DEFAULT 0 CHECK(mt5_online IN (0,1))
 );
+-- Read-only Demo monitor state; never grants trade permissions.
+CREATE TABLE IF NOT EXISTS nabd_member_mt5_monitor_state (
+ account_id TEXT PRIMARY KEY REFERENCES nabd_member_mt5_accounts(id) ON DELETE CASCADE,
+ user_id TEXT NOT NULL REFERENCES nabd_users(id) ON DELETE CASCADE,
+ status TEXT NOT NULL CHECK(status IN ('ONLINE','OFFLINE','STALE')),
+ revision INTEGER NOT NULL CHECK(revision>0),
+ observed_at DOUBLE PRECISION NOT NULL
+);
+CREATE INDEX IF NOT EXISTS nabd_member_mt5_monitor_owner ON nabd_member_mt5_monitor_state(user_id);
 
 `;
 
