@@ -33,3 +33,17 @@ test('Demo pause companion is account scoped and has no order or resume operatio
  assert.doesNotMatch(src,/g_trade\.(Buy|Sell)|OrderSend\(/);
  assert.doesNotMatch(src,/\/api\/worker\/risk-stop\/resume|GlobalVariableSet\(P12Key\(\),0/);
 });
+
+test('offline local PAUSE probe uses the exact account-symbol durable stop and never calls broker or network',()=>{
+ const src=read('./mt5/NABD_Phase12_LocalPauseProbe.mq5');
+ assert.match(src,/InpArmPersistentDemoPause\s*=\s*false/);
+ assert.match(src,/ACCOUNT_TRADE_MODE_DEMO/);
+ assert.match(src,/justmarkets/);
+ assert.match(src,/NB_P12_%I64d_%u/);
+ assert.match(src,/2166136261/);
+ assert.match(src,/16777619/);
+ assert.match(src,/GlobalVariableSet\(key,1\.0\)/);
+ assert.match(src,/GlobalVariablesFlush\(\)/);
+ assert.doesNotMatch(src,/GlobalVariableDel\(/);
+ assert.doesNotMatch(src,/OrderSend\(|\.Buy\(|\.Sell\(|WebRequest\(/);
+});
