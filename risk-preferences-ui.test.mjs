@@ -29,3 +29,15 @@ test('Staged risk UI assets are served only as preview and never claim broker pa
  assert.match(html,/risk-preferences-ui\.js/);
  assert.match(read('./public/risk-control-center.js'),/serverAge<=30/);
 });
+
+test('stop request form requires explicit unconfirmed acknowledgment and only calls staging API',()=>{
+ const html=read('./public/risk-control-center.html');
+ const script=read('./public/risk-preferences-ui.js');
+ assert.match(html,/id="stop-intent-form" hidden/);
+ assert.match(html,/name="acknowledgeUnconfirmed" required/);
+ assert.match(script,/\/api\/auth\/risk-stop-requests/);
+ assert.match(script,/X-NABD-CSRF/);
+ assert.match(script,/result\.confirmedByMT5!==false/);
+ assert.match(script,/result\.executionStopped!==false/);
+ assert.doesNotMatch(script,/\/api\/bridge\/|\/api\/commands/);
+});
