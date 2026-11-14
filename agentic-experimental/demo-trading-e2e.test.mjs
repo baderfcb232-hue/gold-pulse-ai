@@ -90,3 +90,26 @@ test('wrong Demo broker identity cannot receive an existing signed intent',async
  assert.equal(system.orders.report().delivered,0);
  assert.equal(system.orders.pull(signedPull()).status,'INTENT_DELIVERED');
 });
+
+test('full simulated AI -> saved journal -> signed intent -> executor pickup -> signed ACK stays unverified by broker',async()=>{
+ const system=compose();
+ assert.equal(system.result.status,'OBSERVED');
+ assert.equal(system.brain.onSnapshot(system.ingest.getLatest('XAUUSD')).scheduled,true);
+ await system.brain.flush();
+ assert.equal(system.saved,1);
+ assert.equal(system.orders.report().created,1);
+ const delivered=system.orders.pull(signedPull());
+ assert.equal(delivered.status,'INTENT_DELIVERED');
+ assert.equal(system.orders.report().delivered,1);
+ const ackBody=JSON.stringify({id:'XAUUSD-'+(t-300),status:'FILLED',
+  accountType:'DEMO',accountLogin:3214567,occurredAt:t,
+  brokerDealTicket:2326494437,tradeRetcode:10009,executedVolume:.02});
+ const ack={body:ackBody,timestamp:String(t),mac:mac(execSecret,t+'\\n'+ackBody),secure:true};
+ assert.equal(system.orders.ack(ack).status,'RECORDED');
+ assert.equal(system.orders.report().brokerAcks,1);
+ assert.equal(system.orders.report().filledAcks,1);
+ assert.equal(system.orders.report().brokerIndependentlyVerifiedFills,0,
+  'An EA-reported deal number is not independent broker verification');
+ assert.equal(system.orders.ack(ack).status,'DUPLICATE');
+ assert.equal(system.orders.report().brokerAcks,1);
+});
