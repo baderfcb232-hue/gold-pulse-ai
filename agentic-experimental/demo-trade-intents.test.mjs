@@ -188,3 +188,16 @@ test('uncertain broker response remains explicit rather than reported as a rejec
  assert.equal(d.report().uncertainBrokerResults,1);
  assert.equal(d.report().filledAcks,0);
 });
+
+test('Demo execution status reports per-market freshness without disclosing account identifiers',()=>{
+ const d=create({quoteProvider:symbol=>symbol==='XAUUSD'?
+  {...full('XAUUSD'),timestamp:now-1}:
+  {...full('BTCUSD'),timestamp:now-7}});
+ const report=d.report();
+ assert.equal(report.sensorFreshness.XAUUSD.quoteFresh,true);
+ assert.equal(report.sensorFreshness.BTCUSD.quoteFresh,false);
+ assert.equal(report.sensorFreshness.BTCUSD.quoteAgeSeconds,7);
+ assert.equal(report.sensorFreshness.XAUUSD.demoAccountVerified,true);
+ assert.equal(JSON.stringify(report.sensorFreshness).includes('1234567'),false);
+ assert.equal(report.brokerIndependentlyVerifiedFills,0);
+});
