@@ -104,7 +104,7 @@ test('full simulated AI -> saved journal -> signed intent -> executor pickup -> 
  const ackBody=JSON.stringify({id:'XAUUSD-'+(t-300),status:'FILLED',
   accountType:'DEMO',accountLogin:3214567,occurredAt:t,
   brokerDealTicket:424242,tradeRetcode:10009,executedVolume:.02});
- const ack={body:ackBody,timestamp:String(t),mac:mac(execSecret,t+'\\n'+ackBody),secure:true};
+ const ack={body:ackBody,timestamp:String(t),mac:mac(execSecret,t+'\n'+ackBody),secure:true};
  assert.equal(system.orders.ack(ack).status,'RECORDED');
  assert.equal(system.orders.report().brokerAcks,1);
  assert.equal(system.orders.report().filledAcks,1);
