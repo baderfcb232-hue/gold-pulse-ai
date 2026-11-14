@@ -11,6 +11,8 @@ OUT=ROOT / "qa-artifacts" / "phase15-agentic-bundle"
 NAME="NABD_Phase15_Agentic_Lab_LOCAL.zip"
 SOURCES=[
     "windows/NABD_Phase15_Agentic_Lab.ps1",
+    "windows/NABD_Check_Demo_History.cmd",
+    "windows/nabd_phase15_preflight.py",
     "windows/nabd_phase15_mt5_history_export.py",
     "agentic-experimental/research-brain.mjs",
     "agentic-experimental/historical-replay-context.mjs",
@@ -34,7 +36,15 @@ This is NOT an unbiased proof of model skill or trading profitability.
 3. Open the desktop MT5 terminal signed in to your JustMarkets DEMO account.
    In Market Watch enable the exact XAUUSD.m / BTCUSD.m broker symbol.
    Open M5, M15, H1, H4, download at least two years of broker history.
-4. From the unzipped folder, run this PowerShell command after REPLACING each
+4. Before entering any spread or commission assumptions, double-click
+   windows/NABD_Check_Demo_History.cmd. It checks Gold and Bitcoin history
+   separately, states missing timeframe history and account type, and does
+   NOT show login/balance. You can alternatively run:
+   python windows/nabd_phase15_preflight.py --market XAUUSD --symbol XAUUSD.m
+   python windows/nabd_phase15_preflight.py --market BTCUSD --symbol BTCUSD.m
+   Both tests are strictly read-only.
+
+5. From the unzipped folder, run this PowerShell command after REPLACING each
    numeric value with VERIFIED assumptions for your demo broker/account:
 
    powershell -NoProfile -File .\\windows\\NABD_Phase15_Agentic_Lab.ps1 -Market XAUUSD -Symbol XAUUSD.m -SpreadPoints 15 -SlippagePoints 3 -CommissionPerLot 7 -MarginPerLot 500
@@ -43,14 +53,14 @@ This is NOT an unbiased proof of model skill or trading profitability.
    The --to UTC date defaults to today UTC (EXCLUSIVE), from is two years prior.
    The script stores JSON in phase15-local-reports/ and DOES NOT call paid AI.
 
-5. To inspect the report in a browser, from this folder run:
+6. To inspect the report in a browser, from this folder run:
    python -m http.server 8765 --bind 127.0.0.1 --directory viewer
    Then open http://127.0.0.1:8765/ in your browser and pick the *agentic.json
    file from phase15-local-reports. File is read in the browser, NOT uploaded.
    You may stop the local server with Ctrl+C.
 
-6. Optional: repeat for BTCUSD with its ACTUAL broker symbol and fees.
-7. OPTIONAL BILLABLE model inference: only after approving API usage costs,
+7. Optional: repeat for BTCUSD with its ACTUAL broker symbol and fees.
+8. OPTIONAL BILLABLE model inference: only after approving API usage costs,
    set an isolated NABD_TEST_REPLAY_AI_KEY environment variable in PowerShell
    (do NOT paste or upload it), choose a NEW output/report name by rerunning,
    and append -RunAIWithCost. Default max 12 requests, maximum 60.
@@ -61,6 +71,25 @@ The model may have learned post-period information during training, so it
 cannot establish historical forecasting skill. For valid effectiveness data,
 perform a prospective paper-forward test on isolated MT5 Demo.
 """
+ARABIC_QUICK_START="""نبض | مختبر المرحلة 15 — حساب تجريبي فقط
+===========================================
+1) فك ضغط الملف، وثبّت Python وNode.js، ثم:
+   python -m pip install MetaTrader5
+2) افتح JustMarkets Demo على MT5، وافتح شارت الذهب والبيتكوين.
+3) شغّل بالنقر المزدوج: windows/NABD_Check_Demo_History.cmd
+   سيفحص تاريخ M5 / M15 / H1 / H4 لكلا السوقين من دون كلمة مرور أو أوامر تداول.
+4) إذا كانت نتيجة historyReady/readyForHistoricalExport = false، راجع أسباب
+   issues في المخرجات، وحمّل شموع الفريم الناقصة ثم أعد الفحص.
+5) بعد نجاح التاريخ، شغّل أداة PowerShell مع قيم تكلفة الوسيط الصحيحة:
+   powershell -NoProfile -File .\\windows\\NABD_Phase15_Agentic_Lab.ps1 -Market XAUUSD -Symbol XAUUSD.m -SpreadPoints 15 -SlippagePoints 3 -CommissionPerLot 7 -MarginPerLot 500
+   الأرقام في هذا المثال غير مؤكدة. استخدم قيم حسابك الصحيح.
+6) افتح تقرير *-agentic.json في المشاهد المحلي الموجود داخل viewer/
+   باستخدام python -m http.server 8765 --bind 127.0.0.1 --directory viewer
+   ثم المتصفح: http://127.0.0.1:8765/
+7) بشكل افتراضي لا توجد أي استدعاءات AI مدفوعة ولا أي صفقات.
+   لا تفعل -RunAIWithCost قبل مراجعة التكلفة. لا تشارك أي API key هنا.
+الاختبار التاريخي لا يثبت الربحية أو قدرة النموذج على التنبؤ.
+"""
 def main():
     OUT.mkdir(parents=True,exist_ok=True)
     dest=OUT/NAME
@@ -68,6 +97,7 @@ def main():
         dest.unlink()
     with ZipFile(dest,"w",compression=ZIP_DEFLATED,compresslevel=9) as z:
         z.writestr("README_AR_EN.txt",README)
+        z.writestr("START_HERE_AR.txt",ARABIC_QUICK_START)
         for name in SOURCES:
             src=ROOT/name
             if not src.is_file():
@@ -91,6 +121,7 @@ def main():
                 z.writestr(name,data)
         if set(z.namelist()) != {
             "README_AR_EN.txt",
+            "START_HERE_AR.txt",
             "viewer/index.html",
             "viewer/strategy-lab-ui.js",
             "viewer/strategy-lab.css",
