@@ -201,3 +201,40 @@ test('Demo execution status reports per-market freshness without disclosing acco
  assert.equal(JSON.stringify(report.sensorFreshness).includes('1234567'),false);
  assert.equal(report.brokerIndependentlyVerifiedFills,0);
 });
+
+test('a one-time executor pickup with missing ACK is observable, never silently called a fill or resent',()=>{
+ let t=now;
+ const d=create({clock:()=>t,quoteProvider:symbol=>({...full(symbol),timestamp:t-1})});
+ assert.equal(d.consider(proposal).created,true);
+ assert.equal(d.pull(pull).status,'INTENT_DELIVERED');
+ assert.equal(d.report().unacknowledgedCount,1);
+ assert.equal(d.report().overdueAckCount,0);
+ assert.equal(d.report().recentDeliveries[0].deliveryState,'AWAITING_ACK');
+ t+=46;
+ const report=d.report();
+ assert.equal(report.overdueAckCount,1);
+ assert.equal(report.recentDeliveries[0].deliveryState,'ACK_OVERDUE');
+ assert.equal(report.recentDeliveries[0].id,'XAUUSD-'+(now-300));
+ assert.equal(report.brokerAcks,0);
+ assert.equal(report.filledAcks,0);
+ assert.equal(report.deliveryNeverRetried,true);
+ assert.equal(report.liveTrading,false);
+ const refreshed={...JSON.parse(pull.body),capturedAt:t};
+ const body=JSON.stringify(refreshed);
+ assert.equal(d.pull({body,timestamp:String(t),mac:sha(t+'\n'+body),secure:true}).status,'NO_INTENT');
+ assert.equal(d.report().delivered,1);
+});
+test('proper signed Demo ACK reconciles one-time delivery without independent broker confirmation',()=>{
+ const d=create();
+ d.consider(proposal);
+ assert.equal(d.pull(pull).status,'INTENT_DELIVERED');
+ const ack={id:'XAUUSD-'+(now-300),status:'REJECTED',accountType:'DEMO',
+  accountLogin:1234567,occurredAt:now};
+ assert.equal(d.ack(signed(ack)).status,'RECORDED');
+ const report=d.report();
+ assert.equal(report.unacknowledgedCount,0);
+ assert.equal(report.overdueAckCount,0);
+ assert.equal(report.recentDeliveries[0].deliveryState,'ACK_RECEIVED');
+ assert.equal(report.recentDeliveries[0].ackStatus,'EA_REPORTED_REJECTION');
+ assert.equal(report.brokerIndependentlyVerifiedFills,0);
+});
