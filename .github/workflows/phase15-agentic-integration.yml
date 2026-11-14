@@ -5,6 +5,9 @@ on:
       - 'agentic-experimental/**'
       - 'windows/NABD_Phase15_Agentic_Lab.ps1'
       - 'windows/nabd_phase15_mt5_history_export.py'
+      - 'windows/nabd_phase15_preflight.py'
+      - 'windows/test_phase15_preflight.py'
+      - 'windows/NABD_Check_Demo_History.cmd'
       - 'scripts/package-phase15-agentic-lab.py'
       - 'scripts/phase15-browser-qa.mjs'
       - 'public/strategy-lab*'
@@ -31,6 +34,7 @@ jobs:
           node --check public/strategy-lab-ui.js
           node --test agentic-experimental/agentic-historical-lab.test.mjs strategy-lab.test.mjs strategy-lab-static.test.mjs tests/backtest.test.mjs
           python3 -m unittest discover -s windows -p 'test_phase15_history_export.py' -v
+          python3 -m unittest discover -s windows -p 'test_phase15_preflight.py' -v
       - name: Assemble isolated Windows distribution
         run: |
           python3 scripts/package-phase15-agentic-lab.py
@@ -42,6 +46,9 @@ jobs:
               assert 'agentic-experimental/research-brain.mjs' in files
               assert 'agentic-experimental/agentic-historical-cli.mjs' in files
               assert 'windows/NABD_Phase15_Agentic_Lab.ps1' in files
+              assert 'windows/nabd_phase15_preflight.py' in files
+              assert 'windows/NABD_Check_Demo_History.cmd' in files
+              assert 'START_HERE_AR.txt' in files
               view=archive.read('viewer/index.html').decode()
               assert 'href="./strategy-lab.css"' in view
               assert 'src="./strategy-lab-ui.js"' in view
