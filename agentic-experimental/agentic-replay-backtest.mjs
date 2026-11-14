@@ -127,6 +127,9 @@ export function replayAgenticBacktest(dataset,{minCoverageDays=730}={}){
    // Conservative portfolio bookkeeping: every closed simulated trade is applied
    // before the next decision, with no historical future data entering its gate.
    active=active.filter(x=>x.exitAt>now);
+   // Update cash only from positions already closed at this decision's timestamp.
+   equity=market.costs.startingEquityUsd+trades.filter(x=>x.exitAt<=now)
+    .reduce((sum,x)=>sum+x.netUsd,0);
    const stamp=new Date(now*1000).toISOString().slice(0,10);
    if(stamp!==day){day=stamp;dailyCount=0}
    const candles=closedBars(market,now);
@@ -159,14 +162,16 @@ export function replayAgenticBacktest(dataset,{minCoverageDays=730}={}){
    if(!finite(lotRisk)||lotRisk<=0||lot<market.costs.minLot||lot>market.costs.maxLot){
     reasonCount(reasons,'BROKER_MIN_LOT_OR_RISK');continue;
    }
+   const fillPrice=m5[index].open+
+    (intent.side==='BUY'?market.costs.spreadPrice:0)+
+    (intent.side==='BUY'?market.costs.slippagePrice:-market.costs.slippagePrice);
+   const actualStopRisk=Math.abs(fillPrice-intent.stop)/market.costs.tickSize*
+    market.costs.tickValueLoss*lot;
+   if(actualStopRisk>cashCap+1e-8){reasonCount(reasons,'FILL_EXCEEDS_RISK_CAP');continue;}
    const result=simulate(intent,m5,index,market.costs,lot,lotRisk);
    if(result.skip){reasonCount(reasons,result.skip);continue;}
    trades.push({id:delivered.wire.split('|')[1],...result});
    active.push(result);dailyCount++;
-   // Account for a closed trade only after it has closed: conservative sizing
-   // uses initial equity for open trades, then realized PnL for future entries.
-   // In this single-threaded replay, equity is recomputed from realized fills.
-   equity=market.costs.startingEquityUsd+trades.filter(x=>x.exitAt<=now).reduce((n,x)=>n+x.netUsd,0);
    peak=Math.max(peak,equity);maxDD=Math.max(maxDD,peak-equity);
    if(result.netUsd<0){lossStreak++;maxLossStreak=Math.max(maxLossStreak,lossStreak)}else lossStreak=0;
   }
@@ -184,7 +189,7 @@ export function replayAgenticBacktest(dataset,{minCoverageDays=730}={}){
    netR:round(trades.reduce((n,t)=>n+t.netR,0)),
    profitFactor:loss>0?round(profit/loss):null,
    maxDrawdownPct:round(dd),maxConsecutiveLosses:maxLossStreak,
-   costAssumptions:market.costs,rejections:reasons,trades};
+   costAssumptions:market.costs,rejections:reasons,tradeLog:trades};
  }
  return {kind:'OFFLINE_AGENTIC_POINT_IN_TIME_REPLAY',
   disclaimer:'NO LIVE AI INFERENCE; NO REAL MT5 ORDER; NO INDEPENDENT HISTORICAL FILL PROOF',
