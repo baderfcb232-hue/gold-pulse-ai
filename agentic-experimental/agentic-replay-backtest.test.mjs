@@ -68,7 +68,7 @@ test('archived confident WATCH is processed by original DEMO trade-intent gate, 
  assert.equal(r.markets.XAUUSD.decisions,1);
  assert.equal(r.markets.XAUUSD.trades,1,
   'A synthetic valid WATCH should pass the deterministic DEMO gate');
- assert.ok(r.markets.XAUUSD.trades[0].lot>0);
- assert.equal(r.markets.XAUUSD.trades[0].exitReason,'TP');
+ assert.ok(r.markets.XAUUSD.tradeLog[0].lot>0);
+ assert.equal(r.markets.XAUUSD.tradeLog[0].exitReason,'TP');
  assert.equal(r.brokerExecutionConfirmed,false);
 });
