@@ -167,7 +167,7 @@ export async function replayHistoricalAgentic(dataset,{
  const schedule=selectReplayWindows(dataset,{from,to,folds,warmupFraction,maxCalls});
  if(runModel&&(!key||typeof key!=='string'))
    fail('Explicit isolated AI model key is required for billable replay');
- const samples=[];let simulatedTime=0;
+ const samples=[];let simulatedTime=0,attemptedModelCalls=0;
  const brain=createResearchBrain({
   key:runModel?key:'',model,clock:()=>simulatedTime,
   contextMode:'HISTORICAL_PAPER',...(fetcher?{fetcher}:{})
@@ -178,6 +178,7 @@ export async function replayHistoricalAgentic(dataset,{
   try{
    ctx=buildHistoricalBrainContext(dataset,p.asOf);
    if(runModel){
+    attemptedModelCalls++;
     result=await brain.analyze(ctx);
     if(result.status==='RESEARCH_ANALYSIS_ONLY'&&result.plan)
      forward=forwardObservation(dataset,p.index,result.plan);
@@ -208,7 +209,9 @@ export async function replayHistoricalAgentic(dataset,{
   schedule:{from:schedule.from,to:schedule.to,foldCount:folds,
     sampleBudget:maxCalls,modelSelection:schedule.modelSelection,
     trainingPerformed:false,nonOverlapping:true},
-  brain:{model,actualModelInvoked:runModel,invocationCount:brain.report().runs,
+  brain:{model,modelCallsOptedIn:runModel,actualModelInvoked:attemptedModelCalls>0,
+    invocationCount:attemptedModelCalls,completedAnalyses:brain.report().runs,
+    unsuccessfulAnalyses:attemptedModelCalls-brain.report().runs,
     simulationOnly:true,noOrders:true,brokerConnected:false},
   folds:foldReports,samples,
   warnings:[
