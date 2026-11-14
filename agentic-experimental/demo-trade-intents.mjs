@@ -219,8 +219,20 @@ export function createDemoTradeIntents({
      typeof quote?.brokerSymbol==='string'&&quote.brokerSymbol.length>0
    };
   }
+  // One-time pickup is NOT a broker send. An unacknowledged pickup can mean
+  // network loss, EA parsing/guard rejection or a missing ACK. Never auto-replay.
+  const recentDeliveries=[...delivered.entries()].slice(-12).map(([id,item])=>{
+   const receivedAck=acks.get(id),ageSeconds=Math.max(0,now-item.deliveredAt);
+   return {id,symbol:item.symbol,deliveredAt:new Date(item.deliveredAt*1000).toISOString(),
+    ageSeconds,ackStatus:receivedAck?.status||null,
+    deliveryState:receivedAck?'ACK_RECEIVED':ageSeconds>=45?'ACK_OVERDUE':'AWAITING_ACK'};
+  });
+  const unacknowledgedDeliveries=[...delivered.keys()].filter(id=>!acks.has(id));
+  const overdueAcks=unacknowledgedDeliveries.filter(id=>
+   now-delivered.get(id).deliveredAt>=45).length;
   return {enabled:enabled&&keyReady,status:!enabled?'OFF':!keyReady?'SECRET_NOT_CONFIGURED':'DEMO_INTENTS_ARMED',
-   sensorFreshness,
+   sensorFreshness,unacknowledgedCount:unacknowledgedDeliveries.length,
+   overdueAckCount:overdueAcks,recentDeliveries,deliveryNeverRetried:true,
    mode:'ISOLATED_DEMO_ONLY',created,delivered:pulled,rejected,
    brokerAcks:acks.size,filledAcks:[...acks.values()].filter(x=>x.hasBrokerReference).length,
    eaUnverifiedFillClaims:[...acks.values()].filter(x=>x.status==='UNVERIFIED_EA_FILL_CLAIM').length,
