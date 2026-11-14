@@ -205,7 +205,22 @@ export function createDemoTradeIntents({
   return {status:'RECORDED'};
  }
  function report(){
+  // Read-only telemetry. No broker/account IDs, passwords, signatures or prices.
+  // Distinguishes a connected executor from a simultaneously fresh broker feed.
+  const now=clock(),sensorFreshness={};
+  for(const symbol of ['XAUUSD','BTCUSD']){
+   const quote=quoteProvider(symbol);
+   const age=Number.isSafeInteger(quote?.timestamp)?now-quote.timestamp:null;
+   sensorFreshness[symbol]={
+    quoteAgeSeconds:age,
+    quoteFresh:age!==null&&age>=0&&age<=6,
+    demoAccountVerified:quote?.accountType==='DEMO'&&
+     Number.isSafeInteger(quote?.accountLogin)&&quote.accountLogin>0&&
+     typeof quote?.brokerSymbol==='string'&&quote.brokerSymbol.length>0
+   };
+  }
   return {enabled:enabled&&keyReady,status:!enabled?'OFF':!keyReady?'SECRET_NOT_CONFIGURED':'DEMO_INTENTS_ARMED',
+   sensorFreshness,
    mode:'ISOLATED_DEMO_ONLY',created,delivered:pulled,rejected,
    brokerAcks:acks.size,filledAcks:[...acks.values()].filter(x=>x.hasBrokerReference).length,
    eaUnverifiedFillClaims:[...acks.values()].filter(x=>x.status==='UNVERIFIED_EA_FILL_CLAIM').length,
