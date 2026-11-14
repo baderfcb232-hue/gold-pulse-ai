@@ -69,7 +69,7 @@ def parser():
     p.add_argument("--symbol", required=True, help="Exact MT5 broker symbol, e.g. XAUUSD.m")
     p.add_argument("--from", dest="from_date", type=strict_utc_date, required=True)
     p.add_argument("--to", dest="to_date", type=strict_utc_date, required=True)
-    p.add_argument("--spread-points", type=nonnegative, required=True)
+    p.add_argument("--spread-points", type=positive, required=True, help="Explicit positive modeled spread; zero would invalidate the PAPER replay")
     p.add_argument("--commission-per-lot", type=nonnegative, required=True,
                    help="Round-trip commission in account currency for 1 lot")
     p.add_argument("--slippage-points", type=nonnegative, required=True)
