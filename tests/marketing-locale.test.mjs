@@ -9,7 +9,7 @@ const read=file=>readFileSync(new URL('../public/'+file,import.meta.url),'utf8')
 const english=read('landing-en.html'),arabic=read('landing.html'),langJs=read('language-pref.js');
 test('English homepage is genuinely LTR, translated and accurately describes risk',()=>{
   assert.match(english,/<html lang="en" dir="ltr">/);
-  assert.match(english,/<title>NABD \| Clarity for Gold and Bitcoin<\/title>/);
+  assert.match(english,/<title>NABD Trading \| Gold and Bitcoin Market Analysis<\/title>/);
   assert.match(english,/How NABD works/);
   assert.match(english,/A clearer view/);
   assert.match(english,/Trading involves risk/);
