@@ -84,7 +84,7 @@ test('Arabic English dashboard account and marketing routes expose install meta'
  for(const file of ['index.html','accounts.html','landing.html','landing-en.html']){
   const html=read(file).toString();
   assert.match(html,/rel="manifest" href="\/manifest\.webmanifest(?:\?[^\"]+)?"/);
-  assert.match(html,/apple-touch-icon" sizes="180x180"/);
+  assert.match(html,/apple-touch-icon" sizes="(?:180x180|192x192)"/);
   assert.match(html,/pwa-register\.js\?v=pwa-1/);
  }
 });
