@@ -1,3 +1,4 @@
+import {trustedBrowserOrigin} from './trusted-browser-origin.mjs';
 import {randomUUID, randomBytes} from 'node:crypto';
 import {postgresAuthStore} from './auth-store.mjs';
 import {opaque, digest, equal, keyed, parseKey, encrypt, decrypt, hashPassword, checkPassword, newTotpSecret, totpStep} from './auth-crypto.mjs';
@@ -210,7 +211,7 @@ export function createAccounts({publicBase, clock = () => Date.now() / 1000, sto
     if (online && !healthy) await probeDatabase();
     if (!online || !healthy)
       return result({error: 'خدمة الحسابات غير متاحة مؤقتًا؛ جارٍ إعادة الاتصال بقاعدة البيانات.', ...status()}, 503);
-    if (req.method === 'POST' && path !== '/api/worker/mt5-heartbeat' && path !== '/api/telegram/subscriber-webhook' && req.headers.origin !== new URL(base).origin) return result({error: 'Origin rejected'}, 403);
+    if (req.method === 'POST' && path !== '/api/worker/mt5-heartbeat' && path !== '/api/telegram/subscriber-webhook' && !trustedBrowserOrigin(req.headers.origin, base)) return result({error: 'Origin rejected'}, 403);
     try {
       if (path === '/api/telegram/subscriber-webhook' && req.method === 'POST') {
         const secret=req.headers['x-telegram-bot-api-secret-token'];
