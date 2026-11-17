@@ -1,9 +1,18 @@
 export function formatSignal(p) {
   const price = v => v != null && Number.isFinite(Number(v)) ? String(v) : '—';
-  return [`${p.symbol} — ${p.side === 'BUY' ? 'شراء' : 'بيع'}`,
+  const source = typeof p.source === 'string' ? p.source.replace(/[\r\n\u0000-\u001F]/g, ' ').slice(0, 100).trim() : '';
+  const issued = Number.isFinite(p.issued_at) && p.issued_at > 0
+    ? new Date(p.issued_at * 1000).toISOString() : null;
+  return [`نبض | توصية متابعة وليست تأكيد تنفيذ`,
+    `${p.symbol} — ${p.side === 'BUY' ? 'شراء' : 'بيع'}`,
     `الدخول: ${price(p.entry)}`, `وقف الخسارة: ${price(p.sl)}`,
     `الهدف الأول: ${price(p.tp1)}`, `الهدف الثاني: ${price(p.tp2)}`,
-    `الفريم: ${p.timeframe || p.tf || '—'}`].join('\n');
+    `الفريم: ${p.timeframe || p.tf || '—'}`,
+    ...(source ? [`المصدر: ${source}`] : []),
+    ...(issued ? [`صدرت: ${issued} UTC`] : []),
+    'الأهداف قبل التكاليف؛ تكاليف الوسيط قد تؤثر في النتيجة.',
+    'هذه ليست ضمان ربح ولا تأكيدًا بفتح صفقة MT5.'
+  ].join('\n');
 }
 
 export function createTelegramPublisher({db, signals, enabled = false, clock = () => Date.now() / 1000,
