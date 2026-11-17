@@ -49,5 +49,8 @@ export function createTrafficDiagnostics({enabled = false, clock = () => Date.no
     stat.count++; stat.bytes += bytes; counters.set(key,stat);
     if(clock()-start >= intervalSeconds)flush();
   }
-  return {record,recordStream,flush};
+  function flushIfDue() {
+    if (enabled && counters.size && clock()-start >= intervalSeconds) flush();
+  }
+  return {record,recordStream,flush,flushIfDue};
 }
