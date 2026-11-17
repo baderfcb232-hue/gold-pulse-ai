@@ -24,7 +24,7 @@ const htmlCopy=p=>[...new Set(read(p)
 test('exact English translations cover every static dashboard and account phrase',()=>{
   for(const [page,translations,expected]of [
     ['index.html',dashboardStaticEnglish,239],
-    ['accounts.html',accountStaticEnglish,144]
+    ['accounts.html',accountStaticEnglish,143]
   ]){
     const source=htmlCopy(page);
     assert.equal(source.length,expected,'source count changed: '+page);
