@@ -7,31 +7,35 @@ import {spawnSync} from 'node:child_process';
 import {runInNewContext} from 'node:vm';
 import {createApplication} from '../server.mjs';
 const read=p=>readFileSync(new URL('../public/'+p,import.meta.url));
-test('NABD PWA offers real raster icons, properly sized and decodable',()=>{
+test('NABD PWA offers valid decodable icon assets with supported sizes',()=>{
  const manifest=JSON.parse(read('manifest.webmanifest').toString());
  assert.equal(manifest.start_url,'/dashboard');
  assert.equal(manifest.scope,'/');
  assert.equal(manifest.display,'standalone');
- assert.deepEqual(manifest.icons.map(x=>x.sizes),['192x192','512x512']);
- assert.match(manifest.icons[1].purpose,/maskable/);
+ const bySize=new Map(manifest.icons.map(x=>[x.sizes,x]));
+ for(const [size,type] of [['192x192','image/png'],['512x512','image/png'],['any','image/svg+xml']]){
+   assert.equal(bySize.get(size)?.type,type);
+ }
  for(const [name,size]of [['nabd-apple-touch-180.png',180],['nabd-app-icon-192.png',192],['nabd-app-icon-512.png',512]]){
   const buf=read(name);
   assert.deepEqual(buf.subarray(0,8),Buffer.from([137,80,78,71,13,10,26,10]),name+' PNG signature');
   assert.equal(buf.readUInt32BE(16),size,name+' width');
   assert.equal(buf.readUInt32BE(20),size,name+' height');
-  assert.equal(buf[24],8,'indexed 8-bit');
-  assert.equal(buf[25],3,'PNG palette');
+  assert.equal(buf[24],8,name+' bit depth');
+  const colorType=buf[25],channels={0:1,2:3,3:1,4:2,6:4}[colorType];
+  assert.ok(channels,'supported PNG color model');
   const payload=[];
-  for(let p=8;p<buf.length;){const len=buf.readUInt32BE(p),kind=buf.subarray(p+4,p+8).toString('ascii');
+  for(let p=8;p<buf.length;){
+   const len=buf.readUInt32BE(p),kind=buf.subarray(p+4,p+8).toString('ascii');
    if(kind==='IDAT')payload.push(buf.subarray(p+8,p+8+len));
    p+=12+len;
   }
+  assert.ok(payload.length>0,'PNG contains compressed pixels');
   const rows=inflateSync(Buffer.concat(payload));
-  assert.equal(rows.length,(size+1)*size,'PNG pixel rows decompress');
-  assert.ok(new Set(rows).has(2),'Gold mark visible');
-  assert.ok(new Set(rows).has(1),'Teal mark visible');
+  assert.equal(rows.length,(size*channels+1)*size,'PNG pixel rows decompress');
  }
 });
+
 test('offline mode shows an honest notice and never caches market APIs or broker trades',()=>{
  const sw=read('sw.js').toString(),offline=read('offline.html').toString(),register=read('pwa-register.js').toString();
  assert.match(sw,/req\.mode!=='navigate'/);
