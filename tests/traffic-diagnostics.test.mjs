@@ -28,3 +28,32 @@ test('disabled diagnostics are silent even for invalid routes',()=>{
  t.flush();
  assert.equal(calls,0);
 });
+
+test('SSE accounting measures event frames but never exposes contents or request details',()=>{
+  let current=100;
+  const out=[];
+  const meter=createTrafficDiagnostics({enabled:true,clock:()=>current,intervalSeconds:60,
+    log:(...parts)=>out.push(parts.join(' '))});
+  const secret='PRIVATE_USER_PRICE_TOKEN';
+  const frame='event: market\\ndata: {"price":123,"secret":"'+secret+'"}\\n\\n';
+  meter.recordStream('market',frame);
+  meter.recordStream('market',frame);
+  meter.recordStream('unexpected/'+secret,frame);
+  current=161;
+  meter.recordStream('news','event: news\\ndata: {}\\n\\n');
+  assert.equal(out.length,1);
+  assert.doesNotMatch(out[0],new RegExp(secret));
+  const summary=JSON.parse(out[0].slice(out[0].indexOf('{')));
+  assert.deepEqual(summary.groups.find(x=>x.key==='SSE:market:200'),{
+    key:'SSE:market:200',count:2,bytes:2*Buffer.byteLength(frame)});
+  assert.equal(summary.groups.find(x=>x.key==='SSE:other:200').count,1);
+  assert.equal(summary.groups.find(x=>x.key==='SSE:news:200').count,1);
+});
+
+test('SSE accounting is silent while disabled',()=>{
+  const events=[];
+  const meter=createTrafficDiagnostics({enabled:false,log:(...args)=>events.push(args)});
+  meter.recordStream('market','secret');
+  meter.flush();
+  assert.equal(events.length,0);
+});
