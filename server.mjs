@@ -1093,7 +1093,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         // Static, publicly shared assets can revalidate instead of downloading
         // identical bytes again. Never cache HTML, APIs, SSE or the service
         // worker; prices, login/session state and live execution stay fresh.
-        const revalidatable = path !== '/sw.js' && /\\.(?:js|css|svg|png|webmanifest)$/.test(path);
+        const revalidatable = path !== '/sw.js' && /\.(?:js|css|svg|png|webmanifest)$/.test(path);
         if (revalidatable) {
           const etag = '"' + createHash('sha256').update(payload).digest('hex') + '"';
           const cacheHeaders = {'Cache-Control':'public, no-cache, must-revalidate', ETag:etag};
