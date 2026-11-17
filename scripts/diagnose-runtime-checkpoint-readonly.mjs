@@ -1,6 +1,7 @@
 // Read-only production checkpoint diagnostic. NEVER changes Postgres tables or live SQLite data.
 // Run from a trusted host with AUTH_DATABASE_URL accessible, against a backed-up database.
-import {Pool} from 'pg';
+import pg from 'pg';
+const {Pool}=pg;
 import {DatabaseSync} from 'node:sqlite';
 import {createHash} from 'node:crypto';
 import {mkdtemp,writeFile,rm} from 'node:fs/promises';
