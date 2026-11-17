@@ -14,6 +14,7 @@ export async function createRuntimeBackup({connectionString, dataDir, pool: supp
   pool.on?.('error', () => {status.state = 'ERROR'; status.error = 'DATABASE_UNAVAILABLE';});
   const generation = randomUUID(), target = resolve(dataDir, 'nabd.sqlite');
   let timer, pending = Promise.resolve(), db, stopped = false, preservePrevious = false;
+  const recoveryIssues = [];
   try {
     await mkdir(dataDir, {recursive: true, mode: 0o700});
     await pool.query(`CREATE TABLE IF NOT EXISTS nabd_runtime_checkpoint
@@ -34,12 +35,15 @@ export async function createRuntimeBackup({connectionString, dataDir, pool: supp
         if (!candidate.payload) continue;
         const temporary = target + '.restore';
         try {
-          if (createHash('sha256').update(candidate.payload).digest('hex') !== candidate.digest) throw Error('CHECKPOINT_INTEGRITY');
+          if (createHash('sha256').update(candidate.payload).digest('hex') !== candidate.digest) throw Error('CHECKPOINT_DIGEST_MISMATCH');
           await writeFile(temporary, candidate.payload, {mode: 0o600});
           const check = new DatabaseSync(temporary);
-          try {if (check.prepare('PRAGMA quick_check').get().quick_check !== 'ok') throw Error('CHECKPOINT_INTEGRITY');}
+          try {if (check.prepare('PRAGMA quick_check').get().quick_check !== 'ok') throw Error('SQLITE_QUICK_CHECK_FAILED');}
           finally {check.close();}
-        } catch {await rm(temporary, {force: true}); continue;}
+        } catch (error) {
+          recoveryIssues.push(`${candidate.source}:${error?.message === 'CHECKPOINT_DIGEST_MISMATCH' ? 'DIGEST_MISMATCH' : error?.message === 'SQLITE_QUICK_CHECK_FAILED' ? 'SQLITE_INTEGRITY' : 'READ_OR_SQLITE_ERROR'}`);
+          await rm(temporary, {force: true}); continue;
+        }
         await rm(target + '-wal', {force: true}); await rm(target + '-shm', {force: true});
         await rename(temporary, target);
         status.lastSavedAt = new Date(candidate.saved_at).getTime() / 1000;
@@ -50,7 +54,13 @@ export async function createRuntimeBackup({connectionString, dataDir, pool: supp
       if (!restored) throw Error('CHECKPOINT_INTEGRITY');
     }
     status.state = row?.payload || row?.previous_payload ? 'RESTORED' : 'PENDING';
-  } catch {
+  } catch (error) {
+    // Emit only coarse recovery categories. Never log checkpoint bytes, connection strings,
+    // SQL rows, customer data or details of a database connection failure.
+    console.error('NABD checkpoint recovery classification:', JSON.stringify({
+      reason: error?.message === 'CHECKPOINT_INTEGRITY' ? 'NO_VALID_CHECKPOINT' : 'SETUP_OR_CONNECTION',
+      candidates: recoveryIssues
+    }));
     // Never silently start an empty history when recovery was expected.
     await pool.end(); throw Error('Runtime history recovery failed; refusing to overwrite the saved checkpoint.');
   }
