@@ -22,7 +22,7 @@ test('official NABD identity is consistently referenced by marketing, dashboard 
     const svg=read(path);
     assert.match(svg,/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
     assert.match(svg,/<\/svg>/);
-    assert.doesNotMatch(svg,/<script|https?:\/\//i,'official logo must not load external scripts');
+    assert.doesNotMatch(svg,/<script|(?:href|xlink:href)=["']https?:\/\//i,'official logo must not load external scripts');
   }
   assert.doesNotMatch(read('nabd-logo-en.svg'),/[\u0600-\u06FF]/,'English logo must not include Arabic text');
 });
