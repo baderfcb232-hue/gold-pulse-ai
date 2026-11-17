@@ -65,3 +65,29 @@ test('SSE byte-accounting does not mutate frames or cause logging when off',()=>
   assert.equal(meter.recordStream('state',source),undefined);
   assert.equal(source,copy,'meter must not modify the SSE frame sent to clients');
 });
+
+test('periodic flush emits a bounded summary after inactivity without new requests',()=>{
+  let now=100, output=[];
+  const t=createTrafficDiagnostics({enabled:true,clock:()=>now,intervalSeconds:300,
+    log:(...args)=>output.push(args.join(' '))});
+  t.record({method:'GET',url:'/api/state?token=SECRET'},200,'test');
+  now=399;
+  t.flushIfDue();
+  assert.equal(output.length,0);
+  now=400;
+  t.flushIfDue();
+  assert.equal(output.length,1);
+  assert.doesNotMatch(output[0],/SECRET|\/api\/state/);
+  t.flushIfDue();
+  assert.equal(output.length,1,'empty intervals should not spam');
+});
+
+test('periodic flush is silent while disabled',()=>{
+  let now=100, calls=0;
+  const t=createTrafficDiagnostics({enabled:false,clock:()=>now,intervalSeconds:300,
+    log:()=>calls++});
+  t.recordStream('state','secret');
+  now=500;
+  t.flushIfDue();
+  assert.equal(calls,0);
+});
