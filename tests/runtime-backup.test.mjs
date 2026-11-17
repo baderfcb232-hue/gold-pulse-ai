@@ -7,14 +7,21 @@ import {DatabaseSync} from 'node:sqlite';
 import {createRuntimeBackup} from '../runtime-backup.mjs';
 
 test('checkpoint survives runtime deletion and an older deployment cannot overwrite it', async () => {
-  let row = {}, generationBefore, rollbackCount = 0;
+  let row = {}, generationBefore, rollbackCount = 0, writes = 0, duplicateSkips = 0;
   const pool = () => ({async query(sql, values = []) {
     if (sql === 'BEGIN') {generationBefore = row.generation; return {};}
     if (sql === 'COMMIT') return {};
     if (sql === 'ROLLBACK') {row.generation = generationBefore; rollbackCount++; return {};}
     if (sql.startsWith('CREATE') || sql.startsWith('ALTER')) return {};
     if (sql.startsWith('INSERT')) {row.generation = values[0]; return {rows: [{...row}]};}
+    if (sql.startsWith('SELECT digest,saved_at')) return {
+      rows: row.generation === values[0] ? [{digest:row.digest,saved_at:row.saved_at}] : []};
     if (values[2] !== row.generation) return {rows: []};
+    if (row.payload && row.previous_payload && row.digest === values[1]) {
+      duplicateSkips++;
+      return {rows: []};
+    }
+    writes++;
     if (!values[3]) Object.assign(row, {previous_payload:row.payload,previous_digest:row.digest,previous_saved_at:row.saved_at});
     Object.assign(row, {payload: values[0], digest: values[1], saved_at: new Date()});
     return {rows: [{saved_at: row.saved_at}]};
@@ -51,6 +58,8 @@ test('checkpoint survives runtime deletion and an older deployment cannot overwr
     while(recovered.status().state==='RESTORED')await new Promise(r=>setTimeout(r,5));
     assert.deepEqual(row.previous_payload,validPrevious,'first save must not rotate the corrupt primary over the fallback');
     await recovered.close();recoveredDb.close();
+    assert.ok(duplicateSkips >= 1, 'unchanged checkpoint should skip redundant PostgreSQL rewrites');
+    assert.ok(writes >= 2, 'initial and previous checkpoint copies must still be persisted');
     assert.deepEqual(row.previous_payload,validPrevious,'first save after recovery must preserve the known-good copy');
     // Checksum corruption must fail closed instead of starting with empty history.
     row.digest = 'invalid';row.previous_digest='invalid';
