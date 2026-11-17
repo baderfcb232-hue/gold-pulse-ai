@@ -94,15 +94,29 @@ export async function createRuntimeBackup({connectionString, dataDir, pool: supp
       try {if (check.prepare('PRAGMA quick_check').get().quick_check !== 'ok') throw Error('CHECKPOINT_INTEGRITY');}
       finally {check.close();}
       const bytes = await readFile(temporary);
+      const digest = createHash('sha256').update(bytes).digest('hex');
+      // Keep the existing 30-second recovery point while skipping redundant full
+      // PostgreSQL bytea rewrites (and WAL) when the SQLite snapshot is unchanged.
+      // The generation check still fences superseded deployments.
       const result = await pool.query(`UPDATE nabd_runtime_checkpoint SET
         previous_payload=CASE WHEN $4::boolean THEN previous_payload ELSE payload END,
         previous_digest=CASE WHEN $4::boolean THEN previous_digest ELSE digest END,
         previous_saved_at=CASE WHEN $4::boolean THEN previous_saved_at ELSE saved_at END,
         payload=$1,digest=$2,saved_at=now()
-        WHERE id=1 AND generation=$3 RETURNING saved_at`, [bytes, createHash('sha256').update(bytes).digest('hex'), generation, preservePrevious]);
-      if (!result.rows.length) {status.state = 'SUPERSEDED'; clearInterval(timer); return;}
-      status.lastSavedAt = new Date(result.rows[0].saved_at).getTime() / 1000;
-      preservePrevious = false;
+        WHERE id=1 AND generation=$3 AND (payload IS NULL OR digest IS DISTINCT FROM $2)
+        RETURNING saved_at`, [bytes, digest, generation, preservePrevious]);
+      if (!result.rows.length) {
+        // Unchanged data and a superseded worker both yield no UPDATE rows.
+        // Verify fencing without writing any WAL or rotating the fallback copy.
+        const check = await pool.query(`SELECT digest,saved_at FROM nabd_runtime_checkpoint
+          WHERE id=1 AND generation=$1`, [generation]);
+        if (!check.rows.length) {status.state = 'SUPERSEDED'; clearInterval(timer); return;}
+        if (check.rows[0].digest !== digest) throw Error('CHECKPOINT_CONCURRENT_CHANGE');
+        status.lastSavedAt = new Date(check.rows[0].saved_at).getTime() / 1000;
+      } else {
+        status.lastSavedAt = new Date(result.rows[0].saved_at).getTime() / 1000;
+        preservePrevious = false;
+      }
       status.state = 'SAVED'; status.error = null;
     } catch {status.state = 'ERROR'; status.error = 'CHECKPOINT_FAILED';}
     finally {await rm(temporary, {force: true}).catch(() => {});}
