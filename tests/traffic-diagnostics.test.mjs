@@ -57,3 +57,11 @@ test('SSE accounting is silent while disabled',()=>{
   meter.flush();
   assert.equal(events.length,0);
 });
+
+test('SSE byte-accounting does not mutate frames or cause logging when off',()=>{
+  const source = 'event: state\\ndata: {"symbol":"XAUUSD","bid":4321.5}\\n\\n';
+  const copy = source;
+  const meter=createTrafficDiagnostics({enabled:false});
+  assert.equal(meter.recordStream('state',source),undefined);
+  assert.equal(source,copy,'meter must not modify the SSE frame sent to clients');
+});
