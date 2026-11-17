@@ -23,7 +23,9 @@ export async function createRuntimeBackup({connectionString, dataDir, pool: supp
       ADD COLUMN IF NOT EXISTS previous_payload bytea,
       ADD COLUMN IF NOT EXISTS previous_digest text,
       ADD COLUMN IF NOT EXISTS previous_saved_at timestamptz`);
-    // A new deployment fences writes from the old process, even while both are alive.
+    // Keep the fence update transactional: an invalid checkpoint must never evict
+    // a still-running instance's checkpoint writer during a failed deployment.
+    await pool.query('BEGIN');
     const result = await pool.query(`INSERT INTO nabd_runtime_checkpoint(id,generation) VALUES(1,$1)
       ON CONFLICT(id) DO UPDATE SET generation=EXCLUDED.generation RETURNING payload,digest,saved_at,previous_payload,previous_digest,previous_saved_at`, [generation]);
     const row = result.rows[0];
@@ -53,8 +55,10 @@ export async function createRuntimeBackup({connectionString, dataDir, pool: supp
       }
       if (!restored) throw Error('CHECKPOINT_INTEGRITY');
     }
+    await pool.query('COMMIT');
     status.state = row?.payload || row?.previous_payload ? 'RESTORED' : 'PENDING';
   } catch (error) {
+    await pool.query('ROLLBACK').catch(() => {});
     // Emit only coarse recovery categories. Never log checkpoint bytes, connection strings,
     // SQL rows, customer data or details of a database connection failure.
     console.error('NABD checkpoint recovery classification:', JSON.stringify({
