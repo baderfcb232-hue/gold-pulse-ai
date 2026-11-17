@@ -10,7 +10,12 @@ test('checkpoint survives runtime deletion and an older deployment cannot overwr
   let row = {};
   const pool = () => ({async query(sql, values = []) {
     if (sql.startsWith('CREATE') || sql.startsWith('ALTER')) return {};
-    if (sql.startsWith('INSERT')) {row.generation = values[0]; return {rows: [{...row}]};}
+    if (sql.startsWith('INSERT')) {row.generation = values[0]; return {rows: [{...row, has_payload: !!row.payload, has_previous_payload: !!row.previous_payload}]};}
+    if (sql.startsWith('SELECT')) return {rows: values[0] === row.generation ? [{payload: sql.includes('SELECT previous_payload') ? row.previous_payload : row.payload}] : []};
+    if (sql.startsWith('UPDATE nabd_runtime_checkpoint SET saved_at')) {
+      if (values[0] !== row.generation || values[1] !== row.digest) return {rows: []};
+      row.saved_at = new Date(); return {rows: [{saved_at: row.saved_at}]};
+    }
     if (values[2] !== row.generation) return {rows: []};
     if (!values[3]) Object.assign(row, {previous_payload:row.payload,previous_digest:row.digest,previous_saved_at:row.saved_at});
     Object.assign(row, {payload: values[0], digest: values[1], saved_at: new Date()});
@@ -29,12 +34,13 @@ test('checkpoint survives runtime deletion and an older deployment cannot overwr
     const newer = await createRuntimeBackup({pool: pool(), dataDir: second});
     newDb = new DatabaseSync(join(second, 'nabd.sqlite'));
     assert.equal(newDb.prepare('SELECT value FROM history').get().value, 'retained');
-    newer.start(newDb); await newer.close();
+    newDb.exec("INSERT INTO history VALUES('newer');");
+    await newer.start(newDb); await newer.close();
     oldDb.exec("INSERT INTO history VALUES('obsolete');");
     await old.close();
     assert.equal(old.status().state,'SUPERSEDED');
     const verify=new DatabaseSync(join(second,'nabd.sqlite'));
-    assert.equal(verify.prepare('SELECT count(*) AS n FROM history').get().n,1);verify.close();
+    assert.equal(verify.prepare('SELECT count(*) AS n FROM history').get().n,2);verify.close();
     // A damaged newest checkpoint must fall back to the previous valid one.
     newDb.close();newDb=null;
     const validPrevious = Buffer.from(row.previous_payload);
