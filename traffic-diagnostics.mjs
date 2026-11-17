@@ -1,5 +1,5 @@
 // Opt-in, bounded, privacy-safe HTTP response accounting.
-// Render edge maintenance pages, SSE streams and external CDNs are not included.
+// Render edge maintenance pages and external CDNs are not included.
 const groupFor = path => {
   if (path === '/api/mt5' || path === '/api/update') return 'mt5-ingest';
   if (path === '/api/mt5/btc-quote') return 'btc-quote';
@@ -37,5 +37,17 @@ export function createTrafficDiagnostics({enabled = false, clock = () => Date.no
     stat.count++; stat.bytes += bytes; counters.set(key, stat);
     if(clock()-start >= intervalSeconds)flush();
   }
-  return {record,flush};
+  function recordStream(event, frame) {
+    if (!enabled) return;
+    // Static event-class allowlist. Payload content stays in memory only long
+    // enough for a byte-count: never log quotes, signals, or user information.
+    const group = event === 'state' || event === 'market' || event === 'news' ? event : 'other';
+    const key = 'SSE:' + group + ':200';
+    const bytes = Buffer.isBuffer(frame) ? frame.byteLength :
+      typeof frame === 'string' ? Buffer.byteLength(frame) : 0;
+    const stat = counters.get(key) || {count:0, bytes:0};
+    stat.count++; stat.bytes += bytes; counters.set(key,stat);
+    if(clock()-start >= intervalSeconds)flush();
+  }
+  return {record,recordStream,flush};
 }
