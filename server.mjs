@@ -122,8 +122,11 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       if (res.writableLength > 512_000) {clients.delete(res); res.end(); continue;}
       try {
         const allowed = event === 'news' || await canReadSignals(res.nabdRequest);
-        if (!res.destroyed && !res.writableEnded && !res.writableNeedDrain)
-          res.write(`event: ${event}\ndata: ${JSON.stringify(protectSignals(event, value, allowed))}\n\n`);
+        if (!res.destroyed && !res.writableEnded && !res.writableNeedDrain) {
+          const frame = `event: ${event}\ndata: ${JSON.stringify(protectSignals(event, value, allowed))}\n\n`;
+          res.write(frame);
+          traffic.recordStream(event, frame);
+        }
       } catch {if (!res.destroyed) res.end(); clients.delete(res);}
     }
   };
@@ -750,9 +753,16 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
         res.writeHead(200, {...headers(req), 'Content-Type': 'text/event-stream; charset=utf-8', Connection: 'keep-alive', 'X-Accel-Buffering': 'no'});
         const allowed = await canReadSignals(req);
         res.nabdRequest = req;
-        res.write('event: state\ndata: ' + JSON.stringify(protectSignals('state', publicState(), allowed)) + '\n\n');
-        res.write('event: market\ndata: ' + JSON.stringify(protectSignals('market', marketState(), allowed)) + '\n\n');
-        res.write('event: news\ndata: ' + JSON.stringify(newsFeed.publicState()) + '\n\n');
+        const initialFrames = [
+          ['state', protectSignals('state', publicState(), allowed)],
+          ['market', protectSignals('market', marketState(), allowed)],
+          ['news', newsFeed.publicState()]
+        ];
+        for (const [event, value] of initialFrames) {
+          const frame = 'event: ' + event + '\ndata: ' + JSON.stringify(value) + '\n\n';
+          res.write(frame);
+          traffic.recordStream(event, frame);
+        }
         clients.add(res); req.on('close', () => clients.delete(res)); return;
       }
       if (path === '/api/candles' && req.method === 'GET') {
