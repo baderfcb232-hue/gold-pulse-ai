@@ -7,20 +7,24 @@ import {DatabaseSync} from 'node:sqlite';
 import {createRuntimeBackup} from '../runtime-backup.mjs';
 
 test('checkpoint survives runtime deletion and an older deployment cannot overwrite it', async () => {
-  let row = {};
+  let row = {}, generationBefore, rollbackCount = 0;
   const pool = () => ({async query(sql, values = []) {
+    if (sql === 'BEGIN') {generationBefore = row.generation; return {};}
+    if (sql === 'COMMIT') return {};
+    if (sql === 'ROLLBACK') {row.generation = generationBefore; rollbackCount++; return {};}
     if (sql.startsWith('CREATE') || sql.startsWith('ALTER')) return {};
     if (sql.startsWith('INSERT')) {row.generation = values[0]; return {rows: [{...row}]};}
     if (values[2] !== row.generation) return {rows: []};
     if (!values[3]) Object.assign(row, {previous_payload:row.payload,previous_digest:row.digest,previous_saved_at:row.saved_at});
     Object.assign(row, {payload: values[0], digest: values[1], saved_at: new Date()});
     return {rows: [{saved_at: row.saved_at}]};
-  }, async end() {}});
+  }, async connect() {return {query: this.query.bind(this), release() {}};}, async end() {}});
   const first = await mkdtemp(join(tmpdir(), 'nabd-old-'));
   const second = await mkdtemp(join(tmpdir(), 'nabd-new-'));
   let oldDb, newDb;
   try {
     const old = await createRuntimeBackup({pool: pool(), dataDir: first});
+    assert.equal(old.status().intervalSeconds, 30, 'recovery repair preserves the existing recovery-point interval');
     oldDb = new DatabaseSync(join(first, 'nabd.sqlite'));
     oldDb.exec("PRAGMA journal_mode=WAL; CREATE TABLE history(value text); INSERT INTO history VALUES('retained');");
     old.start(oldDb);
@@ -50,6 +54,10 @@ test('checkpoint survives runtime deletion and an older deployment cannot overwr
     assert.deepEqual(row.previous_payload,validPrevious,'first save after recovery must preserve the known-good copy');
     // Checksum corruption must fail closed instead of starting with empty history.
     row.digest = 'invalid';row.previous_digest='invalid';
+    const activeGeneration = row.generation;
     await assert.rejects(createRuntimeBackup({pool: pool(), dataDir: second}), /recovery failed/);
+    assert.equal(row.generation, activeGeneration, 'failed deployment must not fence a running checkpoint writer');
+    assert.equal(rollbackCount, 1, 'failed recovery must roll back the generation transaction');
   } finally {oldDb?.close(); newDb?.close(); await rm(first, {recursive: true, force: true}); await rm(second, {recursive: true, force: true});}
 });
+
