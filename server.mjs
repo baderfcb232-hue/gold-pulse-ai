@@ -1089,7 +1089,19 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       if (req.method === 'GET' && files[path]) {
         const type = path.endsWith('.js') ? 'text/javascript; charset=utf-8' : path.endsWith('.css') ? 'text/css; charset=utf-8'
           : path.endsWith('.webmanifest') ? 'application/manifest+json' : path.endsWith('.svg') ? 'image/svg+xml' : path.endsWith('.png') ? 'image/png' : 'text/html; charset=utf-8';
-        return send(req, res, 200, readFileSync(resolve(PUBLIC, files[path])), type);
+        const payload = readFileSync(resolve(PUBLIC, files[path]));
+        // Static, publicly shared assets can revalidate instead of downloading
+        // identical bytes again. Never cache HTML, APIs, SSE or the service
+        // worker; prices, login/session state and live execution stay fresh.
+        const revalidatable = path !== '/sw.js' && /\.(?:js|css|svg|png|webmanifest)$/.test(path);
+        if (revalidatable) {
+          const etag = '"' + createHash('sha256').update(payload).digest('hex') + '"';
+          const cacheHeaders = {'Cache-Control':'public, no-cache, must-revalidate', ETag:etag};
+          if (req.headers['if-none-match']?.split(',').some(value => value.trim() === etag))
+            return send(req, res, 304, '', type, cacheHeaders);
+          return send(req, res, 200, payload, type, cacheHeaders);
+        }
+        return send(req, res, 200, payload, type);
       }
       send(req, res, 404, {error: 'Not found'});
     } catch (e) {
@@ -1103,6 +1115,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   let lastRecommendationDiagnosticAt = -Infinity;
   const timer = setInterval(() => {
     try {
+      traffic.flushIfDue();
       // Operational diagnostics only: no credentials, account identifiers, orders or price levels.
       // This does not change publication, risk gates, market snapshots or execution.
       if (clock() - lastRecommendationDiagnosticAt >= 300) {
@@ -1157,7 +1170,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       broadcast();
     } catch (e) { console.error('State update failed:', e.message); }
   }, 5000); timer.unref();
-  const close = async () => {clearInterval(timer); for (const c of clients) c.end();
+  const close = async () => {clearInterval(timer); traffic.flush(); for (const c of clients) c.end();
     await Promise.allSettled([telegram.close(), marketFeed.close(), newsFeed.close(), researchWorker.close(), accounts.close()]);
     await new Promise(r => server.close(r)); await runtimeBackup?.close(); await commandJournal?.close(); await analysisArchive?.close(); db.close();};
   return {server, ingest, publicState, signalRows, db, close, marketFeed, analysisHistory, newsFeed, researchWorker, telegram, accounts,
