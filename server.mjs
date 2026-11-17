@@ -21,6 +21,7 @@ import {createResearchWorker} from './research-worker.mjs';
 import {brokerCostStatus} from './broker-costs.mjs';
 import {reviewPublication, publicationReasons} from './publication.mjs';
 import {createAccounts} from './auth.mjs';
+import {trustedBrowserOrigin} from './trusted-browser-origin.mjs';
 import {createRuntimeBackup} from './runtime-backup.mjs';
 import {createCommandJournal} from './command-journal.mjs';
 import {demoTradeDecision} from './demo-trade.mjs';
@@ -354,8 +355,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   function ownOrigin(req) {
     const origin = req.headers.origin;
     if (!origin) return true; // API clients must still present their independent bearer token.
-    const expected = publicBase ? new URL(publicBase).origin : `http://${req.headers.host}`;
-    return origin === expected;
+    return trustedBrowserOrigin(origin, publicBase);
   }
   const headers = req => ({
     'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
