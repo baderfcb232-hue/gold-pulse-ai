@@ -6,7 +6,7 @@ import {randomUUID, createHash} from 'node:crypto';
 // Recovery checkpoints are separate from the durable command journal requirement.
 export async function createRuntimeBackup({connectionString, dataDir, pool: suppliedPool} = {}) {
   const status = {state: connectionString || suppliedPool ? 'STARTING' : 'NOT_CONFIGURED', lastSavedAt: null,
-    intervalSeconds: 30, recoverySource: null, maxCopies: 2, error: null};
+    intervalSeconds: 300, recoverySource: null, maxCopies: 2, error: null};
   if (!connectionString && !suppliedPool) return {status: () => ({...status}), start() {}, async close() {}};
   const pg = suppliedPool ? null : (await import('pg')).default;
   const pool = suppliedPool || new pg.Pool({connectionString, max: 1, connectionTimeoutMillis: 7000,
@@ -78,7 +78,7 @@ export async function createRuntimeBackup({connectionString, dataDir, pool: supp
   return {status: () => ({...status}), start(database) {
     db = database;
     const queue = () => {pending = pending.then(save); return pending;};
-    queue(); timer = setInterval(queue, 30000); timer.unref();
+    queue(); timer = setInterval(queue, status.intervalSeconds * 1000); timer.unref();
   }, async close() {
     if (stopped) return; stopped = true; clearInterval(timer); await pending;
     if (db && status.state !== 'SUPERSEDED') await save();
