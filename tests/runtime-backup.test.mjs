@@ -7,8 +7,11 @@ import {DatabaseSync} from 'node:sqlite';
 import {createRuntimeBackup} from '../runtime-backup.mjs';
 
 test('checkpoint survives runtime deletion and an older deployment cannot overwrite it', async () => {
-  let row = {};
+  let row = {}, generationBefore, rollbackCount = 0;
   const pool = () => ({async query(sql, values = []) {
+    if (sql === 'BEGIN') {generationBefore = row.generation; return {};}
+    if (sql === 'COMMIT') return {};
+    if (sql === 'ROLLBACK') {row.generation = generationBefore; rollbackCount++; return {};}
     if (sql.startsWith('CREATE') || sql.startsWith('ALTER')) return {};
     if (sql.startsWith('INSERT')) {row.generation = values[0]; return {rows: [{...row}]};}
     if (values[2] !== row.generation) return {rows: []};
@@ -51,6 +54,9 @@ test('checkpoint survives runtime deletion and an older deployment cannot overwr
     assert.deepEqual(row.previous_payload,validPrevious,'first save after recovery must preserve the known-good copy');
     // Checksum corruption must fail closed instead of starting with empty history.
     row.digest = 'invalid';row.previous_digest='invalid';
+    const activeGeneration = row.generation;
     await assert.rejects(createRuntimeBackup({pool: pool(), dataDir: second}), /recovery failed/);
+    assert.equal(row.generation, activeGeneration, 'failed deployment must not fence a running checkpoint writer');
+    assert.equal(rollbackCount, 1, 'failed recovery must roll back the generation transaction');
   } finally {oldDb?.close(); newDb?.close(); await rm(first, {recursive: true, force: true}); await rm(second, {recursive: true, force: true});}
 });
