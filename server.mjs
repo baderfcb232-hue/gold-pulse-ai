@@ -22,6 +22,7 @@ import {brokerCostStatus} from './broker-costs.mjs';
 import {reviewPublication, publicationReasons} from './publication.mjs';
 import {createAccounts} from './auth.mjs';
 import {createRuntimeBackup} from './runtime-backup.mjs';
+import {createTrafficDiagnostics} from './traffic-diagnostics.mjs';
 import {createCommandJournal} from './command-journal.mjs';
 import {demoTradeDecision} from './demo-trade.mjs';
 import {automaticRiskSizing} from './automatic-risk.mjs';
@@ -363,9 +364,12 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
     'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-src https://www.tradingview-widget.com; base-uri 'none'; form-action 'self'; object-src 'none'",
     'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
   });
+  const traffic = createTrafficDiagnostics({enabled: process.env.NABD_HTTP_TRAFFIC_DIAGNOSTICS === 'true', clock});
   const send = (req, res, status, data, type = 'application/json; charset=utf-8', extra = {}) => {
+    const payload = type.startsWith('application/json') ? JSON.stringify(data) : data;
+    traffic.record(req, status, payload);
     res.writeHead(status, {...headers(req), 'Content-Type': type, ...extra});
-    res.end(type.startsWith('application/json') ? JSON.stringify(data) : data);
+    res.end(payload);
   };
   async function body(req, maximum = limit) {
     const length = Number(req.headers['content-length'] || 0);
