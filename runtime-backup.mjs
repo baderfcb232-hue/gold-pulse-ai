@@ -103,7 +103,7 @@ export async function createRuntimeBackup({connectionString, dataDir, pool: supp
         previous_digest=CASE WHEN $4::boolean THEN previous_digest ELSE digest END,
         previous_saved_at=CASE WHEN $4::boolean THEN previous_saved_at ELSE saved_at END,
         payload=$1,digest=$2,saved_at=now()
-        WHERE id=1 AND generation=$3 AND (payload IS NULL OR digest IS DISTINCT FROM $2)
+        WHERE id=1 AND generation=$3 AND (payload IS NULL OR previous_payload IS NULL OR digest IS DISTINCT FROM $2)
         RETURNING saved_at`, [bytes, digest, generation, preservePrevious]);
       if (!result.rows.length) {
         // Unchanged data and a superseded worker both yield no UPDATE rows.
