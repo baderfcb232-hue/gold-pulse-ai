@@ -18,7 +18,7 @@ test('legacy Telegram restores broker and reference delivery without costs or D1
   assert.equal(app.publicState().currentSignal, null); // strict broker/order review remains unchanged
   await app.telegram.publish();
   assert.equal(sent.length, 1);
-  assert.match(sent[0], /قبل التكاليف/);
+  assert.match(sent[0], /XAUUSD — شراء/); assert.match(sent[0], /وقف الخسارة:/);
   await app.telegram.publish(); assert.equal(sent.length, 1);
   now += 11;
   // Inject only the market feed boundary: the feed itself already enforces quote freshness.
