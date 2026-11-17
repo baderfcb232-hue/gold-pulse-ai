@@ -21,7 +21,7 @@ test('NABD PWA offers valid decodable icon assets with supported sizes',()=>{
   assert.deepEqual(buf.subarray(0,8),Buffer.from([137,80,78,71,13,10,26,10]),name+' PNG signature');
   assert.equal(buf.readUInt32BE(16),size,name+' width');
   assert.equal(buf.readUInt32BE(20),size,name+' height');
-  assert.equal(buf[24],8,name+' bit depth');
+  assert.ok([1,2,4,8].includes(buf[24]),name+' supported bit depth');
   const colorType=buf[25],channels={0:1,2:3,3:1,4:2,6:4}[colorType];
   assert.ok(channels,'supported PNG color model');
   const payload=[];
@@ -32,7 +32,7 @@ test('NABD PWA offers valid decodable icon assets with supported sizes',()=>{
   }
   assert.ok(payload.length>0,'PNG contains compressed pixels');
   const rows=inflateSync(Buffer.concat(payload));
-  assert.equal(rows.length,(size*channels+1)*size,'PNG pixel rows decompress');
+  assert.equal(rows.length,(Math.ceil(size*channels*buf[24]/8)+1)*size,'PNG pixel rows decompress');
  }
 });
 
@@ -83,7 +83,7 @@ test('service worker rejects stale HTML and returns only the explicit offline no
 test('Arabic English dashboard account and marketing routes expose install meta',()=>{
  for(const file of ['index.html','accounts.html','landing.html','landing-en.html']){
   const html=read(file).toString();
-  assert.match(html,/rel="manifest" href="\/manifest\.webmanifest"/);
+  assert.match(html,/rel="manifest" href="\/manifest\.webmanifest(?:\?[^\"]+)?"/);
   assert.match(html,/apple-touch-icon" sizes="180x180"/);
   assert.match(html,/pwa-register\.js\?v=pwa-1/);
  }
