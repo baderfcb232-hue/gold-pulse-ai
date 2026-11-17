@@ -1089,7 +1089,19 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       if (req.method === 'GET' && files[path]) {
         const type = path.endsWith('.js') ? 'text/javascript; charset=utf-8' : path.endsWith('.css') ? 'text/css; charset=utf-8'
           : path.endsWith('.webmanifest') ? 'application/manifest+json' : path.endsWith('.svg') ? 'image/svg+xml' : path.endsWith('.png') ? 'image/png' : 'text/html; charset=utf-8';
-        return send(req, res, 200, readFileSync(resolve(PUBLIC, files[path])), type);
+        const payload = readFileSync(resolve(PUBLIC, files[path]));
+        // Static, publicly shared assets can revalidate instead of downloading
+        // identical bytes again. Never cache HTML, APIs, SSE or the service
+        // worker; prices, login/session state and live execution stay fresh.
+        const revalidatable = path !== '/sw.js' && /\\.(?:js|css|svg|png|webmanifest)$/.test(path);
+        if (revalidatable) {
+          const etag = '"' + createHash('sha256').update(payload).digest('hex') + '"';
+          const cacheHeaders = {'Cache-Control':'public, no-cache, must-revalidate', ETag:etag};
+          if (req.headers['if-none-match']?.split(',').some(value => value.trim() === etag))
+            return send(req, res, 304, '', type, cacheHeaders);
+          return send(req, res, 200, payload, type, cacheHeaders);
+        }
+        return send(req, res, 200, payload, type);
       }
       send(req, res, 404, {error: 'Not found'});
     } catch (e) {
