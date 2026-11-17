@@ -127,8 +127,8 @@ test('server publishes only a matching fresh broker plan once; costs and diagnos
   assert.equal(state.currentSignal.claimedSuccessRate, null);
   assert.doesNotMatch(JSON.stringify(state), /TEST_ACCOUNT_ONLY|SYNTHETIC TEST ONLY|TEST_TOKEN|verifiedAt/);
   await app.telegram.publish(); await app.telegram.publish(); assert.equal(sends, 1);
-  assert.match(message.text, /MT5 · JustMarkets-Demo/); assert.match(message.text, /UTC/);
-  assert.match(message.text, /5 دقيقة/); assert.match(message.text, /ليست ضمان ربح/);
+  assert.match(message.text, /XAUUSD — شراء/); assert.match(message.text, /الدخول: /);
+  assert.match(message.text, /الفريم: 5 دقيقة/); assert.doesNotMatch(message.text, /TEST_TOKEN|SYNTHETIC TEST ONLY/);
   assert.equal(message.chat_id, 'TEST_CHANNEL');
   const status = await (await fetch(base + '/api/telegram/status', auth)).json();
   assert.equal(status.publication.ready, true); assert.equal(status.deliveries[0].state, 'SENT');

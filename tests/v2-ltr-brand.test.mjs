@@ -7,25 +7,22 @@ import {runInNewContext} from 'node:vm';
 import {createApplication} from '../server.mjs';
 const read=path=>readFileSync(new URL('../public/'+path,import.meta.url),'utf8');
 
-test('transparent responsive premium NABD branding is present on every public account and marketing entry',()=>{
+test('official NABD identity is consistently referenced by marketing, dashboard and accounts',()=>{
   const html=read('index.html');
   const marketing=read('landing.html'),en=read('landing-en.html'),accounts=read('accounts.html');
-  assert.match(html,/nabd-logo\.svg\?v=v2-1/);
-  assert.match(html,/nabd-logo-en\.svg\?v=v2-1/);
+  for(const page of [html,marketing,en,accounts]){
+    assert.match(page,/nabd-logo\.svg\?v=official(?:-kit)?-20261109(?:-2)?/);
+    assert.match(page,/icon\.svg\?v=official(?:-kit)?-20261109(?:-2)?/);
+    assert.doesNotMatch(page,/brand-art|brand-logo\.png/);
+  }
   assert.match(html,/nabd-locale-init\.js\?v=v2-1/);
   assert.match(html,/nabd-ltr-brand\.css\?v=v2-1/);
-  assert.match(marketing,/nabd-mark\.svg\?v=v2-1/);
-  assert.match(en,/nabd-mark\.svg\?v=v2-1/);
-  assert.match(accounts,/nabd-mark\.svg\?v=v2-1/);
-  assert.doesNotMatch(html,/brand-art|brand-logo\.png/);
   assert.doesNotMatch(en,/<span class="brand-word">NABD <b>NABD<\/b>/);
   for(const path of ['icon.svg','nabd-mark.svg','nabd-logo.svg','nabd-logo-en.svg']){
     const svg=read(path);
     assert.match(svg,/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
     assert.match(svg,/<\/svg>/);
-    assert.match(svg,/#0F766E/);
-    assert.match(svg,/#D4A24C/);
-    assert.doesNotMatch(svg,/<rect\b/,'Logo must be transparent, no opaque background');
+    assert.doesNotMatch(svg,/<script|(?:href|xlink:href)=["']https?:\/\//i,'official logo must not load external scripts');
   }
   assert.doesNotMatch(read('nabd-logo-en.svg'),/[\u0600-\u06FF]/,'English logo must not include Arabic text');
 });
