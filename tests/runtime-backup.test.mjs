@@ -21,6 +21,7 @@ test('checkpoint survives runtime deletion and an older deployment cannot overwr
   let oldDb, newDb;
   try {
     const old = await createRuntimeBackup({pool: pool(), dataDir: first});
+    assert.equal(old.status().intervalSeconds, 300, 'full SQLite checkpoints should run every 5 minutes to reduce PostgreSQL WAL churn');
     oldDb = new DatabaseSync(join(first, 'nabd.sqlite'));
     oldDb.exec("PRAGMA journal_mode=WAL; CREATE TABLE history(value text); INSERT INTO history VALUES('retained');");
     old.start(oldDb);
