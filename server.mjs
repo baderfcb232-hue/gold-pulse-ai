@@ -1103,6 +1103,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
   let lastRecommendationDiagnosticAt = -Infinity;
   const timer = setInterval(() => {
     try {
+      traffic.flushIfDue();
       // Operational diagnostics only: no credentials, account identifiers, orders or price levels.
       // This does not change publication, risk gates, market snapshots or execution.
       if (clock() - lastRecommendationDiagnosticAt >= 300) {
@@ -1157,7 +1158,7 @@ export function createApplication({dataDir = process.env.DATA_DIR || resolve(ROO
       broadcast();
     } catch (e) { console.error('State update failed:', e.message); }
   }, 5000); timer.unref();
-  const close = async () => {clearInterval(timer); for (const c of clients) c.end();
+  const close = async () => {clearInterval(timer); traffic.flush(); for (const c of clients) c.end();
     await Promise.allSettled([telegram.close(), marketFeed.close(), newsFeed.close(), researchWorker.close(), accounts.close()]);
     await new Promise(r => server.close(r)); await runtimeBackup?.close(); await commandJournal?.close(); await analysisArchive?.close(); db.close();};
   return {server, ingest, publicState, signalRows, db, close, marketFeed, analysisHistory, newsFeed, researchWorker, telegram, accounts,
