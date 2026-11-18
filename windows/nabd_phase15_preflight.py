@@ -7,6 +7,7 @@ open orders or passwords. Never calls trading APIs or changes terminal settings.
 import argparse
 from datetime import datetime, timedelta, timezone
 import json
+import math
 import sys
 import time
 
@@ -76,10 +77,20 @@ def diagnose(args, mt5, now=None):
                 bars = []
                 prev = -1
                 disorder = False
+                invalid_ohlc = False
                 for row in data:
                     at = int(row["time"])
-                    if at <= prev:
+                    opening = float(row["open"])
+                    high = float(row["high"])
+                    low = float(row["low"])
+                    closing = float(row["close"])
+                    if at <= prev or at < 0 or at % step != 0:
                         disorder = True
+                    if (not all(math.isfinite(v) and v > 0
+                                for v in (opening, high, low, closing))
+                            or high < max(opening, closing)
+                            or low > min(opening, closing)):
+                        invalid_ohlc = True
                     prev = at
                     if at + step <= now:
                         bars.append(at)
@@ -91,7 +102,7 @@ def diagnose(args, mt5, now=None):
                 covered = bool(inside and inside[0] <= requested_start.timestamp()+5*86400
                                and inside[-1]+step >= now-5*86400)
                 gaps = sum(b-a>7*86400 for a,b in zip(inside, inside[1:]))
-                ready = enough and covered and not disorder and gaps == 0
+                ready = enough and covered and not disorder and not invalid_ohlc and gaps == 0
                 output["frames"][tf] = {
                     "count": count, "earliestUTC": (datetime.fromtimestamp(bars[0],timezone.utc)
                         .isoformat() if bars else None),
@@ -99,6 +110,7 @@ def diagnose(args, mt5, now=None):
                         .isoformat() if bars else None),
                     "warmupBars": warmup, "minimumTotalBars": minimum,
                     "dateRangeCovered": covered, "longGaps": gaps,
+                    "invalidOHLC": invalid_ohlc, "invalidOrderingOrAlignment": disorder,
                     "status": "READY" if ready else "NOT_READY"
                 }
                 if count < minimum:
@@ -109,6 +121,8 @@ def diagnose(args, mt5, now=None):
                     output["issues"].append(tf + "_TWO_YEAR_RANGE_INCOMPLETE")
                 if disorder or gaps:
                     output["issues"].append(tf + "_HISTORY_GAPS_OR_ORDER")
+                if invalid_ohlc:
+                    output["issues"].append(tf + "_INVALID_OHLC")
             except (ValueError, TypeError, KeyError, AttributeError) as exc:
                 output["frames"][tf] = {"status": "INVALID_HISTORY"}
                 output["issues"].append(tf + "_HISTORY_READ_ERROR")
