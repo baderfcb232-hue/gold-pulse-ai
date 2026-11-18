@@ -16,6 +16,8 @@ on:
       - 'agentic-experimental/phase5-decision-audit.test.mjs'
       - 'agentic-experimental/phase6-forward-evaluation.mjs'
       - 'agentic-experimental/phase6-forward-evaluation.test.mjs'
+      - 'agentic-experimental/phase7-strategy-comparison.mjs'
+      - 'agentic-experimental/phase7-strategy-comparison.test.mjs'
       - 'agentic-experimental/demo-auto-brain.mjs'
       - 'agentic-experimental/render-connectivity-server.mjs'
       - 'agentic-experimental/shadow-pipeline.mjs'
