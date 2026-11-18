@@ -7,6 +7,7 @@ Optional: set NABD_TEST_GOLD_SYMBOL / NABD_TEST_BTC_SYMBOL to broker names.
 Writes sanitized research snapshots to NABD_TEST_SENSOR_OUTPUT_DIR locally.
 """
 import json
+import math
 import os
 import sys
 import time
@@ -32,7 +33,7 @@ def require_demo(mt5):
 def closed_bars(mt5, symbol, timeframe, now):
     unit = {"M5": 300, "M15": 900, "H1": 3600, "H4": 14400}[timeframe]
     interval = getattr(mt5, "TIMEFRAME_" + timeframe)
-    bars = mt5.copy_rates_from_pos(symbol, interval, 1, 100)
+    bars = mt5.copy_rates_from_pos(symbol, interval, 1, 240)
     if bars is None or len(bars) < 2:
         raise RuntimeError("BROKER_CANDLES_MISSING_" + timeframe)
     result = []
@@ -46,6 +47,17 @@ def closed_bars(mt5, symbol, timeframe, now):
             raise RuntimeError("UNFINISHED_CANDLE_" + timeframe)
         result.append(item)
     result.sort(key=lambda x: x["time"])
+    prior = -1
+    for item in result:
+        if (item["time"] <= prior or item["time"] % unit != 0 or
+                not all(math.isfinite(item[k]) and item[k] > 0 for k in
+                        ("open", "high", "low", "close")) or
+                item["high"] < max(item["open"], item["close"]) or
+                item["low"] > min(item["open"], item["close"])):
+            raise RuntimeError("INVALID_CANDLE_" + timeframe)
+        prior = item["time"]
+    if now - (result[-1]["time"] + unit) > unit * 2:
+        raise RuntimeError("STALE_CANDLES_" + timeframe)
     return result
 
 def capture(mt5, canonical, broker_symbol, now, server):

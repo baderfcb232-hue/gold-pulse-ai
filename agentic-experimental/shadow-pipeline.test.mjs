@@ -31,8 +31,8 @@ test('missing higher timeframes never invokes model',async()=>{
  const {candlesM15,...notMulti}=demo;
  const r=await p.assess({snapshot:notMulti,proposal});
  assert.equal(called,false);assert.equal(r.status,'BLOCKED');
- assert.equal(r.phase,'MARKET_CONTEXT');
- assert.ok(r.reasons.includes('UNVERIFIED_CHART_CONTEXT'));
+ assert.equal(r.phase,'DEMO_SENSOR');
+ assert.ok(r.reasons.includes('MISSING_M15_CANDLES'));
 });
 test('LIVE broker cannot invoke model',async()=>{
  let called=false;

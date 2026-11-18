@@ -111,3 +111,26 @@ test('successful observation clears lastReject but preserves last invalid snapsh
  assert.equal(report.accepted,1);
  assert.equal(report.rejected,1);
 });
+
+test('stale H1 blocks only gold while independent BTC remains usable',()=>{
+ const ingest=createDemoIngest({secret,clock:()=>now});
+ const staleGold={...snapshot,candlesH1:bars(3600).map(c=>({...c,time:c.time-10800}))};
+ const packet=JSON.stringify({source:'ISOLATED_MT5_DEMO_SENSOR',capturedAt:now,
+  ordersSupported:false,symbols:{XAUUSD:staleGold,BTCUSD:{...snapshot,symbol:'BTCUSD'}}});
+ const result=ingest.receive(signed(packet));
+ assert.equal(result.status,'OBSERVED');
+ assert.deepEqual(result.symbols,['BTCUSD']);
+ assert.deepEqual(result.skippedSymbols,['XAUUSD']);
+ assert.equal(ingest.getLatest('XAUUSD'),null);
+ assert.equal(ingest.report().invalidSnapshotCounts.STALE_H1_CANDLES,1);
+});
+test('sensor does not trust fresh quote with missing or misaligned timeframe bars',()=>{
+ const ingest=createDemoIngest({secret,clock:()=>now});
+ const missing=ingest.receive(signed(body({...snapshot,candlesH4:null})));
+ assert.equal(missing.code,'MARKET_SNAPSHOT_INVALID');
+ assert.equal(ingest.report().invalidSnapshotCounts.MISSING_H4_CANDLES,1);
+ const wrong=ingest.receive(signed(body({...snapshot,
+  candlesM15:bars(900).map((bar,i)=>i===0?{...bar,time:bar.time+1}:bar)})));
+ assert.equal(wrong.code,'MARKET_SNAPSHOT_INVALID');
+ assert.equal(ingest.report().invalidSnapshotCounts.INVALID_M15_CANDLES,1);
+});
