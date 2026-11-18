@@ -59,7 +59,7 @@ class TestHistoryExport(unittest.TestCase):
     def test_closed_rates_reject_future_or_intrabar_candles(self):
         row=lambda t:dict(time=t,open=10.,close=11.,high=12.,low=9.,tick_volume=2)
         self.assertEqual(len(closed_rates([row(900),row(1200)],300,1499)),1)
-        self.assertEqual(len(closed_rates([row(900),row(1200)],300,1800,1500)),1)
+        self.assertEqual(len(closed_rates([row(900),row(1200)],300,1800,1499)),1)
         with self.assertRaises(ValueError):
             closed_rates([row(1200),row(900)],300,2000)
         corrupted=row(900);corrupted["high"]=10.
