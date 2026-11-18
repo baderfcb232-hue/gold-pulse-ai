@@ -166,7 +166,7 @@ test('live Demo AI blocks stale broker tick, stale closed candles and invalid fr
  assert.ok(validateResearchContext(staleTick,END).reasons.includes('BROKER_QUOTE_STALE_OR_MISSING'));
  const missingTick={...ctx,quoteObservedAt:undefined};
  assert.ok(validateResearchContext(missingTick,END).reasons.includes('BROKER_QUOTE_STALE_OR_MISSING'));
- const staleH1={...ctx,candlesH1:makeBars(24,3600).map(b=>({...b,time:b.time-7200}))};
+ const staleH1={...ctx,candlesH1:makeBars(24,3600).map(b=>({...b,time:b.time-10800}))};
  assert.ok(validateResearchContext(staleH1,END).reasons.includes('STALE_CLOSED_H1'));
  const openM5={...ctx,candlesM5:[...ctx.candlesM5.slice(0,-1),{...ctx.candlesM5.at(-1),time:END}]};
  assert.ok(validateResearchContext(openM5,END).reasons.includes('INVALID_CLOSED_M5'));
