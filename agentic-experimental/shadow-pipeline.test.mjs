@@ -11,13 +11,13 @@ const demo={environment:'EXPERIMENTAL_NABD_AGENTIC',accountType:'DEMO',execution
  bid:100,ask:100.2,tickSize:0.01,tickValue:1,contractSize:1,
  candlesM5:bars(300),candlesM15:bars(900),candlesH1:bars(3600),candlesH4:bars(14400)};
 const proposal={side:'BUY',balance:2000,riskPercent:0.4,entry:100,stop:98,target:106,
- spreadLimit:0.5,positionsForSymbol:0};
+ spreadLimit:0.5,positionsForSymbol:0,dailyLossPercent:0,dailyEntries:0};
 test('isolated pipeline validates demo frames then analyzes and reviews shadow risk',async()=>{
  let calls=0;
  const p=createShadowResearchPipeline({clock:()=>now,brain:{analyze:async ctx=>{
   calls++;assert.equal(ctx.multiTimeframeVerified,true);
   assert.equal(ctx.candlesH4.length,3);
-  return {status:'RESEARCH_ANALYSIS_ONLY',plan:{stance:'BUY_WATCH',confidence:0.7}};
+  return {status:'RESEARCH_ANALYSIS_ONLY',plan:{stance:'BUY_WATCH',confidence:0.7,thesis:'Closed candle upward evidence',counterThesis:'The trend may reverse',evidence:['Closed M5 candle'],invalidation:'Support fails'}};
  }}});
  const r=await p.assess({snapshot:demo,proposal});
  assert.equal(calls,1);assert.equal(r.status,'SHADOW_RESEARCH_ONLY');
@@ -45,8 +45,8 @@ test('AI WAIT decision blocks risk admission and keeps all order paths disabled'
   status:'RESEARCH_ANALYSIS_ONLY',plan:{stance:'WAIT',confidence:1}})}});
  const r=await p.assess({snapshot:demo,proposal});
  assert.equal(r.status,'BLOCKED');
- assert.ok(r.reasons.includes('AI_HYPOTHESIS_NOT_ALIGNED'));
- assert.equal(r.order,null);assert.equal(r.risk.lotSize,null);
+ assert.ok(r.reasons.includes('AI_DECISION_WAIT'));
+ assert.equal(r.order,null);assert.equal(r.risk,null);
 });
 test('delayed news blocks AI analysis',async()=>{
  let called=false;
