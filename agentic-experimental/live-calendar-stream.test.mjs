@@ -79,3 +79,49 @@ test('configuration report identifies missing streaming entitlements without lea
  assert.equal(report.noKeyAlternativeRealTimeConsensusAvailable,false);
  assert.equal(report.realtimeNewsTradingEnabled,false);
 });
+
+test('early Actual and conflicting normalized Forecast fields are rejected',()=>{
+ const earlier=parseStreamCalendarMessage({...base,date:new Date((now+60)*1000).toISOString()},now);
+ assert.equal(earlier.accepted,false);
+ assert.equal(earlier.reason,'ACTUAL_BEFORE_SCHEDULE');
+ const contradictory=parseStreamCalendarMessage({...base,'forecast ':'9.9%'},now);
+ assert.equal(contradictory.reason,'CONFLICTING_FIELDS');
+});
+test('after-release Forecast revision cannot replace immutable first pre-release observation',async()=>{
+ const release=now+120;
+ let time=now;
+ const messages=new Map(),stored=new Map();
+ const journal={
+  async saveForecast(e){await new Promise(resolve=>setImmediate(resolve));if(!stored.has(e.id))stored.set(e.id,{raw:e.raw,observedAt:e.observedAt});},
+  async saveActual(){},
+  async firstForecast(e){return stored.get(e.id)||null;}
+ };
+ const socket={addEventListener:(kind,fn)=>messages.set(kind,fn),send:()=>{},close:()=>{}};
+ const stream=createLiveCalendarStream({key:'test',secret:'test',clock:()=>time,
+  journalProvider:()=>journal,wsFactory:()=>socket});
+ const event={...base,date:new Date(release*1000).toISOString(),actual:'',forecast:'3.0%'};
+ stream.connect();messages.get('open')();
+ messages.get('message')({data:JSON.stringify(event)});
+ time=release+2;
+ messages.get('message')({data:JSON.stringify({...event,actual:'3.5%',forecast:'3.4%'})});
+ // First message must finish saving its historical baseline before second is recorded.
+ for(let i=0;i<12;i++)await new Promise(resolve=>setImmediate(resolve));
+ const observed=stream.report().latestEvents[0];
+ assert.equal(observed.forecastAsObservedBeforeRelease,'3.0%');
+ assert.equal(observed.comparisonStatus,'PRE_RELEASE_FORECAST_RECORDED');
+ assert.ok(Math.abs(observed.comparison.difference-0.5)<1e-8);
+ assert.equal(observed.eligibleForExecution,false);
+ stream.stop();
+});
+test('Actual seen without pre-release forecast never gets a trusted surprise',async()=>{
+ const listeners=new Map();
+ const socket={addEventListener:(k,fn)=>listeners.set(k,fn),send:()=>{},close:()=>{}};
+ const stream=createLiveCalendarStream({key:'test',secret:'test',clock:()=>now,wsFactory:()=>socket});
+ stream.connect();listeners.get('open')();
+ listeners.get('message')({data:JSON.stringify({...base,forecast:'3.1%'})});
+ for(let i=0;i<5;i++)await new Promise(resolve=>setImmediate(resolve));
+ const row=stream.report().latestEvents[0];
+ assert.equal(row.comparison,null);
+ assert.equal(row.comparisonStatus,'NO_POINT_IN_TIME_BASELINE');
+ assert.equal(row.eligibleForExecution,false);stream.stop();
+});
