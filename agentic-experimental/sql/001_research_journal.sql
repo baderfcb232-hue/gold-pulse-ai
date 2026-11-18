@@ -65,4 +65,35 @@ ALTER TABLE agentic_research.shadow_analysis_decisions
 CREATE INDEX IF NOT EXISTS idx_shadow_decisions_recent
  ON agentic_research.shadow_analysis_decisions (analyzed_at DESC);
 
+-- Phase 8: durable, isolated forward-research outcomes. No broker orders or credentials.
+CREATE TABLE IF NOT EXISTS agentic_research.demo_forward_evaluations (
+ symbol TEXT NOT NULL CHECK (symbol IN ('XAUUSD','BTCUSD')),
+ closed_bar_at TIMESTAMPTZ NOT NULL,
+ predicted_at TIMESTAMPTZ NOT NULL,
+ baseline_tick_at TIMESTAMPTZ NOT NULL,
+ horizon_at TIMESTAMPTZ NOT NULL,
+ baseline_mid DOUBLE PRECISION NOT NULL CHECK (baseline_mid > 0 AND baseline_mid < 1000000000),
+ ai_stance TEXT NOT NULL CHECK (ai_stance IN ('BUY_WATCH','SELL_WATCH')),
+ confidence DOUBLE PRECISION NOT NULL CHECK (confidence BETWEEN 0 AND 1),
+ ema_stance TEXT NOT NULL CHECK (ema_stance IN ('BUY_WATCH','SELL_WATCH','WAIT','UNVERIFIED')),
+ agreement TEXT NOT NULL CHECK (agreement IN ('AGREED','DISAGREED','UNVERIFIED')),
+ outcome_status TEXT NOT NULL DEFAULT 'PENDING' CHECK (outcome_status IN ('PENDING','SCORED','EXPIRED')),
+ outcome_tick_at TIMESTAMPTZ,
+ direction TEXT CHECK (direction IS NULL OR direction IN ('UP','DOWN','FLAT')),
+ hit BOOLEAN,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+ PRIMARY KEY (symbol,closed_bar_at),
+ CONSTRAINT future_after_baseline CHECK (horizon_at > predicted_at AND baseline_tick_at <= predicted_at),
+ CONSTRAINT outcome_consistent CHECK (
+   (outcome_status='PENDING' AND outcome_tick_at IS NULL AND direction IS NULL AND hit IS NULL)
+   OR (outcome_status='SCORED' AND outcome_tick_at IS NOT NULL AND direction IS NOT NULL AND hit IS NOT NULL)
+   OR (outcome_status='EXPIRED' AND outcome_tick_at IS NOT NULL AND direction IS NULL AND hit IS NULL)
+ )
+);
+CREATE INDEX IF NOT EXISTS idx_demo_forward_due
+ ON agentic_research.demo_forward_evaluations(symbol,horizon_at)
+ WHERE outcome_status='PENDING';
+CREATE INDEX IF NOT EXISTS idx_demo_forward_recent
+ ON agentic_research.demo_forward_evaluations(predicted_at DESC);
+
 COMMIT;
