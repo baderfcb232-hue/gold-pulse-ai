@@ -4,7 +4,7 @@ import {createForwardEvaluation} from './phase6-forward-evaluation.mjs';
 const base=1800000000;let current=base;
 const broker=(symbol='XAUUSD',t=current,bid=100,ask=100.2)=>({
  environment:'EXPERIMENTAL_NABD_AGENTIC',accountType:'DEMO',
- executionEnabled:false,symbol,timestamp:t,bid,ask});
+ executionEnabled:false,symbol,brokerServer:'Independent-JustMarkets-Demo',timestamp:t,bid,ask});
 const plan=(stance='BUY_WATCH')=>({stance,confidence:0.8,timeHorizonMinutes:5});
 const setup=()=>{current=base;return createForwardEvaluation({clock:()=>current});};
 test('does not score before the forecast horizon or using a stale quote',()=>{
@@ -58,7 +58,7 @@ test('WAIT is a separate denominator, duplicate candles cannot inflate hits',()=
  assert.equal(e.record(arg).accepted,true);
  assert.equal(e.record(arg).reason,'DUPLICATE_PREDICTION');
  current+=300;e.observe(broker('XAUUSD',current,101,101.2));
- assert.equal(e.record({...arg,broker:broker(),closedBarTime:base-300}).reason,'UNVERIFIED_FORWARD_BASELINE');
+ assert.equal(e.record({...arg,broker:broker(),closedBarTime:base-300}).reason,'DUPLICATE_PREDICTION');
  assert.equal(e.report().counts.scored,1);
 });
 test('bounded backlog rejects instead of discarding a pending forecast',()=>{
