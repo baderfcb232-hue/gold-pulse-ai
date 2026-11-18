@@ -4,6 +4,28 @@ import {validateHistoricalResearchContext} from './historical-replay-context.mjs
 const finite=x=>typeof x==='number'&&Number.isFinite(x);
 const validTime=x=>Number.isSafeInteger(x)&&x>0;
 const fail=(reasons)=>({status:'BLOCKED',reasons,plan:null,tradeAllowed:false,order:null});
+const LIVE_FRAMES=Object.freeze({M5:300,M15:900,H1:3600,H4:14400});
+function verifyLiveBrokerFrames(ctx,now){
+ const problems=[];
+ for(const [tf,seconds] of Object.entries(LIVE_FRAMES)){
+  const bars=ctx['candles'+tf];
+  if(!Array.isArray(bars)||bars.length<24){problems.push('MISSING_CLOSED_'+tf);continue;}
+  let previous=-1,invalid=false;
+  for(const b of bars){
+   if(!b||!Number.isSafeInteger(b.time)||b.time<=previous||
+      b.time%seconds!==0||b.time+seconds>now||
+      ![b.open,b.high,b.low,b.close].every(v=>finite(v)&&v>0)||
+      b.high<Math.max(b.open,b.close)||b.low>Math.min(b.open,b.close)){
+    invalid=true;break;
+   }
+   previous=b.time;
+  }
+  if(invalid)problems.push('INVALID_CLOSED_'+tf);
+  else if(now-(bars.at(-1).time+seconds)>seconds*2)
+   problems.push('STALE_CLOSED_'+tf);
+ }
+ return problems;
+}
 export function validateResearchContext(ctx,now){
  const reasons=[];
  if(!ctx||typeof ctx!=='object')return fail(['NO_MARKET_CONTEXT']);
@@ -17,6 +39,9 @@ export function validateResearchContext(ctx,now){
     (finite(ctx.ask)&&finite(ctx.bid)&&ctx.ask-ctx.bid>ctx.spreadLimit))
   reasons.push('BROKER_SPREAD_TOO_WIDE');
  if(!ctx.candlesVerified||!ctx.multiTimeframeVerified)reasons.push('UNVERIFIED_CHART_CONTEXT');
+ if(!validTime(ctx.quoteObservedAt)||ctx.quoteObservedAt>now||now-ctx.quoteObservedAt>5)
+  reasons.push('BROKER_QUOTE_STALE_OR_MISSING');
+ reasons.push(...verifyLiveBrokerFrames(ctx,now));
  if(ctx.news?.classification==='REALTIME'){
   if(!ctx.news.authorized||!ctx.news.releaseTimeVerified||
      !ctx.news.preReleaseForecastCaptured)reasons.push('UNVERIFIED_LIVE_NEWS');

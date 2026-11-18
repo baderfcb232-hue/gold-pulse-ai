@@ -7,6 +7,7 @@ on:
       - 'windows/nabd_phase15_mt5_history_export.py'
       - 'windows/nabd_phase15_preflight.py'
       - 'windows/test_phase15_preflight.py'
+      - 'tests/test_phase15_market_history_preflight.py'
       - 'windows/NABD_Check_Demo_History.cmd'
       - 'scripts/package-phase15-agentic-lab.py'
       - 'scripts/phase15-browser-qa.mjs'
@@ -35,6 +36,7 @@ jobs:
           node --test agentic-experimental/agentic-historical-lab.test.mjs strategy-lab.test.mjs strategy-lab-static.test.mjs tests/backtest.test.mjs
           python3 -m unittest discover -s windows -p 'test_phase15_history_export.py' -v
           python3 -m unittest discover -s windows -p 'test_phase15_preflight.py' -v
+          python3 -m unittest discover -s tests -p 'test_phase15_market_history_preflight.py' -v
       - name: Assemble isolated Windows distribution
         run: |
           python3 scripts/package-phase15-agentic-lab.py

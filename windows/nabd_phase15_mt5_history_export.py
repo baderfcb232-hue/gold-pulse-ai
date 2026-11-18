@@ -8,6 +8,7 @@ the report is NOT independent broker attestation.
 import argparse
 from datetime import datetime, timedelta, timezone
 import json
+import math
 from pathlib import Path
 import sys
 import time
@@ -50,7 +51,9 @@ def closed_rates(raw, seconds, now, until=None):
         stamp = int(item["time"])
         high, low = float(item["high"]), float(item["low"])
         opening, closing = float(item["open"]), float(item["close"])
-        if stamp <= last or opening <= 0 or closing <= 0 or low <= 0 or high <= 0:
+        if (stamp <= last or stamp < 0 or stamp % seconds != 0 or
+                not all(math.isfinite(v) and v > 0 for v in
+                        (opening, closing, low, high))):
             raise ValueError("Invalid/unsorted MT5 historical candle")
         if high < max(opening, closing) or low > min(opening, closing) or high < low:
             raise ValueError("Inconsistent broker OHLC data")
