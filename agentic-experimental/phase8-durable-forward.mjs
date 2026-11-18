@@ -42,14 +42,14 @@ export function createDurableForwardStore({query,clock=()=>Math.floor(Date.now()
   // Atomic WHERE PENDING prevents double scoring after concurrent requests/restarts.
   const r=await query(
    `UPDATE agentic_research.demo_forward_evaluations
-       SET outcome_status=CASE WHEN $3 <= horizon_at + ($4::integer * interval '1 second')
+       SET outcome_status=CASE WHEN to_timestamp($3) <= horizon_at + ($4::integer * interval '1 second')
              THEN 'SCORED' ELSE 'EXPIRED' END,
            outcome_tick_at=to_timestamp($3),
-           direction=CASE WHEN $3 <= horizon_at + ($4::integer * interval '1 second')
+           direction=CASE WHEN to_timestamp($3) <= horizon_at + ($4::integer * interval '1 second')
              THEN CASE WHEN $2 > baseline_mid THEN 'UP'
                        WHEN $2 < baseline_mid THEN 'DOWN' ELSE 'FLAT' END
              ELSE NULL END,
-           hit=CASE WHEN $3 <= horizon_at + ($4::integer * interval '1 second')
+           hit=CASE WHEN to_timestamp($3) <= horizon_at + ($4::integer * interval '1 second')
              THEN CASE WHEN $2=baseline_mid THEN FALSE
                        WHEN ai_stance='BUY_WATCH' THEN $2>baseline_mid
                        ELSE $2<baseline_mid END
