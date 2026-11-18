@@ -33,3 +33,36 @@ test('production-name URL rejected before migrations', {skip:!url},async()=>{
  const result=await connectResearchJournal({url:parsed.toString()});
  assert.notEqual(result.status,'CONNECTED');
 });
+
+test('phase8 forward outcomes are deduplicated and survive isolated PostgreSQL reconnect', {skip:!url},async()=>{
+ const base=1800000000+process.pid*1000;
+ let now=base;
+ const broker=(bid=100)=>({environment:'EXPERIMENTAL_NABD_AGENTIC',
+  accountType:'DEMO',executionEnabled:false,symbol:'XAUUSD',
+  brokerServer:'JustMarkets-Demo',timestamp:now-1,bid,ask:bid+0.2});
+ const features=Object.fromEntries(['M5','M15','H1','H4'].map(tf=>
+  [tf,{status:'INDICATORS_AVAILABLE',emaDirection:'UP',
+   ema200Verified:true,ema200:90,lastClose:100}]));
+ const plan={stance:'BUY_WATCH',confidence:0.83,timeHorizonMinutes:1};
+ let c=await connectResearchJournal({url,clock:()=>now});
+ assert.equal(c.status,'CONNECTED');
+ try{
+  const input={symbol:'XAUUSD',closedBarTime:base-300,plan,features,broker:broker()};
+  assert.deepEqual(await c.journal.saveForward(input),{inserted:true,reason:null});
+  assert.equal((await c.journal.saveForward(input)).reason,'DUPLICATE_CLOSED_BAR');
+  assert.equal((await c.journal.forwardReport()).markets.XAUUSD.pending>=1,true);
+  await c.close();c=null;
+  now=base+61;
+  const reopened=await connectResearchJournal({url,clock:()=>now});
+  assert.equal(reopened.status,'CONNECTED');
+  try{
+   const observed=await reopened.journal.observeForward(broker(101));
+   assert.equal(observed.scored,1);
+   assert.equal((await reopened.journal.observeForward(broker(101))).scored,0);
+   const stats=(await reopened.journal.forwardReport()).markets.XAUUSD;
+   assert.equal(stats.scored>=1,true);assert.equal(stats.hits>=1,true);
+   assert.equal(stats.pending,0);
+   assert.equal(stats.directionalHitRate,null);
+  }finally{await reopened.close();}
+ }finally{if(c)await c.close();}
+});
