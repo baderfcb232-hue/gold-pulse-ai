@@ -53,7 +53,9 @@ export function createDemoAutoBrain({
    }else{
     completed++;
     record(symbol,'ANALYZED',{stance:result.plan.stance,
-     confidence:result.plan.confidence,closedBarAt:utc(trigger.closedBarTime),
+     confidence:result.plan.confidence,
+     timeHorizonMinutes:result.plan.timeHorizonMinutes,
+     closedBarAt:utc(trigger.closedBarTime),
      trigger:trigger.reason,reasonSummary:(result.plan.thesis||'').slice(0,180),
      evidenceCount:result.plan.evidence?.length||0,simulationOnly:true});
    }
