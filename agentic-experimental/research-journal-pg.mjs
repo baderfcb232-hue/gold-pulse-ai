@@ -1,14 +1,16 @@
 // Disabled-by-default isolated Postgres journal adapter.
 import {readFile} from 'node:fs/promises';
+import {createDurableForwardStore} from './phase8-durable-forward.mjs';
 // Requires explicit isolated DATABASE URL, 'pg' package at runtime and schema migration.
 // No automatic connection to any production database.
 export const ISOLATED_DB_NAME='nabd_agentic_research_test';
 export function assertIsolatedDatabase(name){
  if(name!==ISOLATED_DB_NAME)throw Error('WRONG_DATABASE_FAIL_CLOSED');
 }
-export function createResearchJournal({query}={}){
+export function createResearchJournal({query,clock}={}){
  if(typeof query!=='function')throw Error('JOURNAL_QUERY_REQUIRED');
  let verified=false;
+ const durable=createDurableForwardStore({query,clock});
  async function verify(){
   const result=await query('SELECT current_database() AS database_name',[]);
   assertIsolatedDatabase(result?.rows?.[0]?.database_name);
@@ -76,10 +78,14 @@ export function createResearchJournal({query}={}){
    [symbol,closedBarAt,analyzedAt,trigger,status,stance,confidence,reasonCodes,JSON.stringify(summary)]);
   return {inserted:r?.rowCount===1};
  }
- return {verify,saveForecast,firstForecast,firstActual,saveActual,saveAnalysis,status:()=>({verified,database:verified?ISOLATED_DB_NAME:null,
+ return {verify,saveForecast,firstForecast,firstActual,saveActual,saveAnalysis,
+  saveForward:async x=>{ensure();return durable.save(x)},
+  observeForward:async x=>{ensure();return durable.observe(x)},
+  forwardReport:async()=>{ensure();return durable.report()},
+  status:()=>({verified,database:verified?ISOLATED_DB_NAME:null,
    writesAllowed:verified,persistenceConnected:verified})};
 }
-export async function connectResearchJournal({url=process.env.NABD_TEST_RESEARCH_DATABASE_URL}={}){
+export async function connectResearchJournal({url=process.env.NABD_TEST_RESEARCH_DATABASE_URL,clock}={}){
  if(!url)return {status:'NOT_CONFIGURED',journal:null};
  let parsed;try{parsed=new URL(url);}catch{return {status:'INVALID_DATABASE_URL',journal:null};}
  if(!['postgresql:','postgres:'].includes(parsed.protocol)||!parsed.hostname)
@@ -88,7 +94,7 @@ export async function connectResearchJournal({url=process.env.NABD_TEST_RESEARCH
   const {default:pg}=await import('pg');
   const pool=new pg.Pool({connectionString:url,max:2,connectionTimeoutMillis:5000,
     idleTimeoutMillis:10000,ssl:undefined});
-  const journal=createResearchJournal({query:(sql,args)=>pool.query(sql,args)});
+  const journal=createResearchJournal({query:(sql,args)=>pool.query(sql,args),clock});
   try{
    await journal.verify(); // Critical: verify exact test DB name before ANY DDL.
    const migration=await readFile(new URL('./sql/001_research_journal.sql',import.meta.url),'utf8');
