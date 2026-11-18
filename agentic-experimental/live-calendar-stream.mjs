@@ -8,12 +8,13 @@ const valid=x=>Number.isSafeInteger(x)&&x>0;
 const clean=x=>{const v=typeof x==='string'?x.trim():typeof x==='number'?String(x):'';return /^(null|none|n\/a|na|undefined)$/i.test(v)?'':v;};
 // Provider streaming examples sometimes include the literal key 'forecast ' (trailing whitespace).
 // Normalize keys, but never substitute proprietary TEForecast for analyst consensus Forecast.
-function normalizedFields(message){const result={};for(const [k,v] of Object.entries(message)){const name=k.trim().toLowerCase();if(!(name in result)||result[name]==null)result[name]=v;}return result;}
+function normalizedFields(message){const result=Object.create(null);for(const [k,v] of Object.entries(message)){const name=k.trim().toLowerCase();if(Object.hasOwn(result,name)&&result[name]!==v)return null;result[name]=v;}return result;}
 export function parseStreamCalendarMessage(raw,receivedAt=safeSeconds()){
  let m;try{m=typeof raw==='string'?JSON.parse(raw):raw;}catch{return {accepted:false,reason:'INVALID_JSON'};}
  if(!m||Array.isArray(m)||typeof m!=='object')return {accepted:false,reason:'INVALID_SCHEMA'};
  if(String(m.topic||'').toLowerCase()!=='calendar')return {accepted:false,reason:'NOT_CALENDAR'};
  const fields=normalizedFields(m);
+ if(!fields)return {accepted:false,reason:'CONFLICTING_FIELDS'};
  const country=String(fields.country||'').trim().toLowerCase();
  if(!['united states','usa','us'].includes(country))return {accepted:false,reason:'NOT_US_EVENT'};
  if(Number(fields.importance)!==3)return {accepted:false,reason:'NOT_HIGH_IMPACT'};
@@ -28,6 +29,7 @@ export function parseStreamCalendarMessage(raw,receivedAt=safeSeconds()){
   return {accepted:false,reason:'INVALID_SCHEDULE'};
  const actualRaw=clean(fields.actual),forecastRaw=clean(fields.forecast),previousRaw=clean(fields.previous);
  const a=parseComparable(actualRaw),f=parseComparable(forecastRaw),p=parseComparable(previousRaw);
+ if(a&&receivedAt<eventAt)return {accepted:false,reason:'ACTUAL_BEFORE_SCHEDULE'};
  const comparable=!!a&&!!f&&a.unit===f.unit;
  return {accepted:true,event:{source:SOURCE,id,title,eventAt,receivedAt,actualRaw:actualRaw||null,
   forecastRaw:forecastRaw||null,previousRaw:previousRaw||null,
@@ -52,7 +54,7 @@ export function createLiveCalendarStream({
  let ws=null,status=key&&secret?'READY_TO_CONNECT':'NOT_CONFIGURED',
   lastConnected=null,lastMessageAt=null,lastError=null,received=0,accepted=0,complete=0;
  const errors=[],recent=[],forecastObserved=new Map(),seenActual=new Set();
- let busy=false,reconnectTimer=null,stopped=false;
+ let busy=false,reconnectTimer=null,stopped=false,writeQueue=Promise.resolve();
  function safeError(x){return String(x||'UNKNOWN').slice(0,80).replace(/(key|secret|token|password)=[^\s&]+/gi,'$1=[REDACTED]');}
  const pushError=x=>{const y=safeError(x);errors.push(y);if(errors.length>6)errors.shift();lastError=y;};
  async function record(event){
@@ -73,7 +75,12 @@ export function createLiveCalendarStream({
   const reference=parseComparable(saved?.raw??'');
   const actual=parseComparable(event.actualRaw??'');
   const pointInTime=!!saved&&saved.observedAt<event.eventAt&&!!actual&&!!reference&&actual.unit===reference.unit;
-  recent.unshift({...event,preReleaseForecastAvailable:pointInTime,
+  const difference=pointInTime?actual.value-reference.value:null;
+  recent.unshift({...event,
+    comparison:pointInTime?{difference,unit:actual.unit,
+      direction:difference>0?'ABOVE_FORECAST':difference<0?'BELOW_FORECAST':'IN_LINE'}:null,
+    comparisonStatus:pointInTime?'PRE_RELEASE_FORECAST_RECORDED':'NO_POINT_IN_TIME_BASELINE',
+    preReleaseForecastAvailable:pointInTime,
     forecastAsObservedBeforeRelease:pointInTime?saved.raw:null,
     officialPublicationTimestampVerified:false,
     providerLatencyIndependentlyVerified:false,
@@ -116,7 +123,10 @@ export function createLiveCalendarStream({
    accepted++;if(r.event.allThreeComparable)complete++;
    lastMessageAt=new Date(clock()*1000).toISOString();
    status='OBSERVING_STREAM_MESSAGES';
-   void record(r.event).catch(()=>{pushError('JOURNAL_WRITE_FAILED');status='JOURNAL_ERROR';});
+   // Serialize writes: preserve first-seen forecast/actual across concurrent frames.
+   writeQueue=writeQueue.then(()=>record(r.event)).catch(()=>{
+    pushError('JOURNAL_WRITE_FAILED');status='JOURNAL_ERROR';
+   });
   });
   socket.addEventListener('error',()=>{status='CONNECTION_ERROR';pushError('SOCKET_ERROR');});
   socket.addEventListener('close',()=>{if(ws===socket)ws=null;busy=false;
