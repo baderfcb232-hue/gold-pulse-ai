@@ -8,6 +8,7 @@ the report is NOT independent broker attestation.
 import argparse
 from datetime import datetime, timedelta, timezone
 import json
+import math
 from pathlib import Path
 import sys
 import time
@@ -50,7 +51,9 @@ def closed_rates(raw, seconds, now, until=None):
         stamp = int(item["time"])
         high, low = float(item["high"]), float(item["low"])
         opening, closing = float(item["open"]), float(item["close"])
-        if stamp <= last or opening <= 0 or closing <= 0 or low <= 0 or high <= 0:
+        if (stamp <= last or stamp < 0 or stamp % seconds != 0 or
+                not all(math.isfinite(v) and v > 0 for v in
+                        (opening, closing, low, high))):
             raise ValueError("Invalid/unsorted MT5 historical candle")
         if high < max(opening, closing) or low > min(opening, closing) or high < low:
             raise ValueError("Inconsistent broker OHLC data")
@@ -69,7 +72,7 @@ def parser():
     p.add_argument("--symbol", required=True, help="Exact MT5 broker symbol, e.g. XAUUSD.m")
     p.add_argument("--from", dest="from_date", type=strict_utc_date, required=True)
     p.add_argument("--to", dest="to_date", type=strict_utc_date, required=True)
-    p.add_argument("--spread-points", type=nonnegative, required=True)
+    p.add_argument("--spread-points", type=positive, required=True, help="Explicit positive modeled spread; zero would invalidate the PAPER replay")
     p.add_argument("--commission-per-lot", type=nonnegative, required=True,
                    help="Round-trip commission in account currency for 1 lot")
     p.add_argument("--slippage-points", type=nonnegative, required=True)
