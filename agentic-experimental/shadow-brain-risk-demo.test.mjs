@@ -68,7 +68,10 @@ const candle=(time)=>({time,open:100,high:101,low:99,close:100.4});
 const sample={environment:'EXPERIMENTAL_NABD_AGENTIC',accountType:'DEMO',
  executionEnabled:false,symbol:'BTCUSD',brokerServer:'JustMarkets-Demo',
  timestamp:now-1,bid:100,ask:100.1,tickSize:0.01,tickValue:1,
- contractSize:1,candlesM5:[candle(now-600),candle(now-300)]};
+ contractSize:1,candlesM5:[candle(now-600),candle(now-300)],
+ candlesM15:[candle(now-1800),candle(now-900)],
+ candlesH1:[candle(now-7200),candle(now-3600)],
+ candlesH4:[candle(now-28800),candle(now-14400)]};
 test('isolated MT5 DEMO sensor validates data but never emits an order',()=>{
  const r=validateIsolatedDemoSnapshot(sample,now);
  assert.equal(r.status,'VALIDATED_RESEARCH_SENSOR');
