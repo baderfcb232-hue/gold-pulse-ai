@@ -13,6 +13,8 @@ export function createForwardEvaluation({clock=()=>Math.floor(Date.now()/1000),
  let rejected=0;
  const fresh=(s,t)=>s?.environment==='EXPERIMENTAL_NABD_AGENTIC'&&
   s.accountType==='DEMO'&&s.executionEnabled===false&&
+  typeof s.brokerServer==='string'&&s.brokerServer.toLowerCase().includes('demo')&&
+  !s.brokerServer.toLowerCase().includes('synthetic')&&
   Number.isSafeInteger(s.timestamp)&&Number.isSafeInteger(t)&&
   s.timestamp<=t&&t-s.timestamp<=2&&
   finite(s.bid)&&finite(s.ask)&&s.bid>0&&s.ask>s.bid;
@@ -79,7 +81,8 @@ export function createForwardEvaluation({clock=()=>Math.floor(Date.now()/1000),
     symbol:x.symbol,stance:x.stance,direction:x.direction,hit:x.hit,
     predictedAt:new Date(x.predictedAt*1000).toISOString(),
     observedAt:new Date(x.observedAt*1000).toISOString()})),
-   methodology:'FIRST_FRESH_DEMO_BROKER_TICK_WITHIN_120_SECONDS_AFTER_HORIZON',
+   methodology:'FIRST_FRESH_DEMO_BROKER_TICK_WITHIN_GRACE_SECONDS_AFTER_HORIZON',
+   graceSeconds,
    dataRetention:'BOUNDED_IN_MEMORY_RESETS_ON_RESTART',
    historicalBacktest:false,brokerFillsVerified:false,profitabilityMeasured:false,
    transactionCostsIncluded:false,liveTradingEnabled:false,
