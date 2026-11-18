@@ -3,6 +3,13 @@ on:
   push:
     branches:
       - experimental/nabd-agentic-ai-test
+  pull_request:
+    paths:
+      - 'agentic-experimental/mt5-demo-sensor.mjs'
+      - 'agentic-experimental/mt5-demo-readonly-sensor.py'
+      - 'agentic-experimental/demo-ingest.test.mjs'
+      - 'agentic-experimental/test_mt5_demo_sensor.py'
+      - '.github/workflows/nabd-agentic-isolated.yml'
   workflow_dispatch:
 jobs:
   isolated:
