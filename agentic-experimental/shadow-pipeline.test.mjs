@@ -45,7 +45,7 @@ test('AI WAIT decision blocks risk admission and keeps all order paths disabled'
   status:'RESEARCH_ANALYSIS_ONLY',plan:{stance:'WAIT',confidence:1}})}});
  const r=await p.assess({snapshot:demo,proposal});
  assert.equal(r.status,'BLOCKED');
- assert.ok(r.reasons.includes('AI_HYPOTHESIS_NOT_ALIGNED'));
+ assert.ok(r.reasons.includes('AI_DECISION_WAIT'));
  assert.equal(r.order,null);assert.equal(r.risk,null);
 });
 test('delayed news blocks AI analysis',async()=>{
