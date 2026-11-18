@@ -2,7 +2,7 @@
 // No MT5 data, no OpenAI call, no money or order endpoints.
 import {createShadowResearchPipeline} from './shadow-pipeline.mjs';
 const bars=(now,seconds)=>[3,2,1].map(i=>({
- time:now-i*seconds,open:100,high:101,low:99,close:100.4
+ time:Math.floor(now/seconds)*seconds-i*seconds,open:100,high:101,low:99,close:100.4
 }));
 export async function runSyntheticShadowSmoke({now=Math.floor(Date.now()/1000)}={}){
  const data={environment:'EXPERIMENTAL_NABD_AGENTIC',accountType:'DEMO',
@@ -11,12 +11,15 @@ export async function runSyntheticShadowSmoke({now=Math.floor(Date.now()/1000)}=
   candlesM5:bars(now,300),candlesM15:bars(now,900),
   candlesH1:bars(now,3600),candlesH4:bars(now,14400)};
  const proposal={side:'BUY',balance:2000,riskPercent:0.4,entry:100,stop:98,
-  target:106,spreadLimit:0.5,positionsForSymbol:0};
+  target:106,spreadLimit:0.5,positionsForSymbol:0,
+  dailyLossPercent:0,dailyEntries:0};
  let brainCalls=0;
  const pipeline=createShadowResearchPipeline({
   clock:()=>now,
   brain:{analyze:async()=>{brainCalls++;return{
-   status:'RESEARCH_ANALYSIS_ONLY',plan:{stance:'BUY_WATCH',confidence:0.5}
+   status:'RESEARCH_ANALYSIS_ONLY',plan:{stance:'BUY_WATCH',confidence:0.75,
+    thesis:'Closed price bars trend upwards',counterThesis:'Momentum could reverse',
+    evidence:['Closed broker candles'],invalidation:'Price breaks support'}
   };}}
  });
  const valid=await pipeline.assess({snapshot:data,proposal});
