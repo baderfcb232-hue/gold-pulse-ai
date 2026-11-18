@@ -144,3 +144,37 @@ test('invalid data, missing paid key, runaway sample budget are rejected',async(
  altered=history();altered.spec.tick_value_loss=0;
  await assert.rejects(()=>replayHistoricalAgentic(altered),/tick value/);
 });
+
+test('live Demo AI blocks stale broker tick, stale closed candles and invalid frame evidence before any model call',async()=>{
+ const frames={M5:300,M15:900,H1:3600,H4:14400};
+ const ctx={symbol:'XAUUSD',feedType:'MT5_DEMO_BROKER',
+  accountType:'DEMO',observedAt:END,quoteObservedAt:END,
+  bid:3900,ask:3900.15,spreadLimit:0.5,
+  candlesVerified:true,multiTimeframeVerified:true,
+  news:{classification:'NONE'},
+  ...Object.fromEntries(Object.entries(frames).map(([tf,seconds])=>
+   ['candles'+tf,makeBars(24,seconds)]))};
+ assert.equal(validateResearchContext(ctx,END).status,'RESEARCH_CONTEXT_READY');
+ let modelCalls=0;
+ const brain=createResearchBrain({key:'mock',clock:()=>END,
+  fetcher:async()=>{modelCalls++;return response();}});
+ const accepted=await brain.analyze(ctx);
+ assert.equal(accepted.status,'RESEARCH_ANALYSIS_ONLY');
+ assert.equal(accepted.tradeAllowed,false);
+ assert.equal(modelCalls,1);
+ const staleTick={...ctx,quoteObservedAt:END-20};
+ assert.ok(validateResearchContext(staleTick,END).reasons.includes('BROKER_QUOTE_STALE_OR_MISSING'));
+ const missingTick={...ctx,quoteObservedAt:undefined};
+ assert.ok(validateResearchContext(missingTick,END).reasons.includes('BROKER_QUOTE_STALE_OR_MISSING'));
+ const staleH1={...ctx,candlesH1:makeBars(24,3600).map(b=>({...b,time:b.time-7200}))};
+ assert.ok(validateResearchContext(staleH1,END).reasons.includes('STALE_CLOSED_H1'));
+ const openM5={...ctx,candlesM5:[...ctx.candlesM5.slice(0,-1),{...ctx.candlesM5.at(-1),time:END}]};
+ assert.ok(validateResearchContext(openM5,END).reasons.includes('INVALID_CLOSED_M5'));
+ const fakeFlag={...ctx,candlesM15:undefined};
+ assert.ok(validateResearchContext(fakeFlag,END).reasons.includes('MISSING_CLOSED_M15'));
+ for(const data of [staleTick,missingTick,staleH1,openM5,fakeFlag]){
+  const blocked=await brain.analyze(data);
+  assert.equal(blocked.status,'BLOCKED');
+ }
+ assert.equal(modelCalls,1);
+});
