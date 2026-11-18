@@ -1,7 +1,7 @@
 // Pure shadow orchestration for isolated MT5 DEMO sensor snapshots.
 // A research plan can never turn into a broker order through this pipeline.
 import {validateIsolatedDemoSnapshot} from './mt5-demo-sensor.mjs';
-import {reviewShadowRisk} from './shadow-risk-engine.mjs';
+import {evaluatePhase4ShadowDecision} from './phase4-decision-risk.mjs';
 import {validateResearchContext} from './research-brain.mjs';
 const fail=(phase,reasons)=>({status:'BLOCKED',phase,reasons,analysis:null,risk:null,
  simulationOnly:true,executionAllowed:false,order:null});
@@ -30,20 +30,14 @@ export function createShadowResearchPipeline({brain,clock=()=>Math.floor(Date.no
    blocked++;lastResult=fail('AI_ANALYSIS',analysis.reasons||['NO_ANALYSIS']);return lastResult;
   }
   analyzed++;
-  // This can produce a shadow risk review only; stop levels are hypothetical
-  // and no lot, broker order, or execution payload is created.
-  const risk=reviewShadowRisk({
-   symbol:s.symbol,side:proposal?.side,accountType:'DEMO',
-   balance:proposal?.balance,riskPercent:proposal?.riskPercent,
-   entry:proposal?.entry,stop:proposal?.stop,target:proposal?.target,
-   spread:s.ask-s.bid,spreadLimit:proposal?.spreadLimit,
-   quoteAgeSeconds:now-s.timestamp,
-   positionsForSymbol:proposal?.positionsForSymbol,dailyEntries:proposal?.dailyEntries,modelPlan:analysis.plan
+  // Phase 4: deterministic shadow policy. Missing or stale risk context fails closed.
+  const decision=evaluatePhase4ShadowDecision({
+    symbol:s.symbol,plan:analysis.plan,proposal,broker:s,now,news:ctx.news
   });
-  lastResult={status:risk.status==='SHADOW_RISK_ACCEPTABLE'?
-   'SHADOW_RESEARCH_ONLY':'BLOCKED',phase:'SHADOW_RISK',
-   reasons:risk.reasons,analysis:{stance:analysis.plan.stance,confidence:analysis.plan.confidence},
-   risk,simulationOnly:true,executionAllowed:false,order:null};
+  lastResult={status:decision.status,phase:'PHASE4_DECISION_RISK',
+    reasons:decision.reasons,analysis:{stance:analysis.plan.stance,
+      confidence:analysis.plan.confidence},
+    risk:decision.risk,simulationOnly:true,executionAllowed:false,order:null};
   if(lastResult.status==='BLOCKED')blocked++;
   return lastResult;
  }
