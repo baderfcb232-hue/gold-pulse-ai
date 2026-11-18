@@ -23,6 +23,7 @@ import {createDemoTradeIntents} from './demo-trade-intents.mjs';
 import {createFredHistoricalMonitor} from './fred-historical-fallback.mjs';
 import {createIsolatedDecisionAudit} from './phase5-decision-audit.mjs';
 import {createForwardEvaluation} from './phase6-forward-evaluation.mjs';
+import {createPhase7Comparator} from './phase7-strategy-comparison.mjs';
 const feed=createShadowFeedRunner();
 const goldSpot=createPublicGoldObserver();
 const sources=createResearchSources({goldKey:process.env.NABD_TEST_GOLD_TWELVEDATA_KEY}); // Calendar polled only by economicCalendar to avoid duplicate paid-provider calls.
@@ -36,18 +37,32 @@ const demoIngest=createDemoIngest({secret:process.env.NABD_TEST_DEMO_SENSOR_HMAC
 const officialNews=createOfficialNewsMonitor();
 const decisionAudit=createIsolatedDecisionAudit();
 const forwardEvaluation=createForwardEvaluation();
+const strategyComparison=createPhase7Comparator();
 let connectedJournal=null;
 const demoTradeIntents=createDemoTradeIntents({
  enabled:process.env.NABD_TEST_DEMO_AUTO_EXECUTION==='true',
  secret:process.env.NABD_TEST_DEMO_EXEC_HMAC_SECRET||'',
  quoteProvider:symbol=>demoIngest.getLatest(symbol),
- onAudit:(symbol,stage,reason)=>console.log('[NABD DEMO INTENT]',symbol,stage,reason||'')
+ onAudit:(symbol,stage,reason)=>{
+   decisionAudit.record(symbol,{stage,reason});
+   console.log('[NABD DEMO INTENT]',symbol,stage,reason||'');
+  }
 });
 const demoAutoBrain=createDemoAutoBrain({brains:{XAUUSD:researchBrain,BTCUSD:btcResearchBrain},
  scheduler:hybrid,enabled:process.env.NABD_TEST_AUTO_RESEARCH==='true',
  journalProvider:()=>connectedJournal,
- onPlan:p=>demoTradeIntents.consider(p),
- onAudit:(symbol,event)=>console.log('[NABD AUTO BRAIN]',symbol,event.stage,event.stance||'',event.reasonSummary||event.reason||'')});
+ onPlan:p=>{
+   const broker=demoIngest.getLatest(p.symbol);
+   strategyComparison.compare({symbol:p.symbol,closedBarTime:p.closedBarTime,
+    plan:p.plan,features:p.features});
+   forwardEvaluation.record({symbol:p.symbol,closedBarTime:p.closedBarTime,
+    plan:p.plan,broker});
+   return demoTradeIntents.consider(p);
+  },
+ onAudit:(symbol,event)=>{
+   decisionAudit.record(symbol,event);
+   console.log('[NABD AUTO BRAIN]',symbol,event.stage,event.stance||'',event.reasonSummary||event.reason||'');
+  }});
 const economicCalendar=createEconomicCalendarMonitor({key:process.env.NABD_TEST_TRADING_ECONOMICS_KEY,journalProvider:()=>connectedJournal});
 const blsIndicators=createBlsOfficialMonitor();
 const fredHistorical=createFredHistoricalMonitor();
@@ -129,16 +144,17 @@ const server=http.createServer(async(req,res)=>{
         const snapshot=demoIngest.getLatest(symbol);
         forwardEvaluation.observe(snapshot);
         researchScheduling[symbol]=demoAutoBrain.onSnapshot(snapshot);
+        forwardEvaluation.observe(snapshot);
       }
     }
     send(verdict.status==='OBSERVED'?202:403,{...verdict,researchScheduling});return;
   }
-  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/fred-historical/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-calendar/status','/brain/status','/auto-brain/status','/demo-trade/status','/demo-sensor/status','/shadow-smoke/status','/decision-audit/status','/forward-evaluation/status','/integration/status'].includes(pathname)){
+  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/fred-historical/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-calendar/status','/brain/status','/auto-brain/status','/demo-trade/status','/demo-sensor/status','/shadow-smoke/status','/decision-audit/status','/forward-evaluation/status','/strategy-comparison/status','/integration/status'].includes(pathname)){
     res.writeHead(404,{'Content-Type':'application/json','Cache-Control':'no-store'});
     res.end(JSON.stringify({error:'not_found'}));return;
   }
   res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
-  res.end(JSON.stringify(pathname==='/forward-evaluation/status' ? forwardEvaluation.report() : pathname==='/decision-audit/status' ? decisionAudit.report() : pathname==='/integration/status' ? buildExperimentReadiness({bls:blsIndicators.report(),fred:fredHistorical.report(),brain:researchBrain.report(),autoBrain:demoAutoBrain.report(),execution:demoTradeIntents.report(),demo:{...demoSensorReadiness(),brokerConnected:Object.values(demoIngest.report().markets).some(m=>m.status==='SENSOR_OBSERVED')},journal:journalState,smoke:shadowSmoke,fxStreetAuthorized:false,officialReleaseVerified:false}) : pathname==='/shadow-smoke/status' ? shadowSmoke : pathname==='/brain/status' ? {...researchBrain.report(),BTCUSD:btcResearchBrain.report(),autoResearch:demoAutoBrain.report()} : pathname==='/auto-brain/status' ? demoAutoBrain.report() : pathname==='/demo-trade/status' ? demoTradeIntents.report() : pathname==='/demo-sensor/status' ? {...demoSensorReadiness(),status:Object.values(demoIngest.report().markets).some(x=>x.status==='SENSOR_OBSERVED')?'OBSERVING_ISOLATED_DEMO':'AWAITING_ISOLATED_DEMO_SENSOR',acceptedMethod:demoIngest.report().authentication==='HMAC_SHA256_CONFIGURED'?'HMAC_SHA256_AUTHENTICATED_HTTP':'DISABLED',autoResearch:demoAutoBrain.report(),httpIngestEnabled:demoIngest.report().authentication==='HMAC_SHA256_CONFIGURED',brokerConnected:Object.values(demoIngest.report().markets).some(x=>x.status==='SENSOR_OBSERVED'),ingestion:demoIngest.report()} : pathname==='/live-calendar/status' ? liveCalendarStream.report() : pathname==='/live-news/status' ? liveNewsSystemStatus({journalConnected:!!connectedJournal,calendarKeyConfigured:!!process.env.NABD_TEST_TRADING_ECONOMICS_STREAM_KEY&&!!process.env.NABD_TEST_TRADING_ECONOMICS_STREAM_SECRET,realtimeFeedVerified:false,officialReleaseTimestampVerified:false,preReleaseForecastCaptured:false,brokerFeedVerified:false}) : pathname==='/delayed-consensus/status' ? delayedCalendar.report() : pathname==='/journal/status' ? journalState : pathname==='/fred-historical/status' ? fredHistorical.report() : pathname==='/official-data/status' ? blsIndicators.report() : pathname==='/calendar/status' ? economicCalendar.report() : pathname==='/news/research' ? newsResearchReadiness({calendarConfigured:!!process.env.NABD_TEST_TRADING_ECONOMICS_KEY,verifiedReleaseArchive:false,goldBrokerCandles:false,btcBrokerCandles:false,openaiConnected:state==='CONNECTED'}) : pathname==='/news/status' ? officialNews.report() : pathname==='/gold/status' ? goldSpot.report() : pathname==='/research/status' ? sources.report() : pathname==='/feed/status' ? feed.report() : pathname==='/hybrid/status' ? {...hybrid.report(),marketAdapter:Object.values(demoIngest.report().markets).some(m=>m.status==='SENSOR_OBSERVED')?'isolated_demo_sensor':'not_connected'} : {service:'nabd-agentic-ai-test',experimental:true,reference_only:true,trading_enabled:false,model_connection:state,last_checked:checkTime}));
+  res.end(JSON.stringify(pathname==='/strategy-comparison/status' ? strategyComparison.report() : pathname==='/forward-evaluation/status' ? forwardEvaluation.report() : pathname==='/decision-audit/status' ? decisionAudit.report() : pathname==='/integration/status' ? buildExperimentReadiness({bls:blsIndicators.report(),fred:fredHistorical.report(),brain:researchBrain.report(),autoBrain:demoAutoBrain.report(),execution:demoTradeIntents.report(),demo:{...demoSensorReadiness(),brokerConnected:Object.values(demoIngest.report().markets).some(m=>m.status==='SENSOR_OBSERVED')},journal:journalState,smoke:shadowSmoke,fxStreetAuthorized:false,officialReleaseVerified:false}) : pathname==='/shadow-smoke/status' ? shadowSmoke : pathname==='/brain/status' ? {...researchBrain.report(),BTCUSD:btcResearchBrain.report(),autoResearch:demoAutoBrain.report()} : pathname==='/auto-brain/status' ? demoAutoBrain.report() : pathname==='/demo-trade/status' ? demoTradeIntents.report() : pathname==='/demo-sensor/status' ? {...demoSensorReadiness(),status:Object.values(demoIngest.report().markets).some(x=>x.status==='SENSOR_OBSERVED')?'OBSERVING_ISOLATED_DEMO':'AWAITING_ISOLATED_DEMO_SENSOR',acceptedMethod:demoIngest.report().authentication==='HMAC_SHA256_CONFIGURED'?'HMAC_SHA256_AUTHENTICATED_HTTP':'DISABLED',autoResearch:demoAutoBrain.report(),httpIngestEnabled:demoIngest.report().authentication==='HMAC_SHA256_CONFIGURED',brokerConnected:Object.values(demoIngest.report().markets).some(x=>x.status==='SENSOR_OBSERVED'),ingestion:demoIngest.report()} : pathname==='/live-calendar/status' ? liveCalendarStream.report() : pathname==='/live-news/status' ? liveNewsSystemStatus({journalConnected:!!connectedJournal,calendarKeyConfigured:!!process.env.NABD_TEST_TRADING_ECONOMICS_STREAM_KEY&&!!process.env.NABD_TEST_TRADING_ECONOMICS_STREAM_SECRET,realtimeFeedVerified:false,officialReleaseTimestampVerified:false,preReleaseForecastCaptured:false,brokerFeedVerified:false}) : pathname==='/delayed-consensus/status' ? delayedCalendar.report() : pathname==='/journal/status' ? journalState : pathname==='/fred-historical/status' ? fredHistorical.report() : pathname==='/official-data/status' ? blsIndicators.report() : pathname==='/calendar/status' ? economicCalendar.report() : pathname==='/news/research' ? newsResearchReadiness({calendarConfigured:!!process.env.NABD_TEST_TRADING_ECONOMICS_KEY,verifiedReleaseArchive:false,goldBrokerCandles:false,btcBrokerCandles:false,openaiConnected:state==='CONNECTED'}) : pathname==='/news/status' ? officialNews.report() : pathname==='/gold/status' ? goldSpot.report() : pathname==='/research/status' ? sources.report() : pathname==='/feed/status' ? feed.report() : pathname==='/hybrid/status' ? {...hybrid.report(),marketAdapter:Object.values(demoIngest.report().markets).some(m=>m.status==='SENSOR_OBSERVED')?'isolated_demo_sensor':'not_connected'} : {service:'nabd-agentic-ai-test',experimental:true,reference_only:true,trading_enabled:false,model_connection:state,last_checked:checkTime}));
 });
 server.listen(port,'0.0.0.0',()=>{console.log('[NABD AGENTIC TEST] ready on port',port);void verify();
   void runSyntheticShadowSmoke().then(result=>{shadowSmoke=result;
