@@ -24,6 +24,7 @@ import {createFredHistoricalMonitor} from './fred-historical-fallback.mjs';
 import {createIsolatedDecisionAudit} from './phase5-decision-audit.mjs';
 import {createForwardEvaluation} from './phase6-forward-evaluation.mjs';
 import {createPhase7Comparator} from './phase7-strategy-comparison.mjs';
+import {assessIsolatedQuality} from './phase9-quality-monitor.mjs';
 const feed=createShadowFeedRunner();
 const goldSpot=createPublicGoldObserver();
 const sources=createResearchSources({goldKey:process.env.NABD_TEST_GOLD_TWELVEDATA_KEY}); // Calendar polled only by economicCalendar to avoid duplicate paid-provider calls.
@@ -164,9 +165,20 @@ const server=http.createServer(async(req,res)=>{
     }
     send(verdict.status==='OBSERVED'?202:403,{...verdict,researchScheduling});return;
   }
-  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/fred-historical/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-calendar/status','/brain/status','/auto-brain/status','/demo-trade/status','/demo-sensor/status','/shadow-smoke/status','/decision-audit/status','/forward-evaluation/status','/strategy-comparison/status','/durable-evaluation/status','/integration/status'].includes(pathname)){
+  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/fred-historical/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-calendar/status','/brain/status','/auto-brain/status','/demo-trade/status','/demo-sensor/status','/shadow-smoke/status','/decision-audit/status','/forward-evaluation/status','/strategy-comparison/status','/durable-evaluation/status','/quality/status','/integration/status'].includes(pathname)){
     res.writeHead(404,{'Content-Type':'application/json','Cache-Control':'no-store'});
     res.end(JSON.stringify({error:'not_found'}));return;
+  }
+  if(pathname==='/quality/status'){
+    const headers={'Content-Type':'application/json','Cache-Control':'no-store'};
+    let durable=null;
+    try{if(connectedJournal?.forwardReport)durable=await connectedJournal.forwardReport();}
+    catch{durable=null;}
+    const quality=assessIsolatedQuality({
+      sensor:demoIngest.report(),autoBrain:demoAutoBrain.report(),
+      model:researchBrain.report(),journal:journalState,
+      durable,forwardWriteFailures:forwardDbWriteFailures});
+    res.writeHead(200,headers);res.end(JSON.stringify(quality));return;
   }
   if(pathname==='/durable-evaluation/status'){
     const headers={'Content-Type':'application/json','Cache-Control':'no-store'};
