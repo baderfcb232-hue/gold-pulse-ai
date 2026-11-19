@@ -1,4 +1,5 @@
 import {requestJson} from '/http.js';
+import {initPhase14Admin} from '/admin-phase14.js';
 import {translateUiText,currentLocale,setLocalizedText} from '/i18n-dom.js?v=v2-i18n-5';
 const $ = id => document.getElementById(id);
 const node = (tag, cls, text) => {const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) setLocalizedText(el,text); return el;};
@@ -359,7 +360,7 @@ async function initialize() {
   }
   if (page === 'admin') {
     if (!response.adminReady) {if (member?.role === 'admin') $('admin-guard-note').textContent = 'حسابك مسؤول. أكمل تفعيل التحقق بخطوتين من صفحة حسابي ثم افتح الإدارة.'; return;}
-    $('admin-guard').hidden = true; $('admin-content').hidden = false; await Promise.all([overview(), users(), audit(), adminMt5Hosting()]);
+    $('admin-guard').hidden = true; $('admin-content').hidden = false; await Promise.all([overview(), users(), audit(), adminMt5Hosting(), initPhase14Admin({api,message,currentLocale,date})]);
   }
 }
 // Re-read display-only dates in the selected locale; no auth mutation or trade request.

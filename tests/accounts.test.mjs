@@ -382,7 +382,8 @@ test('encrypted backups include central hosting requests and v2 archives still d
   const archive=await exportAuthBackup(h.store,h.backup.key,h.now);
   assert.equal(archive.includes('55557777'),false);
   const decoded=readAuthBackup(archive,h.backup.key);
-  assert.equal(decoded.version,4);
+  assert.equal(decoded.version,5);
+  assert.deepEqual(decoded.tables.nabd_admin_plan_drafts,[]);
   assert.equal(decoded.tables.nabd_mt5_hosting_requests.length,1);
   assert.deepEqual(decoded.tables.nabd_member_alert_preferences,[]);
   assert.deepEqual(decoded.tables.nabd_member_telegram,[]);
@@ -488,4 +489,56 @@ test('Windows monitor cannot spoof a member account after access is disabled',as
       body:JSON.stringify(packet)});
   assert.equal(response.status,401);
   assert.equal((await h.request('/api/admin/mt5-hosting',undefined,admin)).body.accounts[0].monitoring_status,'AWAITING_WORKER');
+});
+
+test('Phase14 protected admin API requires MFA and rejects member/CSRF/origin access',async t=>{
+ const h=await setup(t),admin=await h.owner();
+ await h.verify('p14-member@example.test');
+ const member=await h.login('p14-member@example.test');
+ assert.equal((await h.request('/api/admin/control-center',undefined,member)).status,403);
+ assert.equal((await h.request('/api/admin/plan-drafts',undefined,member)).status,403);
+ assert.equal((await h.request('/api/admin/control-center')).status,401);
+ const dashboard=await h.request('/api/admin/control-center',undefined,admin);
+ assert.equal(dashboard.status,200);
+ assert.equal(dashboard.body.users.total,2);
+ assert.equal(dashboard.body.services.database,'CONNECTED');
+ assert.equal(dashboard.body.services.render,'NOT_CHECKED');
+ assert.equal(dashboard.body.marketReports.XAUUSD.state,'NO_REPORT');
+ assert.equal(dashboard.body.marketReports.BTCUSD.tradeExecutionVerified,false);
+ assert.equal(dashboard.body.mt5Monitor.brokerConnectionVerified,false);
+ assert.equal(dashboard.body.subscriptions.billingEnabled,false);
+ const draft={action:'create',code:'P14_GOLD',nameAr:'باقة تجريبية',nameEn:'Preview Gold',
+  currency:'USD',priceMinor:1999,durationDays:30,features:['GOLD_SIGNALS']};
+ assert.equal((await h.request('/api/admin/plan-drafts',draft,member)).status,403);
+ assert.equal((await h.request('/api/admin/plan-drafts',draft,admin,{'X-NABD-CSRF':''})).status,403);
+ assert.equal((await h.request('/api/admin/plan-drafts',draft,admin,{Origin:'https://attacker.invalid'})).status,403);
+ assert.equal((await h.request('/api/admin/plan-drafts',{...draft,billingEnabled:true},admin)).status,400);
+ assert.equal((await h.request('/api/admin/plan-drafts',{...draft,features:['AUTO_TRADE']},admin)).status,400);
+ const saved=await h.request('/api/admin/plan-drafts',draft,admin);
+ assert.equal(saved.status,200);assert.equal(saved.body.billingEnabled,false);
+ assert.equal(saved.body.subscriptionsEnabled,false);assert.equal(saved.body.liveTradingEnabled,false);
+ const list=await h.request('/api/admin/plan-drafts',undefined,admin);
+ assert.equal(list.status,200);assert.equal(list.body.plans.length,1);
+ assert.equal(list.body.plans[0].priceMinor,1999);
+ assert.equal(list.body.plans[0].state,'DRAFT');
+ assert.equal((await h.request('/api/admin/plan-drafts',undefined,member)).status,403);
+ const archived=await h.request('/api/admin/plan-drafts',{action:'archive',id:saved.body.id},admin);
+ assert.equal(archived.status,200);assert.equal(archived.body.state,'ARCHIVED');
+ // This acceptance suite deliberately exercises invalid inputs; respect the
+ // existing 4-attempt/15-minute admin-write rate limit before final assertion.
+ h.advance(901);
+ assert.equal((await h.request('/api/admin/plan-drafts',{...draft,action:'update',id:saved.body.id},admin)).status,409);
+ const audit=await h.request('/api/admin/audit',undefined,admin);
+ assert.ok(audit.body.events.some(x=>x.event==='ADMIN_PLAN_DRAFT_CREATED'));
+ assert.ok(audit.body.events.some(x=>x.event==='ADMIN_PLAN_DRAFT_ARCHIVED'));
+ const html=await fetch(h.base+'/admin');assert.equal(html.status,200);
+ assert.match(await html.text(),/phase14-metrics/);
+ assert.equal((await fetch(h.base+'/admin-phase14.js')).status,200);
+});
+test('Phase14 administrative overview cannot be accessed before admin MFA verification',async t=>{
+ const h=await setup(t);await h.verify(OWNER);
+ const adminNoMfa=await h.login(OWNER);
+ assert.equal(adminNoMfa.body.user.role,'admin');
+ assert.equal((await h.request('/api/admin/control-center',undefined,adminNoMfa)).status,403);
+ assert.equal((await h.request('/api/admin/plan-drafts',undefined,adminNoMfa)).status,403);
 });
