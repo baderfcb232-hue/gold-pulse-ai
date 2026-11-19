@@ -1,0 +1,26 @@
+/* Phase 13 — self-contained, light/dark compatible, responsive private inbox */
+.nabd-inbox-host{position:relative;flex:0 0 auto;display:flex;align-items:center}
+.nabd-inbox-bell{position:relative;display:inline-grid;place-items:center;width:40px;height:40px;padding:0;background:transparent;border:1px solid var(--border,#8885);border-radius:12px;color:inherit;cursor:pointer}
+.nabd-inbox-bell svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nabd-inbox-bell:focus-visible,.nabd-inbox-action:focus-visible{outline:2px solid #b58d40;outline-offset:2px}
+.nabd-inbox-count{position:absolute;top:-7px;inset-inline-end:-8px;display:grid;place-items:center;min-width:19px;height:19px;padding:1px 4px;border-radius:12px;background:#a83232;color:#fff;font-size:11px;font-weight:700}
+.nabd-inbox-count[hidden],.nabd-inbox-panel[hidden],.nabd-inbox-more[hidden]{display:none!important}
+.nabd-inbox-panel{position:absolute;z-index:1200;top:calc(100% + 14px);inset-inline-end:0;width:min(410px,calc(100vw - 24px));max-height:min(75vh,670px);overflow-y:auto;background:var(--surface,#171522);color:var(--text,#f4f3f8);border:1px solid var(--border,#8a8a8a55);box-shadow:0 20px 50px #0005;border-radius:16px;padding:16px;direction:inherit}
+.nabd-inbox-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.nabd-inbox-head h2{font-size:17px;line-height:1.5;margin:0;font-weight:700}
+.nabd-inbox-close{border:0;background:transparent;color:inherit;font-size:24px;cursor:pointer;line-height:1}
+.nabd-inbox-subtitle,.nabd-inbox-status,.nabd-inbox-empty{opacity:.8;font-size:12px;line-height:1.6;margin:8px 0}
+.nabd-inbox-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
+.nabd-inbox-filters label{display:grid;gap:4px;min-width:0;font-size:11px}
+.nabd-inbox-filters select{width:100%;min-width:0;border:1px solid #8885;background:var(--bg,#100d17);color:inherit;padding:7px 4px;border-radius:8px;font-size:11px}
+.nabd-inbox-list{display:grid;gap:8px;margin-top:12px}
+.nabd-inbox-item{display:grid;gap:5px;border:1px solid #8883;border-radius:10px;padding:12px;background:transparent}
+.nabd-inbox-item.is-unread{border-inline-start:3px solid #28a18c}
+.nabd-inbox-item-title{font-size:13px;line-height:1.4}
+.nabd-inbox-item small{opacity:.7;font-size:11px}
+.nabd-inbox-detail summary{cursor:pointer;font-size:12px;opacity:.8}
+.nabd-inbox-detail p{margin:6px 0;line-height:1.65;font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.nabd-inbox-actions{display:flex;flex-wrap:wrap;gap:6px}
+.nabd-inbox-action,.nabd-inbox-more{padding:5px 9px;border:1px solid #8885;border-radius:7px;background:transparent;color:inherit;font-size:11px;cursor:pointer}
+.nabd-inbox-more{width:100%;padding:10px;margin-top:12px}
+@media (max-width:700px){.nabd-inbox-host{margin-inline:4px}.nabd-inbox-panel{position:fixed;top:64px;inset-inline:12px;width:auto;max-height:calc(100dvh - 80px);padding:12px}.nabd-inbox-filters{grid-template-columns:1fr 1fr 1fr;gap:5px}}
