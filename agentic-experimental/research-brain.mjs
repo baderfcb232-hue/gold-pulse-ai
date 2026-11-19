@@ -1,5 +1,6 @@
 // Experimental intelligence planner. Never signs orders, generates MT5 commands or
 // upgrades Binance/indicative quotes to broker evidence.
+import {validateHistoricalResearchContext} from './historical-replay-context.mjs';
 const finite=x=>typeof x==='number'&&Number.isFinite(x);
 const validTime=x=>Number.isSafeInteger(x)&&x>0;
 const fail=(reasons)=>({status:'BLOCKED',reasons,plan:null,tradeAllowed:false,order:null});
@@ -53,10 +54,12 @@ export function validateAnalysisPlan(plan){
   timeHorizonMinutes:plan.timeHorizonMinutes,
   executionPermission:false,signal:'WAIT'};
 }
-export function createResearchBrain({key,model='gpt-4.1-mini',fetcher=fetch,clock=()=>Math.floor(Date.now()/1000)}={}){
+export function createResearchBrain({key,model='gpt-4.1-mini',fetcher=fetch,clock=()=>Math.floor(Date.now()/1000),contextMode='DEMO_LIVE'}={}){
+ if(!['DEMO_LIVE','HISTORICAL_PAPER'].includes(contextMode))throw Error('UNSUPPORTED_BRAIN_CONTEXT_MODE');
  let lastResult=null,lastError=null,lastAttempt=null,runs=0,blocked=0,busy=false;
  async function analyze(ctx){
-  const readiness=validateResearchContext(ctx,clock());
+  const readiness=contextMode==='HISTORICAL_PAPER'?
+    validateHistoricalResearchContext(ctx,clock()):validateResearchContext(ctx,clock());
   if(readiness.status!=='RESEARCH_CONTEXT_READY'){blocked++;return readiness;}
   if(!key)return fail(['AI_API_KEY_MISSING']);
   if(busy)return fail(['AI_ANALYSIS_BUSY']);
@@ -65,7 +68,9 @@ export function createResearchBrain({key,model='gpt-4.1-mini',fetcher=fetch,cloc
    const response=await fetcher('https://api.openai.com/v1/responses',{
     method:'POST',headers:{authorization:'Bearer '+key,'content-type':'application/json'},
     body:JSON.stringify({model,store:false,max_output_tokens:900,
-     instructions:'You are NABD isolated DEMO research analyst. Evaluate M5, M15, H1, H4 closed broker candles and the provided deterministic technicalEvidence, including EMA8/21/200, RSI14, ATR14 and prior structure only where actually available. Do not invent missing indicators or infer upcoming economic news. Compare trend vs reversal, support/resistance, spread, counter-thesis and invalidation. If history is too short, frames conflict, spread is poor, or evidence is weak, choose WAIT. State precise evidence limitations. This is research only: no orders, lot sizing, execution permissions, claims of guaranteed outcomes or profits.',
+     instructions:(contextMode==='HISTORICAL_PAPER'?
+       'You are NABD retrospective PAPER analyst. Use only provided CLOSED historical MT5-export candles and deterministic indicators, with as-of historical date. Bid/ask are MODELLED, not historical broker tick quotes. Historical news and actual releases are NOT provided. You must not use general-world knowledge of later events or future outcomes. Choose WAIT if evidence is insufficient. Compare hypotheses with counterarguments, explicit invalidation and uncertainty. This is a research observation, not a prediction guarantee, trade signal or executable order.':
+       'You are NABD isolated DEMO research analyst. Evaluate M5, M15, H1, H4 closed broker candles and the provided deterministic technicalEvidence, including EMA8/21/200, RSI14, ATR14 and prior structure only where actually available. Do not invent missing indicators or infer upcoming economic news. Compare trend vs reversal, support/resistance, spread, counter-thesis and invalidation. If history is too short, frames conflict, spread is poor, or evidence is weak, choose WAIT. State precise evidence limitations. This is research only: no orders, lot sizing, execution permissions, claims of guaranteed outcomes or profits.'),
      input:JSON.stringify(ctx),
      text:{format:{type:'json_schema',name:'isolated_nabd_research_plan',strict:true,schema}}}),
     signal:AbortSignal.timeout(25000)
@@ -84,7 +89,8 @@ export function createResearchBrain({key,model='gpt-4.1-mini',fetcher=fetch,cloc
   }catch(e){lastError=String(e.message||e).slice(0,80);return fail(['AI_ANALYSIS_FAILED']);}
   finally{busy=false;}
  }
- return {analyze,report:()=>({status:key?'READY_FOR_VERIFIED_DEMO_CONTEXT':'NOT_CONFIGURED',
+ return {analyze,report:()=>({status:key?(contextMode==='HISTORICAL_PAPER'?'READY_FOR_HISTORICAL_RESEARCH':'READY_FOR_VERIFIED_DEMO_CONTEXT'):'NOT_CONFIGURED',
+  contextMode,
   runs,blocked,lastAttempt,lastError,lastResult,executionPermission:false,
   signal:'WAIT',orderRoutesAvailable:false})};
 }
