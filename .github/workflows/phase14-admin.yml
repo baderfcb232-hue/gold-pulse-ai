@@ -1,0 +1,47 @@
+name: NABD phase 14 isolated admin operations
+on:
+  pull_request:
+    paths:
+      - 'admin-operations.mjs'
+      - 'admin-operations.test.mjs'
+      - 'admin-operations-static.test.mjs'
+      - 'scripts/phase14-browser-qa.mjs'
+      - 'auth.mjs'
+      - 'server.mjs'
+      - 'tests/accounts.test.mjs'
+      - 'public/accounts.html'
+      - 'public/admin-operations-ui.js'
+      - 'public/admin-operations.css'
+      - '.github/workflows/phase14-admin.yml'
+  workflow_dispatch:
+jobs:
+  admin-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - run: node --test admin-operations.test.mjs admin-operations-static.test.mjs tests/accounts.test.mjs
+
+  browser-admin:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - run: npm install --no-save --package-lock=false playwright@1.56.1
+      - run: node scripts/phase14-browser-qa.mjs
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nabd-phase14-admin-browser
+          path: qa-artifacts/phase14/
+          if-no-files-found: ignore
+          retention-days: 7
