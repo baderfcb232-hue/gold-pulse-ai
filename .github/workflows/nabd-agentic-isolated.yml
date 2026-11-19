@@ -22,6 +22,8 @@ on:
       - 'agentic-experimental/phase8-durable-forward.test.mjs'
       - 'agentic-experimental/phase9-quality-monitor.mjs'
       - 'agentic-experimental/phase9-quality-monitor.test.mjs'
+      - 'agentic-experimental/phase10-incident-monitor.mjs'
+      - 'agentic-experimental/phase10-incident-monitor.test.mjs'
       - 'agentic-experimental/research-journal-pg.mjs'
       - 'agentic-experimental/research-journal.integration.test.mjs'
       - 'agentic-experimental/sql/001_research_journal.sql'
