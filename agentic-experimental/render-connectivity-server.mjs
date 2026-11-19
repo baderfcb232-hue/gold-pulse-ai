@@ -1,6 +1,8 @@
 // NABD Agentic AI isolated connectivity service.
 // No imports from production. No trading, database, Telegram, or signal routes.
 import http from 'node:http';
+import {authorizedView, createObservatory} from './observatory.mjs';
+const observatory = createObservatory();
 import {HybridScheduler} from './hybrid-scheduler.mjs';
 import {createShadowFeedRunner} from './shadow-feed-runner.mjs';
 import {createPublicGoldObserver} from './gold-spot-public.mjs';
@@ -75,10 +77,13 @@ const demoAutoBrain=createDemoAutoBrain({brains:{XAUUSD:researchBrain,BTCUSD:btc
     plan:p.plan,broker});
    serializeForwardDb(p.symbol,journal=>journal.saveForward({symbol:p.symbol,
     closedBarTime:p.closedBarTime,plan:p.plan,features:p.features,broker}));
-   return demoTradeIntents.consider(p);
+   const verdict = demoTradeIntents.consider(p);
+   try { observatory.decision(p,verdict); } catch {}
+   return verdict;
   },
  onAudit:(symbol,event)=>{
    decisionAudit.record(symbol,event);
+   try { observatory.analysis(symbol,event); } catch {}
    console.log('[NABD AUTO BRAIN]',symbol,event.stage,event.stance||'',event.reasonSummary||event.reason||'');
   }});
 const economicCalendar=createEconomicCalendarMonitor({key:process.env.NABD_TEST_TRADING_ECONOMICS_KEY,journalProvider:()=>connectedJournal});
@@ -112,7 +117,22 @@ async function verify(){
   console.log('[NABD AGENTIC TEST] verification status:',state);
 }
 const server=http.createServer(async(req,res)=>{
-  const pathname=new URL(req.url,'http://localhost').pathname;
+  const url=new URL(req.url,'http://localhost');
+  const pathname=url.pathname;
+  if (pathname === '/observatory/v1') {
+    const headers={'Content-Type':'application/json','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};
+    if (req.method !== 'GET' || !authorizedView(req.headers.authorization,process.env.NABD_DEMO_VIEW_TOKEN)) {
+      res.writeHead(403,headers);res.end(JSON.stringify({error:'READ_AUTH_REQUIRED'}));return;
+    }
+    try {
+      const view=await observatory.read({requested:url.searchParams.get('cycle'),journal:connectedJournal,
+        trade:demoTradeIntents.report(),sensor:demoIngest.report(),active:demoAutoBrain.report().active});
+      res.writeHead(200,headers);res.end(JSON.stringify(view));
+    } catch {
+      res.writeHead(503,headers);res.end(JSON.stringify({error:'TELEMETRY_UNAVAILABLE'}));
+    }
+    return;
+  }
   if((pathname==='/demo-trade/pull'||pathname==='/demo-trade/ack')&&req.method==='POST'){
     const send=(status,payload)=>{res.writeHead(status,{
       'Content-Type':'application/json','Cache-Control':'no-store'});
@@ -133,6 +153,9 @@ const server=http.createServer(async(req,res)=>{
       secure:req.socket.encrypted===true||req.headers['x-forwarded-proto']==='https'};
     const result=pathname==='/demo-trade/pull'?
       demoTradeIntents.pull(auth):demoTradeIntents.ack(auth);
+    if(pathname==='/demo-trade/ack' && result.status==='RECORDED') {
+      try { observatory.acknowledge(JSON.parse(body)); } catch {}
+    }
     send(['REJECTED','WRONG_DEMO_ACCOUNT','BROKER_MISMATCH','SENSOR_ACCOUNT_UNVERIFIED','SYMBOL_MAPPING_UNVERIFIED','BROKER_SYMBOL_MISMATCH'].includes(result.status)?403:
       result.status==='WAITING_FOR_SENSOR'?409:200,result);
     return;
@@ -158,11 +181,14 @@ const server=http.createServer(async(req,res)=>{
     });
     const researchScheduling={};
     if(verdict.status==='OBSERVED'){
+      let historyPacket=null;
+      try {historyPacket=JSON.parse(body).history;} catch {}
       for(const symbol of verdict.symbols){
         const snapshot=demoIngest.getLatest(symbol);
         forwardEvaluation.observe(snapshot);
         serializeForwardDb(symbol,journal=>journal.observeForward(snapshot));
         researchScheduling[symbol]=demoAutoBrain.onSnapshot(snapshot);
+        try { observatory.observe(snapshot,researchScheduling[symbol]); observatory.history(historyPacket?.[symbol],snapshot); } catch {}
       }
     }
     send(verdict.status==='OBSERVED'?202:403,{...verdict,researchScheduling});return;
@@ -248,3 +274,4 @@ server.listen(port,'0.0.0.0',()=>{console.log('[NABD AGENTIC TEST] ready on port
   const calendarTimer=setInterval(()=>void economicCalendar.poll(),safeCalendarMinutes*60000);calendarTimer.unref();
   const goldCandlesTimer=setInterval(()=>void sources.check(),15*60000);goldCandlesTimer.unref();
 });
+

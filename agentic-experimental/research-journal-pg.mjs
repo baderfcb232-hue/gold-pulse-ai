@@ -78,7 +78,27 @@ export function createResearchJournal({query,clock}={}){
    [symbol,closedBarAt,analyzedAt,trigger,status,stance,confidence,reasonCodes,JSON.stringify(summary)]);
   return {inserted:r?.rowCount===1};
  }
- return {verify,saveForecast,firstForecast,firstActual,saveActual,saveAnalysis,
+ async function viewDecisions(id) {
+  ensure();
+  const cut = id?.lastIndexOf('-') ?? -1;
+  const selected = cut > 0 ? id.slice(0,cut) : null;
+  const epoch = cut > 0 ? Number(id.slice(cut+1)) : 0;
+  const result = await query(`
+   WITH recent AS (
+    (SELECT * FROM agentic_research.shadow_analysis_decisions WHERE symbol='XAUUSD' ORDER BY closed_bar_at DESC LIMIT 24)
+    UNION ALL
+    (SELECT * FROM agentic_research.shadow_analysis_decisions WHERE symbol='BTCUSD' ORDER BY closed_bar_at DESC LIMIT 24)
+    UNION
+    (SELECT * FROM agentic_research.shadow_analysis_decisions WHERE symbol=$1 AND closed_bar_at=to_timestamp($2))
+   )
+   SELECT d.symbol, EXTRACT(EPOCH FROM d.closed_bar_at)::bigint AS bar, d.analyzed_at, d.trigger,
+    d.analysis_status, d.stance, d.confidence, d.reason_codes, d.plan_summary,
+    f.ema_stance, f.agreement, f.outcome_status, f.outcome_tick_at, f.direction, f.hit
+   FROM recent d LEFT JOIN agentic_research.demo_forward_evaluations f
+     ON d.symbol=f.symbol AND d.closed_bar_at=f.closed_bar_at ORDER BY d.analyzed_at DESC`,[selected,epoch]);
+  return result.rows;
+ }
+ return {verify,saveForecast,firstForecast,firstActual,saveActual,saveAnalysis,viewDecisions,
   saveForward:async x=>{ensure();return durable.save(x)},
   observeForward:async x=>{ensure();return durable.observe(x)},
   forwardReport:async()=>{ensure();return durable.report()},
@@ -106,3 +126,4 @@ export async function connectResearchJournal({url=process.env.NABD_TEST_RESEARCH
   catch(e){await pool.end();return {status:String(e.message).slice(0,80),journal:null};}
  }catch(e){return {status:e?.code==='ERR_MODULE_NOT_FOUND'?'PG_DRIVER_UNAVAILABLE':'DATABASE_CONNECTION_FAILED',journal:null};}
 }
+
