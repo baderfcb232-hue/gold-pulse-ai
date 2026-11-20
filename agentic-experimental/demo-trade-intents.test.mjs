@@ -271,7 +271,7 @@ test('expired ACK envelope is diagnosed but cannot change the broker outcome',()
  assert.equal(d.report().ackRejectCounts.ACK_REQUEST_EXPIRED,1);
  assert.equal(d.report().brokerAcks,0);
  const freshBody=JSON.stringify(ackBody);
- const refreshed={body:freshBody,timestamp:String(t),mac:sha(t+'\\n'+freshBody),secure:true};
+ const refreshed={body:freshBody,timestamp:String(t),mac:sha(t+'\n'+freshBody),secure:true};
  assert.equal(d.ack(refreshed).status,'RECORDED');
  assert.equal(d.report().uncertainBrokerResults,1);
 });
