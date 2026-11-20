@@ -6,6 +6,19 @@ const fail=(reasons)=>({status:'BLOCKED',reasons,plan:null,tradeAllowed:false,or
 const maxEvidenceItems=8;
 const maxEvidenceLength=240;
 const maxNarrativeLength=1000;
+// Use bounded error codes; never expose raw provider messages or credentials.
+export function classifyResearchFailure(error) {
+ const msg=String(error?.message||'');
+ if(error?.name==='TimeoutError'||error?.name==='AbortError'||msg.toLowerCase().includes('timeout'))return 'AI_REQUEST_TIMEOUT';
+ if(msg==='AI_HTTP_429')return 'AI_RATE_LIMITED';
+ if(/^AI_HTTP_(401|403)$/.test(msg))return 'AI_AUTH_FAILED';
+ if(/^AI_HTTP_5\d\d$/.test(msg))return 'AI_PROVIDER_UNAVAILABLE';
+ if(/^AI_HTTP_\d{3}$/.test(msg))return 'AI_HTTP_REJECTED';
+ if(msg==='AI_INCOMPLETE_RESPONSE')return 'AI_INCOMPLETE_RESPONSE';
+ if(msg==='AI_EMPTY_RESPONSE')return 'AI_EMPTY_RESPONSE';
+ if(msg==='AI_PLAN_INVALID'||error instanceof SyntaxError)return 'AI_RESPONSE_INVALID';
+ return 'AI_ANALYSIS_FAILED';
+}
 export function validateResearchContext(ctx,now){
  const reasons=[];
  if(!ctx||typeof ctx!=='object')return fail(['NO_MARKET_CONTEXT']);
@@ -84,7 +97,7 @@ export function createResearchBrain({key,model='gpt-4.1-mini',fetcher=fetch,cloc
      confidence:plan.confidence,executionPermission:false};
    lastError=null;
    return {status:'RESEARCH_ANALYSIS_ONLY',plan,tradeAllowed:false,order:null};
-  }catch(e){lastError=String(e.message||e).slice(0,80);return fail(['AI_ANALYSIS_FAILED']);}
+  }catch(e){const reason=classifyResearchFailure(e);lastError=reason;blocked++;return fail([reason]);}
   finally{busy=false;}
  }
  return {analyze,report:()=>({status:key?'READY_FOR_VERIFIED_DEMO_CONTEXT':'NOT_CONFIGURED',
