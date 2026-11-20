@@ -3,6 +3,9 @@
 const finite=x=>typeof x==='number'&&Number.isFinite(x);
 const validTime=x=>Number.isSafeInteger(x)&&x>0;
 const fail=(reasons)=>({status:'BLOCKED',reasons,plan:null,tradeAllowed:false,order:null});
+const maxEvidenceItems=8;
+const maxEvidenceLength=240;
+const maxNarrativeLength=1000;
 export function validateResearchContext(ctx,now){
  const reasons=[];
  if(!ctx||typeof ctx!=='object')return fail(['NO_MARKET_CONTEXT']);
@@ -43,13 +46,13 @@ export function validateAnalysisPlan(plan){
     !finite(plan.confidence)||plan.confidence<0||plan.confidence>1||
     !Number.isSafeInteger(plan.timeHorizonMinutes)||
     plan.timeHorizonMinutes<1||plan.timeHorizonMinutes>60||
-    !Array.isArray(plan.evidence)||plan.evidence.length>8||
-    plan.evidence.some(e=>typeof e!=='string'||e.length>240)||
-    ['thesis','counterThesis','invalidation','riskNotes'].some(k=>typeof plan[k]!=='string'||
-      plan[k].length>1000))throw Error('AI_PLAN_INVALID');
- return {stance:plan.stance,confidence:plan.confidence,thesis:plan.thesis,
-  counterThesis:plan.counterThesis,evidence:plan.evidence,
-  invalidation:plan.invalidation,riskNotes:plan.riskNotes,
+    !Array.isArray(plan.evidence)||plan.evidence.some(e=>typeof e!=='string')||
+    ['thesis','counterThesis','invalidation','riskNotes'].some(k=>typeof plan[k]!=='string'))
+  throw Error('AI_PLAN_INVALID');
+ return {stance:plan.stance,confidence:plan.confidence,thesis:plan.thesis.slice(0,maxNarrativeLength),
+  counterThesis:plan.counterThesis.slice(0,maxNarrativeLength),
+  evidence:plan.evidence.slice(0,maxEvidenceItems).map(item=>item.slice(0,maxEvidenceLength)),
+  invalidation:plan.invalidation.slice(0,maxNarrativeLength),riskNotes:plan.riskNotes.slice(0,maxNarrativeLength),
   timeHorizonMinutes:plan.timeHorizonMinutes,
   executionPermission:false,signal:'WAIT'};
 }
