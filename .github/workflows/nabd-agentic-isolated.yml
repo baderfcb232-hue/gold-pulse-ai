@@ -29,6 +29,8 @@ on:
       - 'agentic-experimental/sql/001_research_journal.sql'
       - 'agentic-experimental/research-brain.mjs'
       - 'agentic-experimental/research-brain-diagnostics.test.mjs'
+      - 'agentic-experimental/demo-trade-intents.mjs'
+      - 'agentic-experimental/demo-trade-intents.test.mjs'
       - 'agentic-experimental/demo-auto-brain.mjs'
       - 'agentic-experimental/render-connectivity-server.mjs'
       - 'agentic-experimental/shadow-pipeline.mjs'

@@ -238,3 +238,40 @@ test('proper signed Demo ACK reconciles one-time delivery without independent br
  assert.equal(report.recentDeliveries[0].ackStatus,'EA_REPORTED_REJECTION');
  assert.equal(report.brokerIndependentlyVerifiedFills,0);
 });
+
+test('ACK diagnostics identify signed but invalid outcomes without modifying delivery or creating trades',()=>{
+ const d=create();d.consider(proposal);d.pull(pull);
+ const id='XAUUSD-'+(now-300);
+ const base={id,status:'REJECTED',accountType:'DEMO',accountLogin:1234567,occurredAt:now};
+ assert.equal(d.ack({...signed(base),mac:'0'.repeat(64)}).status,'REJECTED');
+ assert.equal(d.ack(signed({...base,accountLogin:7654321})).status,'REJECTED');
+ assert.equal(d.ack(signed({...base,id:'XAUUSD-999999999'})).status,'REJECTED');
+ const pending=d.report();
+ assert.equal(pending.brokerAcks,0);
+ assert.equal(pending.unacknowledgedCount,1);
+ assert.equal(pending.ackRejectCounts.ACK_SIGNATURE_INVALID,1);
+ assert.equal(pending.ackRejectCounts.ACK_ACCOUNT_OR_OUTCOME_INVALID,1);
+ assert.equal(pending.ackRejectCounts.ACK_DELIVERY_NOT_FOUND,1);
+ assert.equal(pending.lastAckRejectReason,'ACK_DELIVERY_NOT_FOUND');
+ assert.equal(JSON.stringify(pending.ackRejectCounts).includes('1234567'),false);
+ assert.equal(d.ack(signed(base)).status,'RECORDED');
+ assert.equal(d.report().unacknowledgedCount,0);
+ assert.equal(d.report().serverPlacesOrders,false);
+});
+
+test('expired ACK envelope is diagnosed but cannot change the broker outcome',()=>{
+ let t=now;
+ const d=create({clock:()=>t,quoteProvider:symbol=>({...full(symbol),timestamp:t-1})});
+ d.consider(proposal);d.pull(pull);
+ t=now+12;
+ const ackBody={id:'XAUUSD-'+(now-300),status:'UNCERTAIN',
+  accountType:'DEMO',accountLogin:1234567,occurredAt:t};
+ const stale=signed(ackBody);
+ assert.equal(d.ack(stale).status,'REJECTED');
+ assert.equal(d.report().ackRejectCounts.ACK_REQUEST_EXPIRED,1);
+ assert.equal(d.report().brokerAcks,0);
+ const freshBody=JSON.stringify(ackBody);
+ const refreshed={body:freshBody,timestamp:String(t),mac:sha(t+'\n'+freshBody),secure:true};
+ assert.equal(d.ack(refreshed).status,'RECORDED');
+ assert.equal(d.report().uncertainBrokerResults,1);
+});
