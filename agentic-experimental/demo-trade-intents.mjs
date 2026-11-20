@@ -14,6 +14,8 @@ export function createDemoTradeIntents({
  const queue=new Map(),seen=new Set(),delivered=new Map(),acks=new Map();
  let registeredDemoLogin=null,registeredDemoServer=null,lastExecutorSeen=null,lastAckAt=null;
  let created=0,pulled=0,rejected=0,brokerFeedMismatch=0;
+ const ackRejectCounts=Object.create(null);
+ let lastAckRejectReason=null;
  const lastBySymbol={};
  function audit(symbol,state,reason=null){
   lastBySymbol[symbol]={at:new Date(clock()*1000).toISOString(),state,reason};
@@ -172,33 +174,43 @@ export function createDemoTradeIntents({
 
  // Signed HTTP ACK is audit-only; this method never authorizes any additional trade.
  function ack({body,timestamp,mac,secure=false}={}){
-  if(!enabled||!keyReady||!secure)return {status:'REJECTED'};
-  if(typeof body!=='string'||body.length>1000||
-     typeof timestamp!=='string'||!/^\d{10}$/.test(timestamp)||
-     Math.abs(clock()-Number(timestamp))>10||typeof mac!=='string'||
-     !/^[a-f0-9]{64}$/.test(mac))return {status:'REJECTED'};
-  const expected=signature(secret,timestamp+'\n'+body);
-  if(!timingSafeEqual(Buffer.from(expected,'hex'),Buffer.from(mac,'hex')))
+  // Rejection diagnostics are fixed labels, never submitted content or credentials.
+  const denyAck=(reason)=>{
+   ackRejectCounts[reason]=(ackRejectCounts[reason]||0)+1;
+   lastAckRejectReason=reason;
    return {status:'REJECTED'};
-  let parsed;try{parsed=JSON.parse(body)}catch{return {status:'REJECTED'}}
-  if(!parsed||typeof parsed.id!=='string'||!delivered.has(parsed.id)||
-     !['FILLED','REJECTED','UNCERTAIN'].includes(parsed.status)||
+  };
+  if(!enabled||!keyReady||!secure)return denyAck('ACK_CHANNEL_DISABLED_OR_INSECURE');
+  if(typeof body!=='string'||body.length>1000||typeof timestamp!=='string'||
+     !/^\\d{10}$/.test(timestamp)||typeof mac!=='string'||!/^[a-f0-9]{64}$/.test(mac))
+   return denyAck('ACK_ENVELOPE_INVALID');
+  if(Math.abs(clock()-Number(timestamp))>10)return denyAck('ACK_REQUEST_EXPIRED');
+  const expected=signature(secret,timestamp+'\\n'+body);
+  if(!timingSafeEqual(Buffer.from(expected,'hex'),Buffer.from(mac,'hex')))
+   return denyAck('ACK_SIGNATURE_INVALID');
+  let parsed;try{parsed=JSON.parse(body)}catch{return denyAck('ACK_JSON_INVALID')}
+  if(!parsed||typeof parsed.id!=='string'||!delivered.has(parsed.id))
+   return denyAck('ACK_DELIVERY_NOT_FOUND');
+  if(!['FILLED','REJECTED','UNCERTAIN'].includes(parsed.status)||
      parsed.accountType!=='DEMO'||!Number.isSafeInteger(parsed.accountLogin)||
-     parsed.accountLogin<=0||parsed.accountLogin!==registeredDemoLogin||
-     !Number.isSafeInteger(parsed.occurredAt)||
-     Math.abs(parsed.occurredAt-clock())>30)return {status:'REJECTED'};
+     parsed.accountLogin<=0||parsed.accountLogin!==registeredDemoLogin)
+   return denyAck('ACK_ACCOUNT_OR_OUTCOME_INVALID');
+  if(!Number.isSafeInteger(parsed.occurredAt)||
+     Math.abs(parsed.occurredAt-clock())>30)
+   return denyAck('ACK_OCCURRED_AT_INVALID');
   if(acks.has(parsed.id))return {status:'DUPLICATE'};
   const deliveredIntent=delivered.get(parsed.id);
-  if(parsed.occurredAt<deliveredIntent.deliveredAt-2||parsed.occurredAt>deliveredIntent.expires+30)
-    return {status:'REJECTED'};
+  if(parsed.occurredAt<deliveredIntent.deliveredAt-2||
+     parsed.occurredAt>deliveredIntent.expires+30)
+   return denyAck('ACK_OUTSIDE_DELIVERY_WINDOW');
   const dealTicketValid=Number.isSafeInteger(parsed.brokerDealTicket)&&parsed.brokerDealTicket>0;
   const retcodeValid=[10009,10010].includes(parsed.tradeRetcode);
   const volumeValid=finite(parsed.executedVolume)&&parsed.executedVolume>0&&parsed.executedVolume<=1000;
   const hasBrokerReference=parsed.status==='FILLED'&&dealTicketValid&&retcodeValid&&volumeValid;
-  // This is an authenticated EA claim with deal reference, NOT independent
-  // broker verification. Never label this as independent broker confirmation.
+  // Authenticated EA claim, NOT independent broker verification.
   const status=parsed.status==='FILLED'?
-    (hasBrokerReference?'EA_REPORTED_FILL_WITH_DEAL':'UNVERIFIED_EA_FILL_CLAIM'):parsed.status==='REJECTED'?'EA_REPORTED_REJECTION':'EA_UNCERTAIN_BROKER_RESULT';
+    (hasBrokerReference?'EA_REPORTED_FILL_WITH_DEAL':'UNVERIFIED_EA_FILL_CLAIM'):
+    parsed.status==='REJECTED'?'EA_REPORTED_REJECTION':'EA_UNCERTAIN_BROKER_RESULT';
   acks.set(parsed.id,{status,at:clock(),hasBrokerReference});
   lastAckAt=clock();
   audit(deliveredIntent.symbol,status);
@@ -243,6 +255,7 @@ export function createDemoTradeIntents({
    lastExecutorSeenAt:lastExecutorSeen===null?null:new Date(lastExecutorSeen*1000).toISOString(),
    lastAckAt:lastAckAt===null?null:new Date(lastAckAt*1000).toISOString(),
    brokerFeedMismatch,
+   ackRejectCounts:{...ackRejectCounts},lastAckRejectReason,
    tradeCountVerifiedByBroker:false,
    liveTrading:false,serverPlacesOrders:false,dailyLimitsEnforcedByEA:true};
  }
