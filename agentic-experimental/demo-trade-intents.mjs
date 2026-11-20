@@ -182,10 +182,10 @@ export function createDemoTradeIntents({
   };
   if(!enabled||!keyReady||!secure)return denyAck('ACK_CHANNEL_DISABLED_OR_INSECURE');
   if(typeof body!=='string'||body.length>1000||typeof timestamp!=='string'||
-     !/^\\d{10}$/.test(timestamp)||typeof mac!=='string'||!/^[a-f0-9]{64}$/.test(mac))
+     !/^\d{10}$/.test(timestamp)||typeof mac!=='string'||!/^[a-f0-9]{64}$/.test(mac))
    return denyAck('ACK_ENVELOPE_INVALID');
   if(Math.abs(clock()-Number(timestamp))>10)return denyAck('ACK_REQUEST_EXPIRED');
-  const expected=signature(secret,timestamp+'\\n'+body);
+  const expected=signature(secret,timestamp+'\n'+body);
   if(!timingSafeEqual(Buffer.from(expected,'hex'),Buffer.from(mac,'hex')))
    return denyAck('ACK_SIGNATURE_INVALID');
   let parsed;try{parsed=JSON.parse(body)}catch{return denyAck('ACK_JSON_INVALID')}
