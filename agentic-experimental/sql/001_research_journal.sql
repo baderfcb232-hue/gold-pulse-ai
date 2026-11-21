@@ -111,4 +111,20 @@ CREATE TABLE IF NOT EXISTS agentic_research.demo_operational_events (
 CREATE INDEX IF NOT EXISTS idx_demo_operational_recent
  ON agentic_research.demo_operational_events(id DESC);
 
+
+-- Independent of executor ACK, but still a reading from the same MT5 terminal.
+-- Do not mislabel as broker-signed third-party verification.
+CREATE TABLE IF NOT EXISTS agentic_research.demo_broker_history_proofs (
+ intent_id TEXT PRIMARY KEY CHECK (intent_id ~ '^(XAUUSD|BTCUSD)-[0-9]{10}
+),
+ symbol TEXT NOT NULL CHECK (symbol IN ('XAUUSD','BTCUSD')),
+ deal_ticket BIGINT NOT NULL CHECK (deal_ticket > 0),
+ observed_at TIMESTAMPTZ NOT NULL,
+ method TEXT NOT NULL DEFAULT 'SIGNED_READ_ONLY_MT5_HISTORY'
+   CHECK (method='SIGNED_READ_ONLY_MT5_HISTORY'),
+ recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_demo_broker_history_proofs_recent
+ ON agentic_research.demo_broker_history_proofs (observed_at DESC);
+
 COMMIT;
