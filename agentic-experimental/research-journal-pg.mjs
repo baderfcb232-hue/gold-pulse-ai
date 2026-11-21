@@ -98,7 +98,37 @@ export function createResearchJournal({query,clock}={}){
      ON d.symbol=f.symbol AND d.closed_bar_at=f.closed_bar_at ORDER BY d.analyzed_at DESC`,[selected,epoch]);
   return result.rows;
  }
+ async function saveOperationalEvent({source,stage,symbol=null,reason=null,observedAt}={}){
+  ensure();
+  const code=x=>typeof x==='string'&&/^[A-Z][A-Z0-9_]{1,79}$/.test(x);
+  if(!['BRAIN','TRADE','ACK','SENSOR'].includes(source)||!code(stage)||
+     (symbol!==null&&!['XAUUSD','BTCUSD'].includes(symbol))||
+     (reason!==null&&!code(reason))||
+     !Number.isSafeInteger(observedAt)||observedAt<=0)
+   throw Error('INVALID_OPERATIONAL_EVENT');
+  const result=await query(
+   'INSERT INTO agentic_research.demo_operational_events (source,stage,symbol,reason_code,observed_at) VALUES ($1,$2,$3,$4,to_timestamp($5)) RETURNING id',
+   [source,stage,symbol,reason,observedAt]);
+  return {inserted:result?.rowCount===1};
+ }
+ async function operationalReport(){
+  ensure();
+  const [recent,groups]=await Promise.all([
+   query('SELECT source,stage,symbol,reason_code,observed_at FROM agentic_research.demo_operational_events ORDER BY id DESC LIMIT 40',[]),
+   query('SELECT source,stage,reason_code,COUNT(*)::bigint AS total FROM agentic_research.demo_operational_events GROUP BY source,stage,reason_code ORDER BY source,stage,reason_code',[])
+  ]);
+  const counts=(groups.rows||[]).map(x=>({source:x.source,stage:x.stage,
+   reason:x.reason_code||null,total:Number(x.total)}));
+  return {status:'PERSISTED_ISOLATED_AUDIT',storage:'ISOLATED_POSTGRESQL',
+   total:counts.reduce((a,b)=>a+b.total,0),counts,
+   recent:(recent.rows||[]).map(x=>({source:x.source,stage:x.stage,
+    symbol:x.symbol||null,reason:x.reason_code||null,
+    at:new Date(x.observed_at).toISOString()})),
+   containsAccountIdentifiers:false,containsCredentials:false,
+   containsBrokerTickets:false,canTriggerTrades:false};
+ }
  return {verify,saveForecast,firstForecast,firstActual,saveActual,saveAnalysis,viewDecisions,
+  saveOperationalEvent,operationalReport,
   saveForward:async x=>{ensure();return durable.save(x)},
   observeForward:async x=>{ensure();return durable.observe(x)},
   forwardReport:async()=>{ensure();return durable.report()},
