@@ -100,7 +100,10 @@ const demoTradeIntents=createDemoTradeIntents({
    recordOperational('TRADE',stage,symbol,reason);
    console.log('[NABD DEMO INTENT]',symbol,stage,reason||'');
   },
- onAckDiagnostic:reason=>recordOperational('ACK','REJECTED',null,reason)
+ onAckDiagnostic:reason=>recordOperational('ACK','REJECTED',null,reason),
+ onBrokerHistoryProof:proof=>{
+  serializeForwardDb(proof.symbol,journal=>journal.saveBrokerHistoryProof(proof));
+ }
 });
 const demoAutoBrain=createDemoAutoBrain({brains:{XAUUSD:researchBrain,BTCUSD:btcResearchBrain},
  scheduler:hybrid,enabled:process.env.NABD_TEST_AUTO_RESEARCH==='true',
@@ -231,13 +234,17 @@ const server=http.createServer(async(req,res)=>{
         const snapshot=demoIngest.getLatest(symbol);
         forwardEvaluation.observe(snapshot);
         serializeForwardDb(symbol,journal=>journal.observeForward(snapshot));
+        // Independently read from the MT5 history API by a signed Demo sensor.
+        // Compare against the exact ACK delivery and protective levels; never
+        // count self-reported ACK as broker-history proof.
+        demoTradeIntents.observeBrokerHistory(historyPacket?.[symbol],snapshot);
         researchScheduling[symbol]=demoAutoBrain.onSnapshot(snapshot);
         try { observatory.observe(snapshot,researchScheduling[symbol]); observatory.history(historyPacket?.[symbol],snapshot); } catch {}
       }
     }
     send(verdict.status==='OBSERVED'?202:403,{...verdict,researchScheduling});return;
   }
-  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/fred-historical/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-calendar/status','/brain/status','/auto-brain/status','/demo-trade/status','/demo-sensor/status','/shadow-smoke/status','/decision-audit/status','/forward-evaluation/status','/strategy-comparison/status','/durable-evaluation/status','/operational-audit/status','/quality/status','/incident/status','/integration/status'].includes(pathname)){
+  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/fred-historical/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-calendar/status','/brain/status','/auto-brain/status','/demo-trade/status','/demo-trade/history-proofs','/demo-sensor/status','/shadow-smoke/status','/decision-audit/status','/forward-evaluation/status','/strategy-comparison/status','/durable-evaluation/status','/operational-audit/status','/quality/status','/incident/status','/integration/status'].includes(pathname)){
     res.writeHead(404,{'Content-Type':'application/json','Cache-Control':'no-store'});
     res.end(JSON.stringify({error:'not_found'}));return;
   }
@@ -265,6 +272,21 @@ const server=http.createServer(async(req,res)=>{
       model:researchBrain.report(),journal:journalState,
       durable,forwardWriteFailures:forwardDbWriteFailures});
     res.writeHead(200,headers);res.end(JSON.stringify(quality));return;
+  }
+  if(pathname==='/demo-trade/history-proofs'){
+    const headers={'Content-Type':'application/json','Cache-Control':'private, no-store'};
+    if(!authorizedView(req.headers.authorization,process.env.NABD_DEMO_VIEW_TOKEN)){
+      res.writeHead(403,headers);res.end(JSON.stringify({error:'READ_AUTH_REQUIRED'}));return;
+    }
+    if(!connectedJournal?.brokerHistoryProofReport){
+      res.writeHead(503,headers);res.end(JSON.stringify({status:'NO_ISOLATED_DB_PROOF'}));return;
+    }
+    try{
+      const data=await connectedJournal.brokerHistoryProofReport();
+      res.writeHead(200,headers);res.end(JSON.stringify(data));return;
+    }catch{
+      res.writeHead(503,headers);res.end(JSON.stringify({status:'PROOF_QUERY_UNAVAILABLE'}));return;
+    }
   }
   if(pathname==='/operational-audit/status'){
     const headers={'Content-Type':'application/json','Cache-Control':'private, no-store'};
