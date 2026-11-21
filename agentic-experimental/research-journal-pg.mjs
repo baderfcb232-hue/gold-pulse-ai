@@ -129,11 +129,11 @@ export function createResearchJournal({query,clock}={}){
    containsAccountIdentifiers:false,containsCredentials:false,
    containsBrokerTickets:false,canTriggerTrades:false};
  }
+
  async function calendarEvidenceReport(){
   ensure();
-  const r=await query(
-   "SELECT a.provider_event_id AS id,a.scheduled_at,a.first_observed_at AS actual_observed_at,a.actual_raw,a.previous_raw,f.first_observed_at AS forecast_observed_at,f.forecast_raw FROM agentic_research.actual_observations a LEFT JOIN agentic_research.forecast_snapshots f ON f.event_provider=a.event_provider AND f.provider_event_id=a.provider_event_id AND f.scheduled_at=a.scheduled_at WHERE a.event_provider=$1 ORDER BY a.first_observed_at DESC LIMIT 25",
-   ['TRADING_ECONOMICS_STREAM']);
+  const queryText="SELECT a.provider_event_id AS id,a.scheduled_at,a.first_observed_at AS actual_observed_at,a.actual_raw,a.previous_raw,f.first_observed_at AS forecast_observed_at,f.forecast_raw FROM agentic_research.actual_observations a LEFT JOIN agentic_research.forecast_snapshots f ON f.event_provider=a.event_provider AND f.provider_event_id=a.provider_event_id AND f.scheduled_at=a.scheduled_at WHERE a.event_provider=$1 ORDER BY a.first_observed_at DESC LIMIT 25";
+  const r=await query(queryText,['TRADING_ECONOMICS_STREAM']);
   const events=(r.rows||[]).map(e=>{
    const actual=parseComparable(e.actual_raw||''),forecast=parseComparable(e.forecast_raw||''),
     previous=parseComparable(e.previous_raw||'');
@@ -154,44 +154,15 @@ export function createResearchJournal({query,clock}={}){
     independentProviderLatencyVerified:false,officialPublicationTimestampVerified:false};
   });
   return {status:'POINT_IN_TIME_RESEARCH_ARCHIVE',source:'TRADING_ECONOMICS_STREAM',
-    observedEvents:events.length,completeEvents:events.filter(e=>e.difference!==null).length,
-    events,brokerReactionVerified:false,realTimeTradingAuthorized:false};
+   observedEvents:events.length,completeEvents:events.filter(e=>e.difference!==null).length,
+   events,brokerReactionVerified:false,realTimeTradingAuthorized:false};
  }
  async function saveBrokerHistoryProof({intentId,symbol,dealTicket,observedAt}={}){
   ensure();
-  if(!['XAUUSD','BTCUSD'].includes(symbol)||
-     typeof intentId!=='string'||!new RegExp('^'+symbol+'-[0-9]{10}
-  saveOperationalEvent,operationalReport,
-  saveBrokerHistoryProof,brokerHistoryProofReport,calendarEvidenceReport,
-  saveForward:async x=>{ensure();return durable.save(x)},
-  observeForward:async x=>{ensure();return durable.observe(x)},
-  forwardReport:async()=>{ensure();return durable.report()},
-  status:()=>({verified,database:verified?ISOLATED_DB_NAME:null,
-   writesAllowed:verified,persistenceConnected:verified})};
-}
-export async function connectResearchJournal({url=process.env.NABD_TEST_RESEARCH_DATABASE_URL,clock}={}){
- if(!url)return {status:'NOT_CONFIGURED',journal:null};
- let parsed;try{parsed=new URL(url);}catch{return {status:'INVALID_DATABASE_URL',journal:null};}
- if(!['postgresql:','postgres:'].includes(parsed.protocol)||!parsed.hostname)
-  return {status:'INVALID_DATABASE_URL',journal:null};
- try{
-  const {default:pg}=await import('pg');
-  const pool=new pg.Pool({connectionString:url,max:2,connectionTimeoutMillis:5000,
-    idleTimeoutMillis:10000,ssl:undefined});
-  const journal=createResearchJournal({query:(sql,args)=>pool.query(sql,args),clock});
-  try{
-   await journal.verify(); // Critical: verify exact test DB name before ANY DDL.
-   const migration=await readFile(new URL('./sql/001_research_journal.sql',import.meta.url),'utf8');
-   const migrationClient=await pool.connect();
-   try{await migrationClient.query(migration);}finally{migrationClient.release();}
-   await pool.query('SELECT 1 FROM agentic_research.forecast_snapshots LIMIT 0');
-   return {status:'CONNECTED',journal,close:()=>pool.end()};
-  }
-  catch(e){await pool.end();return {status:String(e.message).slice(0,80),journal:null};}
- }catch(e){return {status:e?.code==='ERR_MODULE_NOT_FOUND'?'PG_DRIVER_UNAVAILABLE':'DATABASE_CONNECTION_FAILED',journal:null};}
-}
-
-).test(intentId)||
+  const idValid=typeof intentId==='string' &&
+    intentId.startsWith(symbol+'-')&&intentId.length===symbol.length+11&&
+    /^[0-9]{10}$/.test(intentId.slice(symbol.length+1));
+  if(!['XAUUSD','BTCUSD'].includes(symbol)||!idValid||
      !Number.isSafeInteger(dealTicket)||dealTicket<=0||
      !Number.isSafeInteger(observedAt)||observedAt<=0)
    throw Error('INVALID_BROKER_HISTORY_PROOF');
@@ -212,6 +183,7 @@ export async function connectResearchJournal({url=process.env.NABD_TEST_RESEARCH
  }
  return {verify,saveForecast,firstForecast,firstActual,saveActual,saveAnalysis,viewDecisions,
   saveOperationalEvent,operationalReport,
+  saveBrokerHistoryProof,brokerHistoryProofReport,calendarEvidenceReport,
   saveForward:async x=>{ensure();return durable.save(x)},
   observeForward:async x=>{ensure();return durable.observe(x)},
   forwardReport:async()=>{ensure();return durable.report()},
