@@ -97,3 +97,61 @@ test('redacted operational events survive isolated PostgreSQL reconnect and reje
   }finally{await reopened.close();}
  }finally{if(c)await c.close();}
 });
+
+test('isolated PostgreSQL retains only validated broker history proof across restart',
+ {skip:!url},async()=>{
+ const at=1800000000+process.pid;
+ const symbol='BTCUSD',intentId='BTCUSD-'+at;
+ let conn=await connectResearchJournal({url});
+ assert.equal(conn.status,'CONNECTED');
+ try{
+  assert.deepEqual(await conn.journal.saveBrokerHistoryProof({
+   symbol,intentId,dealTicket:887766,observedAt:at}),{inserted:true});
+  assert.deepEqual(await conn.journal.saveBrokerHistoryProof({
+   symbol,intentId,dealTicket:111222,observedAt:at}),{inserted:false});
+  await assert.rejects(conn.journal.saveBrokerHistoryProof({
+   symbol,intentId:'XAUUSD-1800000000',dealTicket:1,observedAt:at}),
+   /INVALID_BROKER_HISTORY_PROOF/);
+  await conn.close();conn=null;
+  const reopened=await connectResearchJournal({url});
+  assert.equal(reopened.status,'CONNECTED');
+  try{
+   const report=await reopened.journal.brokerHistoryProofReport();
+   assert.equal(report.brokerSigned,false);
+   assert.ok(report.recent.some(p=>p.intentId===intentId&&p.brokerDealTicket===887766));
+   assert.equal(report.verifiedByIndependentBroker,false);
+  }finally{await reopened.close();}
+ }finally{if(conn)await conn.close();}
+});
+
+test('licensed streaming calendar archive persists first Actual, prior Forecast and Previous without revisions',
+ {skip:!url},async()=>{
+ const t=1800000000+process.pid*100;
+ const id=String(900000000+process.pid),provider='TRADING_ECONOMICS_STREAM';
+ let c=await connectResearchJournal({url});
+ assert.equal(c.status,'CONNECTED');
+ try{
+  assert.deepEqual(await c.journal.saveForecast({
+   provider,id,scheduledAt:t,observedAt:t-30,raw:'3.0%'}),{inserted:true});
+  assert.deepEqual(await c.journal.saveActual({
+   provider,id,scheduledAt:t,observedAt:t+2,raw:'3.4%',previousRaw:'2.9%'}),
+   {inserted:true});
+  assert.deepEqual(await c.journal.saveActual({
+   provider,id,scheduledAt:t,observedAt:t+8,raw:'9.9%',previousRaw:'0%'}),
+   {inserted:false});
+  await c.close();c=null;
+  const reopened=await connectResearchJournal({url});
+  try{
+   const report=await reopened.journal.calendarEvidenceReport();
+   const item=report.events.find(e=>e.id===id);
+   assert.ok(item);
+   assert.equal(item.actual,'3.4%');
+   assert.equal(item.forecast,'3.0%');
+   assert.equal(item.previous,'2.9%');
+   assert.equal(item.dataStatus,'ALL_THREE_WITH_PRE_RELEASE_BASELINE');
+   assert.equal(item.observationSecondsAfterScheduled,2);
+   assert.equal(item.independentProviderLatencyVerified,false);
+   assert.equal(report.realTimeTradingAuthorized,false);
+  }finally{await reopened.close();}
+ }finally{if(c)await c.close();}
+});

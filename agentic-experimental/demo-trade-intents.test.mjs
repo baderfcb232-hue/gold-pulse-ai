@@ -5,7 +5,7 @@ import {createDemoTradeIntents} from './demo-trade-intents.mjs';
 const now=1800000000,secret='test-execution-only-32-byte-secret-12345';
 const sha=x=>createHmac('sha256',secret).update(x).digest('hex');
 const full=(sym='XAUUSD')=>({environment:'EXPERIMENTAL_NABD_AGENTIC',accountType:'DEMO',
- brokerServer:'Independent-JustMarkets-Demo',brokerSymbol:sym==='BTCUSD'?'BTCUSD.m':'XAUUSD.m',accountLogin:1234567,timestamp:now-1,bid:100,ask:100.2,
+ brokerServer:'Independent-JustMarkets-Demo',brokerSymbol:sym==='BTCUSD'?'BTCUSD.m':'XAUUSD.m',accountLogin:1234567,timestamp:now-1,bid:100,ask:100.2,tickSize:0.01,
  candlesM5:[{time:now-300}]});
 const features=Object.fromEntries(['M5','M15','H1','H4'].map(tf=>[tf,{
  status:'INDICATORS_AVAILABLE',emaDirection:'UP',
@@ -303,4 +303,49 @@ test('rejected ACK emits only fixed reason code for durable operational tracing'
  assert.equal(d.report().brokerAcks,0);
  assert.equal(d.report().filledAcks,0);
  assert.equal(d.report().deliveryNeverRetried,true);
+});
+
+test('independent signed Demo sensor History must match ACK ticket, broker identity and original SL/TP',()=>{
+ const proofs=[];
+ const d=create({onBrokerHistoryProof:proof=>proofs.push(proof)});
+ assert.equal(d.consider(proposal).created,true);
+ const pullResult=d.pull(pull);
+ assert.equal(pullResult.status,'INTENT_DELIVERED');
+ const parts=pullResult.wire.split('|');
+ const broker={...full(),symbol:'XAUUSD',tickSize:0.01};
+ const history={dealTicket:887122,orderTicket:99221,brokerSymbol:'XAUUSD.m',
+  side:'BUY',entry:'IN',dealAt:now,volume:0.02,
+  stop:Number(parts[8]),target:Number(parts[9])};
+ const ack={id:'XAUUSD-'+(now-300),status:'FILLED',accountType:'DEMO',
+  accountLogin:1234567,occurredAt:now,brokerDealTicket:887122,
+  tradeRetcode:10009,executedVolume:0.02};
+ assert.equal(d.observeBrokerHistory([history],broker).matched,0,
+  'sensor history before signed executor ACK cannot prove a fill');
+ assert.equal(d.ack(signed(ack)).status,'RECORDED');
+ assert.equal(d.observeBrokerHistory([{...history,stop:history.stop+1}],broker).matched,0);
+ assert.equal(d.observeBrokerHistory([{...history,side:'SELL'}],broker).matched,0);
+ assert.equal(d.observeBrokerHistory([{...history,dealTicket:887123}],broker).matched,0);
+ assert.equal(d.observeBrokerHistory([history],{...broker,accountLogin:99}).matched,0);
+ assert.equal(d.observeBrokerHistory([history],broker).matched,1);
+ assert.equal(d.observeBrokerHistory([history],broker).matched,0);
+ assert.equal(d.report().mt5HistoryCrossCheckedFills,1);
+ assert.equal(d.report().brokerIndependentlyVerifiedFills,0,
+   'a same-terminal MT5 history read is not a broker-signed independent attestation');
+ assert.equal(d.report().recentDeliveries[0].historyProof,'SIGNED_SENSOR_MT5_HISTORY_MATCH');
+ assert.deepEqual(proofs,[{intentId:ack.id,symbol:'XAUUSD',
+  dealTicket:887122,observedAt:now}]);
+});
+test('a forged or missing Demo broker order SL/TP cannot establish execution proof',()=>{
+ const d=create();
+ d.consider(proposal);
+ const wire=d.pull(pull).wire.split('|');
+ d.ack(signed({id:'XAUUSD-'+(now-300),status:'FILLED',accountType:'DEMO',
+  accountLogin:1234567,occurredAt:now,brokerDealTicket:9001,
+  tradeRetcode:10009,executedVolume:0.02}));
+ const base={dealTicket:9001,orderTicket:10002,brokerSymbol:'XAUUSD.m',
+  side:'BUY',entry:'IN',dealAt:now,volume:0.02,stop:Number(wire[8]),
+  target:Number(wire[9])};
+ assert.equal(d.observeBrokerHistory([{...base,target:0}],{...full(),symbol:'XAUUSD'}).matched,0);
+ assert.equal(d.observeBrokerHistory([{...base,entry:'OUT'}],{...full(),symbol:'XAUUSD'}).matched,0);
+ assert.equal(d.observeBrokerHistory([base],{...full(),symbol:'XAUUSD'}).matched,1);
 });

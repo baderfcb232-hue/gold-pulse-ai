@@ -35,6 +35,10 @@ CREATE TABLE IF NOT EXISTS agentic_research.actual_observations (
   CONSTRAINT actual_bounded CHECK (length(actual_raw) BETWEEN 1 AND 80),
   CONSTRAINT actual_provider_id_bounded CHECK (length(provider_event_id) BETWEEN 1 AND 128)
 );
+-- Vendor Previous is recorded as observed with Actual. It is never
+-- substituted for the separately captured pre-release consensus Forecast.
+ALTER TABLE agentic_research.actual_observations
+ ADD COLUMN IF NOT EXISTS previous_raw TEXT;
 CREATE TABLE IF NOT EXISTS agentic_research.feed_checks (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   source TEXT NOT NULL,
@@ -110,5 +114,20 @@ CREATE TABLE IF NOT EXISTS agentic_research.demo_operational_events (
 );
 CREATE INDEX IF NOT EXISTS idx_demo_operational_recent
  ON agentic_research.demo_operational_events(id DESC);
+
+
+-- Independent of executor ACK, but still a reading from the same MT5 terminal.
+-- Do not mislabel as broker-signed third-party verification.
+CREATE TABLE IF NOT EXISTS agentic_research.demo_broker_history_proofs (
+ intent_id TEXT PRIMARY KEY CHECK (intent_id ~ '^(XAUUSD|BTCUSD)-[0-9]{10}$'),
+ symbol TEXT NOT NULL CHECK (symbol IN ('XAUUSD','BTCUSD')),
+ deal_ticket BIGINT NOT NULL CHECK (deal_ticket > 0),
+ observed_at TIMESTAMPTZ NOT NULL,
+ method TEXT NOT NULL DEFAULT 'SIGNED_READ_ONLY_MT5_HISTORY'
+   CHECK (method='SIGNED_READ_ONLY_MT5_HISTORY'),
+ recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_demo_broker_history_proofs_recent
+ ON agentic_research.demo_broker_history_proofs (observed_at DESC);
 
 COMMIT;
