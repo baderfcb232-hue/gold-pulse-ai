@@ -217,7 +217,12 @@ const server=http.createServer(async(req,res)=>{
       secure:req.socket.encrypted===true||req.headers['x-forwarded-proto']==='https'
     });
     const researchScheduling={};
-    if(verdict.status==='REJECTED')
+    // Do not persist arbitrary unauthenticated internet traffic as database rows.
+    // Only code paths reached after a valid signed sensor envelope are durable.
+    if(verdict.status==='REJECTED'&&
+       ['JSON_INVALID','ISOLATION_PROVENANCE_INVALID','BROKER_IDENTITY_UNVERIFIED',
+        'MARKET_SNAPSHOT_INVALID','NO_VALID_MARKET_SNAPSHOTS',
+        'OUT_OF_ORDER_BROKER_QUOTE','REPLAY_DETECTED'].includes(verdict.code))
       recordOperational('SENSOR','REJECTED',null,verdict.code);
     if(verdict.status==='OBSERVED'){
       let historyPacket=null;
