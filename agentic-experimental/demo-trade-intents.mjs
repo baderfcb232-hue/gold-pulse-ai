@@ -13,6 +13,7 @@ export function createDemoTradeIntents({
  const keyReady=typeof secret==='string'&&Buffer.byteLength(secret,'utf8')>=32;
  const queue=new Map(),seen=new Set(),delivered=new Map(),acks=new Map();
  let registeredDemoLogin=null,registeredDemoServer=null,lastExecutorSeen=null,lastAckAt=null;
+ let lastExecutorAuthenticatedAt=null,executorWaitingForSensor=0;
  let created=0,pulled=0,rejected=0,brokerFeedMismatch=0;
  const ackRejectCounts=Object.create(null);
  let lastAckRejectReason=null;
@@ -140,13 +141,20 @@ export function createDemoTradeIntents({
        /^[-A-Za-z0-9._]{1,64}$/.test(x.brokerSymbols[k]))||
      !Number.isSafeInteger(x.capturedAt)||Math.abs(x.capturedAt-Number(timestamp))>2)
     return {status:'REJECTED',wire:null};
+  // An authenticated executor can be reachable even when the separately signed
+  // market sensor is missing. Never treat this transport signal as permission
+  // to deliver an order or as proof of broker/account equality.
+  lastExecutorAuthenticatedAt=clock();
   // Both EAs must belong to the SAME independently isolated DEMO account.
   // Legacy read-only snapshots without a signed login may still be used for
   // chart research, but they MUST NEVER authorize broker execution.
   const observed=x.symbols.map(symbol=>quoteProvider(symbol))
     .filter(s=>s&&Number.isSafeInteger(s.timestamp)&&
       s.timestamp<=clock()&&clock()-s.timestamp<=10);
-  if(!observed.length)return {status:'WAITING_FOR_SENSOR',wire:null};
+  if(!observed.length){
+    executorWaitingForSensor++;
+    return {status:'WAITING_FOR_SENSOR',wire:null};
+  }
   if(observed.some(s=>s.brokerServer!==x.brokerServer))
     return {status:'BROKER_MISMATCH',wire:null};
   if(observed.some(s=>!Number.isSafeInteger(s.accountLogin)||s.accountLogin<=0))
@@ -253,6 +261,9 @@ export function createDemoTradeIntents({
    queued:[...queue.keys()],lastBySymbol,executorRegistered:registeredDemoLogin!==null,
    executorOnline:lastExecutorSeen!==null&&clock()>=lastExecutorSeen&&clock()-lastExecutorSeen<=15,
    lastExecutorSeenAt:lastExecutorSeen===null?null:new Date(lastExecutorSeen*1000).toISOString(),
+   executorTransportOnline:lastExecutorAuthenticatedAt!==null&&now>=lastExecutorAuthenticatedAt&&now-lastExecutorAuthenticatedAt<=15,
+   lastAuthenticatedExecutorAt:lastExecutorAuthenticatedAt===null?null:new Date(lastExecutorAuthenticatedAt*1000).toISOString(),
+   executorWaitingForSensor,
    lastAckAt:lastAckAt===null?null:new Date(lastAckAt*1000).toISOString(),
    brokerFeedMismatch,
    ackRejectCounts:{...ackRejectCounts},lastAckRejectReason,
