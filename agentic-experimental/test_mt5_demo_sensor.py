@@ -66,6 +66,39 @@ class SensorSafetyTests(unittest.TestCase):
         broker=MockMetaTrader5()
         with self.assertRaisesRegex(RuntimeError,"STALE_OR_INVALID_QUOTE"):
             sensor.capture(broker,"XAUUSD","XAUUSD",1800000100,"Isolated-Broker-Demo")
+    def test_readonly_broker_history_requires_completed_order_guards(self):
+        now=1800000000
+        broker=MockMetaTrader5()
+        broker.DEAL_ENTRY_IN=0
+        broker.DEAL_TYPE_BUY=0
+        broker.DEAL_TYPE_SELL=1
+        def history_deals_get(start,end):
+            return [types.SimpleNamespace(time=now-1,ticket=999001,order=888011,
+                volume=0.02,entry=0,type=0,symbol="XAUUSD")]
+        def history_orders_get(ticket=None):
+            return [types.SimpleNamespace(ticket=ticket,symbol="XAUUSD",
+                sl=97.2,tp=106.2)]
+        broker.history_deals_get=history_deals_get
+        broker.history_orders_get=history_orders_get
+        evidence=sensor.recent_broker_history(broker,now,1234567,{"XAUUSD":"XAUUSD"})
+        self.assertEqual(len(evidence["XAUUSD"]),1)
+        self.assertEqual(evidence["XAUUSD"][0]["dealTicket"],999001)
+        self.assertEqual(evidence["XAUUSD"][0]["stop"],97.2)
+        self.assertEqual(evidence["XAUUSD"][0]["target"],106.2)
+        self.assertFalse(broker.orders_called)
+        broker.history_orders_get=lambda ticket=None: [
+            types.SimpleNamespace(ticket=ticket,symbol="XAUUSD",sl=0,tp=0)]
+        self.assertEqual(sensor.recent_broker_history(
+            broker,now,1234567,{"XAUUSD":"XAUUSD"})["XAUUSD"],[])
+
+    def test_unavailable_or_wrong_history_never_fabricates_deal(self):
+        broker=MockMetaTrader5()
+        self.assertEqual(sensor.recent_broker_history(
+            broker,1800000000,1234567,{"XAUUSD":"XAUUSD"}),{})
+        broker.history_deals_get=lambda *args: None
+        broker.history_orders_get=lambda **kwargs: None
+        self.assertEqual(sensor.recent_broker_history(
+            broker,1800000000,1234567,{"XAUUSD":"XAUUSD"}),{})
     def test_no_order_calls_exist_in_public_surface(self):
         self.assertFalse(hasattr(sensor,"order_send"))
         self.assertEqual(sensor.TIMEFRAMES,("M5","M15","H1","H4"))
