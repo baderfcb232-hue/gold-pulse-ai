@@ -35,6 +35,10 @@ CREATE TABLE IF NOT EXISTS agentic_research.actual_observations (
   CONSTRAINT actual_bounded CHECK (length(actual_raw) BETWEEN 1 AND 80),
   CONSTRAINT actual_provider_id_bounded CHECK (length(provider_event_id) BETWEEN 1 AND 128)
 );
+-- Vendor Previous is recorded as observed with Actual. It is never
+-- substituted for the separately captured pre-release consensus Forecast.
+ALTER TABLE agentic_research.actual_observations
+ ADD COLUMN IF NOT EXISTS previous_raw TEXT;
 CREATE TABLE IF NOT EXISTS agentic_research.feed_checks (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   source TEXT NOT NULL,
