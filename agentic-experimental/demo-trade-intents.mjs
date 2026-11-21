@@ -264,6 +264,8 @@ export function createDemoTradeIntents({
        Math.abs(d.stop-delivery.stop)>tick*2.01||
        Math.abs(d.target-delivery.target)>tick*2.01)continue;
     brokerHistoryMatches.set(id,{at:now,symbol:delivery.symbol});
+    if(brokerHistoryMatches.size>500)
+     brokerHistoryMatches.delete(brokerHistoryMatches.keys().next().value);
     matched++;
     audit(delivery.symbol,'BROKER_HISTORY_CROSSCHECKED');
     try{onBrokerHistoryProof({intentId:id,symbol:delivery.symbol,
