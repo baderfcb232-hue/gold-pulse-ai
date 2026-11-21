@@ -8,7 +8,7 @@ const signature=(secret,wire)=>createHmac('sha256',secret).update(wire).digest('
 const openPosition=Object.freeze({XAUUSD:1,BTCUSD:2});
 export function createDemoTradeIntents({
  enabled=false,secret='',clock=()=>Math.floor(Date.now()/1000),quoteProvider=()=>null,
- onAudit=()=>{}
+ onAudit=()=>{},onAckDiagnostic=()=>{}
 }={}){
  const keyReady=typeof secret==='string'&&Buffer.byteLength(secret,'utf8')>=32;
  const queue=new Map(),seen=new Set(),delivered=new Map(),acks=new Map();
@@ -186,6 +186,11 @@ export function createDemoTradeIntents({
   const denyAck=(reason)=>{
    ackRejectCounts[reason]=(ackRejectCounts[reason]||0)+1;
    lastAckRejectReason=reason;
+   // Persist only diagnostics for an envelope whose signature was already verified.
+   // Public malformed/unauthenticated traffic stays in bounded memory counters.
+   if(['ACK_JSON_INVALID','ACK_DELIVERY_NOT_FOUND','ACK_ACCOUNT_OR_OUTCOME_INVALID',
+       'ACK_OCCURRED_AT_INVALID','ACK_OUTSIDE_DELIVERY_WINDOW'].includes(reason))
+    try{onAckDiagnostic(reason)}catch{}
    return {status:'REJECTED'};
   };
   if(!enabled||!keyReady||!secure)return denyAck('ACK_CHANNEL_DISABLED_OR_INSECURE');

@@ -66,3 +66,34 @@ test('phase8 forward outcomes are deduplicated and survive isolated PostgreSQL r
   }finally{await reopened.close();}
  }finally{if(c)await c.close();}
 });
+
+test('redacted operational events survive isolated PostgreSQL reconnect and reject unsafe text',
+ {skip:!url},async()=>{
+ const at=1800000000+process.pid;
+ let c=await connectResearchJournal({url});
+ assert.equal(c.status,'CONNECTED');
+ try{
+  assert.deepEqual(await c.journal.saveOperationalEvent({
+   source:'ACK',stage:'REJECTED',symbol:null,
+   reason:'ACK_SIGNATURE_INVALID',observedAt:at}),{inserted:true});
+  await assert.rejects(c.journal.saveOperationalEvent({
+   source:'ACK',stage:'REJECTED',reason:'secret=abc',observedAt:at}),
+   /INVALID_OPERATIONAL_EVENT/);
+  await assert.rejects(c.journal.saveOperationalEvent({
+   source:'ACK',stage:'REJECTED',symbol:'EURUSD',observedAt:at}),
+   /INVALID_OPERATIONAL_EVENT/);
+  const first=await c.journal.operationalReport();
+  assert.equal(first.storage,'ISOLATED_POSTGRESQL');
+  assert.ok(first.counts.some(x=>x.source==='ACK'&&x.reason==='ACK_SIGNATURE_INVALID'));
+  assert.equal(first.containsAccountIdentifiers,false);
+  assert.equal(first.canTriggerTrades,false);
+  await c.close();c=null;
+  const reopened=await connectResearchJournal({url});
+  assert.equal(reopened.status,'CONNECTED');
+  try{
+   const report=await reopened.journal.operationalReport();
+   assert.ok(report.recent.some(x=>x.source==='ACK'&&x.reason==='ACK_SIGNATURE_INVALID'));
+   assert.equal(JSON.stringify(report).includes('secret=abc'),false);
+  }finally{await reopened.close();}
+ }finally{if(c)await c.close();}
+});

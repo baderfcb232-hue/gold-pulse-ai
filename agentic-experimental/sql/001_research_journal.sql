@@ -96,4 +96,19 @@ CREATE INDEX IF NOT EXISTS idx_demo_forward_due
 CREATE INDEX IF NOT EXISTS idx_demo_forward_recent
  ON agentic_research.demo_forward_evaluations(predicted_at DESC);
 
+
+-- Read-only operational evidence. No request bodies, account IDs, order tickets,
+-- signatures, API keys or raw prices; separate isolated DB enforced by connector.
+CREATE TABLE IF NOT EXISTS agentic_research.demo_operational_events (
+ id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+ source TEXT NOT NULL CHECK (source IN ('BRAIN','TRADE','ACK','SENSOR')),
+ stage TEXT NOT NULL CHECK (stage ~ '^[A-Z][A-Z0-9_]{1,79}$'),
+ symbol TEXT CHECK (symbol IS NULL OR symbol IN ('XAUUSD','BTCUSD')),
+ reason_code TEXT CHECK (reason_code IS NULL OR reason_code ~ '^[A-Z][A-Z0-9_]{1,79}$'),
+ observed_at TIMESTAMPTZ NOT NULL,
+ recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_demo_operational_recent
+ ON agentic_research.demo_operational_events(id DESC);
+
 COMMIT;
