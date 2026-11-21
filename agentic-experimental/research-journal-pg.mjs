@@ -1,6 +1,7 @@
 // Disabled-by-default isolated Postgres journal adapter.
 import {readFile} from 'node:fs/promises';
 import {createDurableForwardStore} from './phase8-durable-forward.mjs';
+import {parseComparable} from './news-surprise.mjs';
 // Requires explicit isolated DATABASE URL, 'pg' package at runtime and schema migration.
 // No automatic connection to any production database.
 export const ISOLATED_DB_NAME='nabd_agentic_research_test';
@@ -40,14 +41,15 @@ export function createResearchJournal({query,clock}={}){
   const result=await query('SELECT actual_raw, EXTRACT(EPOCH FROM first_observed_at)::bigint AS observed_at FROM agentic_research.actual_observations WHERE event_provider=$1 AND provider_event_id=$2 AND scheduled_at=to_timestamp($3)',[provider,id,scheduledAt]);
   const row=result?.rows?.[0];return row?{raw:row.actual_raw,observedAt:Number(row.observed_at)}:null;
  }
- async function saveActual({provider,id,scheduledAt,observedAt,raw,unit=null,numeric=null}){
+ async function saveActual({provider,id,scheduledAt,observedAt,raw,unit=null,numeric=null,previousRaw=null}){
   ensure();
   if(!provider||!id||!raw||!Number.isSafeInteger(scheduledAt)||
-     !Number.isSafeInteger(observedAt)||observedAt<scheduledAt)
+     !Number.isSafeInteger(observedAt)||observedAt<scheduledAt||
+     (previousRaw!==null&&(typeof previousRaw!=='string'||previousRaw.length>80)))
     throw Error('INVALID_ACTUAL_OBSERVATION');
   const result=await query(
-   'INSERT INTO agentic_research.actual_observations (event_provider,provider_event_id,scheduled_at,first_observed_at,actual_raw,actual_numeric,actual_unit,provenance) VALUES ($1,$2,to_timestamp($3),to_timestamp($4),$5,$6,$7,$8) ON CONFLICT DO NOTHING RETURNING actual_raw',
-   [provider,id,scheduledAt,observedAt,raw,numeric,unit,'VENDOR_FIRST_OBSERVED_NOT_OFFICIAL_RELEASE']);
+   'INSERT INTO agentic_research.actual_observations (event_provider,provider_event_id,scheduled_at,first_observed_at,actual_raw,actual_numeric,actual_unit,provenance,previous_raw) VALUES ($1,$2,to_timestamp($3),to_timestamp($4),$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING RETURNING actual_raw',
+   [provider,id,scheduledAt,observedAt,raw,numeric,unit,'VENDOR_FIRST_OBSERVED_NOT_OFFICIAL_RELEASE',previousRaw]);
   return {inserted:result?.rowCount===1};
  }
 
@@ -127,12 +129,40 @@ export function createResearchJournal({query,clock}={}){
    containsAccountIdentifiers:false,containsCredentials:false,
    containsBrokerTickets:false,canTriggerTrades:false};
  }
+ async function calendarEvidenceReport(){
+  ensure();
+  const r=await query(
+   "SELECT a.provider_event_id AS id,a.scheduled_at,a.first_observed_at AS actual_observed_at,a.actual_raw,a.previous_raw,f.first_observed_at AS forecast_observed_at,f.forecast_raw FROM agentic_research.actual_observations a LEFT JOIN agentic_research.forecast_snapshots f ON f.event_provider=a.event_provider AND f.provider_event_id=a.provider_event_id AND f.scheduled_at=a.scheduled_at WHERE a.event_provider=$1 ORDER BY a.first_observed_at DESC LIMIT 25",
+   ['TRADING_ECONOMICS_STREAM']);
+  const events=(r.rows||[]).map(e=>{
+   const actual=parseComparable(e.actual_raw||''),forecast=parseComparable(e.forecast_raw||''),
+    previous=parseComparable(e.previous_raw||'');
+   const scheduled=Math.floor(new Date(e.scheduled_at).getTime()/1000);
+   const seen=Math.floor(new Date(e.actual_observed_at).getTime()/1000);
+   const before=e.forecast_observed_at?
+    Math.floor(new Date(e.forecast_observed_at).getTime()/1000):null;
+   const comparable=!!actual&&!!forecast&&!!previous&&
+     actual.unit===forecast.unit&&actual.unit===previous.unit;
+   const pointInTime=comparable&&before!==null&&before<scheduled&&seen>=scheduled;
+   return {id:e.id,scheduledAt:new Date(e.scheduled_at).toISOString(),
+    firstActualObservedAt:new Date(e.actual_observed_at).toISOString(),
+    forecastObservedAt:e.forecast_observed_at?new Date(e.forecast_observed_at).toISOString():null,
+    actual:e.actual_raw,forecast:e.forecast_raw||null,previous:e.previous_raw||null,
+    dataStatus:pointInTime?'ALL_THREE_WITH_PRE_RELEASE_BASELINE':'INCOMPLETE_OR_NO_PRE_RELEASE_BASELINE',
+    difference:pointInTime?actual.value-forecast.value:null,
+    observationSecondsAfterScheduled:seen-scheduled,
+    independentProviderLatencyVerified:false,officialPublicationTimestampVerified:false};
+  });
+  return {status:'POINT_IN_TIME_RESEARCH_ARCHIVE',source:'TRADING_ECONOMICS_STREAM',
+    observedEvents:events.length,completeEvents:events.filter(e=>e.difference!==null).length,
+    events,brokerReactionVerified:false,realTimeTradingAuthorized:false};
+ }
  async function saveBrokerHistoryProof({intentId,symbol,dealTicket,observedAt}={}){
   ensure();
   if(!['XAUUSD','BTCUSD'].includes(symbol)||
      typeof intentId!=='string'||!new RegExp('^'+symbol+'-[0-9]{10}
   saveOperationalEvent,operationalReport,
-  saveBrokerHistoryProof,brokerHistoryProofReport,
+  saveBrokerHistoryProof,brokerHistoryProofReport,calendarEvidenceReport,
   saveForward:async x=>{ensure();return durable.save(x)},
   observeForward:async x=>{ensure();return durable.observe(x)},
   forwardReport:async()=>{ensure();return durable.report()},
