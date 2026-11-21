@@ -16,12 +16,13 @@ class MockMetaTrader5:
     TIMEFRAME_M15 = 15
     TIMEFRAME_H1 = 60
     TIMEFRAME_H4 = 240
-    def __init__(self, mode=0, server="Isolated-Broker-Demo"):
+    def __init__(self, mode=0, server="Isolated-Broker-Demo", login=1234567):
         self.mode = mode
         self.server = server
+        self.login = login
         self.orders_called = False
     def account_info(self):
-        return types.SimpleNamespace(trade_mode=self.mode, server=self.server)
+        return types.SimpleNamespace(trade_mode=self.mode, server=self.server, login=self.login)
     def symbol_select(self, symbol, enabled):
         return enabled and symbol in ("XAUUSD", "BTCUSD")
     def symbol_info_tick(self, symbol):
@@ -48,11 +49,19 @@ class SensorSafetyTests(unittest.TestCase):
         broker=MockMetaTrader5()
         result=sensor.capture(broker,"XAUUSD","XAUUSD",1800000000,"Isolated-Broker-Demo")
         self.assertEqual(result["accountType"],"DEMO")
+        self.assertEqual(result["accountLogin"],1234567)
         self.assertFalse(result["executionEnabled"])
         self.assertEqual(len(result["candlesM5"]),3)
         self.assertEqual(len(result["candlesH4"]),3)
         self.assertEqual(result["tickSize"],0.01)
         self.assertFalse(broker.orders_called)
+    def test_identity_mismatch_and_missing_login_fail_closed(self):
+        with self.assertRaisesRegex(RuntimeError,"DEMO_ACCOUNT_IDENTITY_UNVERIFIED"):
+            sensor.capture(MockMetaTrader5(login=0),"XAUUSD","XAUUSD",1800000000,"Isolated-Broker-Demo")
+        with self.assertRaisesRegex(RuntimeError,"DEMO_ACCOUNT_IDENTITY_UNVERIFIED"):
+            sensor.capture(MockMetaTrader5(mode=2),"XAUUSD","XAUUSD",1800000000,"Isolated-Broker-Demo")
+        with self.assertRaisesRegex(RuntimeError,"DEMO_ACCOUNT_IDENTITY_UNVERIFIED"):
+            sensor.capture(MockMetaTrader5(),"XAUUSD","XAUUSD",1800000000,"Wrong-Demo")
     def test_stale_quotes_are_rejected(self):
         broker=MockMetaTrader5()
         with self.assertRaisesRegex(RuntimeError,"STALE_OR_INVALID_QUOTE"):
