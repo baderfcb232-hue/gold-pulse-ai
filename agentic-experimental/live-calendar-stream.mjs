@@ -67,7 +67,8 @@ export function createLiveCalendarStream({
   }
   if(event.hasActual&&event.receivedAt>=event.eventAt&&!seenActual.has(id)){
    if(journal)await journal.saveActual({provider:SOURCE,id:event.id,scheduledAt:event.eventAt,
-     observedAt:event.receivedAt,raw:event.actualRaw});
+     observedAt:event.receivedAt,raw:event.actualRaw,
+     previousRaw:event.previousRaw});
    seenActual.add(id);
   }
   let saved=journal?await journal.firstForecast({provider:SOURCE,id:event.id,scheduledAt:event.eventAt}):null;
@@ -80,6 +81,8 @@ export function createLiveCalendarStream({
     comparison:pointInTime?{difference,unit:actual.unit,
       direction:difference>0?'ABOVE_FORECAST':difference<0?'BELOW_FORECAST':'IN_LINE'}:null,
     comparisonStatus:pointInTime?'PRE_RELEASE_FORECAST_RECORDED':'NO_POINT_IN_TIME_BASELINE',
+    actualForecastPreviousObserved:pointInTime&&event.allThreeComparable,
+    observationSecondsAfterScheduled:event.secondsAfterScheduled,
     preReleaseForecastAvailable:pointInTime,
     forecastAsObservedBeforeRelease:pointInTime?saved.raw:null,
     officialPublicationTimestampVerified:false,
