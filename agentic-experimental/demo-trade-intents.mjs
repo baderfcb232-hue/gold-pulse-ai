@@ -8,7 +8,7 @@ const signature=(secret,wire)=>createHmac('sha256',secret).update(wire).digest('
 const openPosition=Object.freeze({XAUUSD:1,BTCUSD:2});
 export function createDemoTradeIntents({
  enabled=false,secret='',clock=()=>Math.floor(Date.now()/1000),quoteProvider=()=>null,
- onAudit=()=>{}
+ onAudit=()=>{},onAckDiagnostic=()=>{}
 }={}){
  const keyReady=typeof secret==='string'&&Buffer.byteLength(secret,'utf8')>=32;
  const queue=new Map(),seen=new Set(),delivered=new Map(),acks=new Map();
@@ -186,6 +186,7 @@ export function createDemoTradeIntents({
   const denyAck=(reason)=>{
    ackRejectCounts[reason]=(ackRejectCounts[reason]||0)+1;
    lastAckRejectReason=reason;
+   try{onAckDiagnostic(reason)}catch{}
    return {status:'REJECTED'};
   };
   if(!enabled||!keyReady||!secure)return denyAck('ACK_CHANNEL_DISABLED_OR_INSECURE');
