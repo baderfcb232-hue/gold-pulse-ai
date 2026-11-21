@@ -105,6 +105,22 @@ test('executorRegistered is historical; executorOnline requires recent authentic
  assert.equal(d.pull({...refresh,timestamp:String(t),mac:sha(t+'\n'+refresh.body)}).status,'NO_INTENT');
  assert.equal(d.report().executorOnline,true);
 });
+test('authenticated executor heartbeat remains visible while sensor is offline without granting orders',()=>{
+ const d=create({quoteProvider:()=>null});
+ assert.equal(d.report().executorTransportOnline,false);
+ const forged={...pull,mac:'0'.repeat(64)};
+ assert.equal(d.pull(forged).status,'REJECTED');
+ assert.equal(d.report().executorTransportOnline,false);
+ assert.equal(d.pull(pull).status,'WAITING_FOR_SENSOR');
+ const status=d.report();
+ assert.equal(status.executorTransportOnline,true);
+ assert.equal(status.executorOnline,false);
+ assert.equal(status.executorRegistered,false);
+ assert.equal(status.executorWaitingForSensor,1);
+ assert.ok(status.lastAuthenticatedExecutorAt);
+ assert.equal(status.delivered,0);
+ assert.equal(status.brokerAcks,0);
+});
 test('foreign Demo broker account never receives a pending order',()=>{
  const d=create(); assert.equal(d.consider(proposal).created,true);
  const foreign=signed({...JSON.parse(pull.body),brokerServer:'OtherBroker-Demo'});

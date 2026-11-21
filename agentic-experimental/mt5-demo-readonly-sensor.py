@@ -61,6 +61,11 @@ def closed_bars(mt5, symbol, timeframe, now):
     return result
 
 def capture(mt5, canonical, broker_symbol, now, server):
+    account = mt5.account_info()
+    if (account is None or account.trade_mode != mt5.ACCOUNT_TRADE_MODE_DEMO or
+            str(account.server or '') != server or
+            type(getattr(account, 'login', None)) is not int or account.login <= 0):
+        raise RuntimeError('DEMO_ACCOUNT_IDENTITY_UNVERIFIED')
     if not broker_symbol or len(broker_symbol) > 64:
         raise RuntimeError("INVALID_BROKER_SYMBOL")
     if not mt5.symbol_select(broker_symbol, True):
@@ -81,6 +86,7 @@ def capture(mt5, canonical, broker_symbol, now, server):
         "environment": "EXPERIMENTAL_NABD_AGENTIC", "accountType": "DEMO",
         "executionEnabled": False, "symbol": canonical,
         "brokerSymbol": broker_symbol, "brokerServer": server,
+        "accountLogin": account.login,
         "timestamp": int(tick.time), "bid": bid, "ask": ask,
         "tickSize": tick_size, "tickValue": tick_value,
         "contractSize": contract,
