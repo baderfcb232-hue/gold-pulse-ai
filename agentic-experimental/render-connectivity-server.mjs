@@ -44,6 +44,40 @@ const forwardEvaluation=createForwardEvaluation();
 const strategyComparison=createPhase7Comparator();
 const incidentMonitor=createIncidentMonitor();
 let connectedJournal=null;
+// Only bounded, redacted event labels reach the verified isolated test database.
+// Never retain HTTP bodies, logins, signatures, broker tickets or price streams.
+const operationalQueue=[];
+let operationalBusy=false,operationalWriteFailures=0,operationalDropped=0;
+let operationalLastPersistedAt=null;
+const operationalCode=x=>typeof x==='string'&&/^[A-Z][A-Z0-9_]{1,79}$/.test(x);
+function recordOperational(source,stage,symbol=null,reason=null){
+ if(!['BRAIN','TRADE','ACK','SENSOR'].includes(source)||
+    !operationalCode(stage))return;
+ const item={source,stage,
+  symbol:['XAUUSD','BTCUSD'].includes(symbol)?symbol:null,
+  reason:operationalCode(reason)?reason:null,
+  observedAt:Math.floor(Date.now()/1000)};
+ if(operationalQueue.length>=100){operationalQueue.shift();operationalDropped++;}
+ operationalQueue.push(item);
+ void flushOperational();
+}
+async function flushOperational(){
+ if(operationalBusy||!connectedJournal?.saveOperationalEvent)return;
+ operationalBusy=true;
+ try{
+  while(operationalQueue.length&&connectedJournal?.saveOperationalEvent){
+   try{
+    await connectedJournal.saveOperationalEvent(operationalQueue[0]);
+    operationalQueue.shift();
+    operationalLastPersistedAt=new Date().toISOString();
+   }catch{
+    operationalWriteFailures++;
+    console.log('[NABD OPERATIONAL AUDIT] WRITE_FAILED');
+    break;
+   }
+  }
+ }finally{operationalBusy=false;}
+}
 const forwardDbQueue=new Map();
 let forwardDbWriteFailures=0;
 function serializeForwardDb(symbol,work){
@@ -63,8 +97,10 @@ const demoTradeIntents=createDemoTradeIntents({
  quoteProvider:symbol=>demoIngest.getLatest(symbol),
  onAudit:(symbol,stage,reason)=>{
    decisionAudit.record(symbol,{stage,reason});
+   recordOperational('TRADE',stage,symbol,reason);
    console.log('[NABD DEMO INTENT]',symbol,stage,reason||'');
-  }
+  },
+ onAckDiagnostic:reason=>recordOperational('ACK','REJECTED',null,reason)
 });
 const demoAutoBrain=createDemoAutoBrain({brains:{XAUUSD:researchBrain,BTCUSD:btcResearchBrain},
  scheduler:hybrid,enabled:process.env.NABD_TEST_AUTO_RESEARCH==='true',
@@ -83,6 +119,7 @@ const demoAutoBrain=createDemoAutoBrain({brains:{XAUUSD:researchBrain,BTCUSD:btc
   },
  onAudit:(symbol,event)=>{
    decisionAudit.record(symbol,event);
+   recordOperational('BRAIN',event.stage,symbol,event.reason);
    try { observatory.analysis(symbol,event); } catch {}
    console.log('[NABD AUTO BRAIN]',symbol,event.stage,event.stance||'',event.reasonSummary||event.reason||'');
   }});
@@ -180,6 +217,8 @@ const server=http.createServer(async(req,res)=>{
       secure:req.socket.encrypted===true||req.headers['x-forwarded-proto']==='https'
     });
     const researchScheduling={};
+    if(verdict.status==='REJECTED')
+      recordOperational('SENSOR','REJECTED',null,verdict.code);
     if(verdict.status==='OBSERVED'){
       let historyPacket=null;
       try {historyPacket=JSON.parse(body).history;} catch {}
@@ -193,7 +232,7 @@ const server=http.createServer(async(req,res)=>{
     }
     send(verdict.status==='OBSERVED'?202:403,{...verdict,researchScheduling});return;
   }
-  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/fred-historical/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-calendar/status','/brain/status','/auto-brain/status','/demo-trade/status','/demo-sensor/status','/shadow-smoke/status','/decision-audit/status','/forward-evaluation/status','/strategy-comparison/status','/durable-evaluation/status','/quality/status','/incident/status','/integration/status'].includes(pathname)){
+  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/fred-historical/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-calendar/status','/brain/status','/auto-brain/status','/demo-trade/status','/demo-sensor/status','/shadow-smoke/status','/decision-audit/status','/forward-evaluation/status','/strategy-comparison/status','/durable-evaluation/status','/operational-audit/status','/quality/status','/incident/status','/integration/status'].includes(pathname)){
     res.writeHead(404,{'Content-Type':'application/json','Cache-Control':'no-store'});
     res.end(JSON.stringify({error:'not_found'}));return;
   }
@@ -222,6 +261,29 @@ const server=http.createServer(async(req,res)=>{
       durable,forwardWriteFailures:forwardDbWriteFailures});
     res.writeHead(200,headers);res.end(JSON.stringify(quality));return;
   }
+  if(pathname==='/operational-audit/status'){
+    const headers={'Content-Type':'application/json','Cache-Control':'private, no-store'};
+    if(!authorizedView(req.headers.authorization,process.env.NABD_DEMO_VIEW_TOKEN)){
+      res.writeHead(403,headers);
+      res.end(JSON.stringify({error:'READ_AUTH_REQUIRED'}));return;
+    }
+    if(!connectedJournal?.operationalReport){
+      res.writeHead(503,headers);
+      res.end(JSON.stringify({status:'ISOLATED_DATABASE_NOT_CONNECTED',
+       persistentMetricsAvailable:false}));return;
+    }
+    try{
+      const report=await connectedJournal.operationalReport();
+      res.writeHead(200,headers);
+      res.end(JSON.stringify({...report,pendingWrites:operationalQueue.length,
+       writeFailures:operationalWriteFailures,droppedEvents:operationalDropped,
+       lastPersistedAt:operationalLastPersistedAt}));return;
+    }catch{
+      res.writeHead(503,headers);
+      res.end(JSON.stringify({status:'OPERATIONAL_AUDIT_QUERY_FAILED',
+       persistentMetricsAvailable:false}));return;
+    }
+  }
   if(pathname==='/durable-evaluation/status'){
     const headers={'Content-Type':'application/json','Cache-Control':'no-store'};
     if(!connectedJournal?.forwardReport){
@@ -249,12 +311,14 @@ server.listen(port,'0.0.0.0',()=>{console.log('[NABD AGENTIC TEST] ready on port
     connectedJournal=r.status==='CONNECTED'?r.journal:null;
     journalState={status:r.status,isolated:true,persistenceConnected:r.status==='CONNECTED',writePathEnabled:!!connectedJournal&&!!process.env.NABD_TEST_TRADING_ECONOMICS_KEY};
     console.log('[NABD RESEARCH JOURNAL]',r.status);
+    void flushOperational();
   });
   void feed.poll().then(r=>console.log('[NABD REFERENCE FEED]',r.status,r.code||r.observation?.trigger));
   void goldSpot.poll().then(r=>console.log('[NABD GOLD REFERENCE]',r.status,r.code||''));
   void sources.check().then(r=>console.log('[NABD RESEARCH SOURCES]',JSON.stringify(r)));
   void officialNews.poll().then(r=>console.log('[NABD OFFICIAL NEWS]',r.status,JSON.stringify(r.providers)));
   const officialNewsTimer=setInterval(()=>void officialNews.poll().then(r=>{if(r.status!=='OK')console.log('[NABD OFFICIAL NEWS]',r.status);}),5*60000); officialNewsTimer.unref();
+  const auditTimer=setInterval(()=>void flushOperational(),30*1000);auditTimer.unref();
   const timer=setInterval(()=>void feed.poll().then(r=>{if(r.status==='ERROR')console.log('[NABD REFERENCE FEED] ERROR',r.code);}),60000);
   timer.unref();
   const goldTimer=setInterval(()=>void goldSpot.poll().then(r=>{if(r.status==='ERROR')console.log('[NABD GOLD REFERENCE] ERROR',r.code);}),60000);goldTimer.unref();
