@@ -127,6 +127,59 @@ export function createResearchJournal({query,clock}={}){
    containsAccountIdentifiers:false,containsCredentials:false,
    containsBrokerTickets:false,canTriggerTrades:false};
  }
+ async function saveBrokerHistoryProof({intentId,symbol,dealTicket,observedAt}={}){
+  ensure();
+  if(!['XAUUSD','BTCUSD'].includes(symbol)||
+     typeof intentId!=='string'||!new RegExp('^'+symbol+'-[0-9]{10}
+  saveOperationalEvent,operationalReport,
+  saveBrokerHistoryProof,brokerHistoryProofReport,
+  saveForward:async x=>{ensure();return durable.save(x)},
+  observeForward:async x=>{ensure();return durable.observe(x)},
+  forwardReport:async()=>{ensure();return durable.report()},
+  status:()=>({verified,database:verified?ISOLATED_DB_NAME:null,
+   writesAllowed:verified,persistenceConnected:verified})};
+}
+export async function connectResearchJournal({url=process.env.NABD_TEST_RESEARCH_DATABASE_URL,clock}={}){
+ if(!url)return {status:'NOT_CONFIGURED',journal:null};
+ let parsed;try{parsed=new URL(url);}catch{return {status:'INVALID_DATABASE_URL',journal:null};}
+ if(!['postgresql:','postgres:'].includes(parsed.protocol)||!parsed.hostname)
+  return {status:'INVALID_DATABASE_URL',journal:null};
+ try{
+  const {default:pg}=await import('pg');
+  const pool=new pg.Pool({connectionString:url,max:2,connectionTimeoutMillis:5000,
+    idleTimeoutMillis:10000,ssl:undefined});
+  const journal=createResearchJournal({query:(sql,args)=>pool.query(sql,args),clock});
+  try{
+   await journal.verify(); // Critical: verify exact test DB name before ANY DDL.
+   const migration=await readFile(new URL('./sql/001_research_journal.sql',import.meta.url),'utf8');
+   const migrationClient=await pool.connect();
+   try{await migrationClient.query(migration);}finally{migrationClient.release();}
+   await pool.query('SELECT 1 FROM agentic_research.forecast_snapshots LIMIT 0');
+   return {status:'CONNECTED',journal,close:()=>pool.end()};
+  }
+  catch(e){await pool.end();return {status:String(e.message).slice(0,80),journal:null};}
+ }catch(e){return {status:e?.code==='ERR_MODULE_NOT_FOUND'?'PG_DRIVER_UNAVAILABLE':'DATABASE_CONNECTION_FAILED',journal:null};}
+}
+
+).test(intentId)||
+     !Number.isSafeInteger(dealTicket)||dealTicket<=0||
+     !Number.isSafeInteger(observedAt)||observedAt<=0)
+   throw Error('INVALID_BROKER_HISTORY_PROOF');
+  const r=await query(
+   'INSERT INTO agentic_research.demo_broker_history_proofs (intent_id,symbol,deal_ticket,observed_at) VALUES ($1,$2,$3,to_timestamp($4)) ON CONFLICT DO NOTHING RETURNING intent_id',
+   [intentId,symbol,dealTicket,observedAt]);
+  return {inserted:r?.rowCount===1};
+ }
+ async function brokerHistoryProofReport(){
+  ensure();
+  const rows=await query('SELECT intent_id,symbol,deal_ticket,observed_at FROM agentic_research.demo_broker_history_proofs ORDER BY observed_at DESC LIMIT 25',[]);
+  const total=await query('SELECT count(*)::int AS n FROM agentic_research.demo_broker_history_proofs',[]);
+  return {status:'ISOLATED_MT5_HISTORY_CROSSCHECK',
+   source:'SEPARATE_SIGNED_DEMO_MT5_SENSOR',brokerSigned:false,
+   total:total.rows[0]?.n||0,verifiedByIndependentBroker:false,
+   recent:rows.rows.map(x=>({intentId:x.intent_id,symbol:x.symbol,
+    brokerDealTicket:Number(x.deal_ticket),observedAt:new Date(x.observed_at).toISOString()}))};
+ }
  return {verify,saveForecast,firstForecast,firstActual,saveActual,saveAnalysis,viewDecisions,
   saveOperationalEvent,operationalReport,
   saveForward:async x=>{ensure();return durable.save(x)},
