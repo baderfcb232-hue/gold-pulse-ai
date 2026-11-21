@@ -97,3 +97,29 @@ test('redacted operational events survive isolated PostgreSQL reconnect and reje
   }finally{await reopened.close();}
  }finally{if(c)await c.close();}
 });
+
+test('isolated PostgreSQL retains only validated broker history proof across restart',
+ {skip:!url},async()=>{
+ const at=1800000000+process.pid;
+ const symbol='BTCUSD',intentId='BTCUSD-'+at;
+ let conn=await connectResearchJournal({url});
+ assert.equal(conn.status,'CONNECTED');
+ try{
+  assert.deepEqual(await conn.journal.saveBrokerHistoryProof({
+   symbol,intentId,dealTicket:887766,observedAt:at}),{inserted:true});
+  assert.deepEqual(await conn.journal.saveBrokerHistoryProof({
+   symbol,intentId,dealTicket:111222,observedAt:at}),{inserted:false});
+  await assert.rejects(conn.journal.saveBrokerHistoryProof({
+   symbol,intentId:'XAUUSD-1800000000',dealTicket:1,observedAt:at}),
+   /INVALID_BROKER_HISTORY_PROOF/);
+  await conn.close();conn=null;
+  const reopened=await connectResearchJournal({url});
+  assert.equal(reopened.status,'CONNECTED');
+  try{
+   const report=await reopened.journal.brokerHistoryProofReport();
+   assert.equal(report.brokerSigned,false);
+   assert.ok(report.recent.some(p=>p.intentId===intentId&&p.brokerDealTicket===887766));
+   assert.equal(report.verifiedByIndependentBroker,false);
+  }finally{await reopened.close();}
+ }finally{if(conn)await conn.close();}
+});
