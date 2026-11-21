@@ -12,6 +12,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from datetime import datetime, timezone
 
 TIMEFRAMES = ("M5", "M15", "H1", "H4")
 MARKETS = {
@@ -95,6 +96,67 @@ def capture(mt5, canonical, broker_symbol, now, server):
         payload["candles" + frame] = closed_bars(mt5, broker_symbol, frame, now)
     return payload
 
+def recent_broker_history(mt5, now, account_login, broker_symbols):
+    """Read a bounded set of broker-confirmed DEMO deals and opening-order guards.
+
+    This is a distinct read-only MetaTrader5 API path, not a copy of EA ACK.
+    A trade is *not* proven until the test server matches deal ticket, side,
+    timeframe, account, instrument and protective SL/TP to the issued intent.
+    """
+    if not isinstance(account_login, int) or account_login <= 0:
+        return {}
+    if not hasattr(mt5, "history_deals_get") or not hasattr(mt5, "history_orders_get"):
+        return {}
+    begin = datetime.fromtimestamp(now - 900, tz=timezone.utc)
+    end = datetime.fromtimestamp(now + 1, tz=timezone.utc)
+    deals = mt5.history_deals_get(begin, end)
+    if deals is None:
+        return {}
+    result = {canonical: [] for canonical in broker_symbols}
+    for deal in sorted(deals, key=lambda d: int(getattr(d, "time", 0)),
+                       reverse=True)[:80]:
+        canonical = next((k for k, v in broker_symbols.items()
+                          if v == getattr(deal, "symbol", None)), None)
+        if canonical is None or len(result[canonical]) >= 20:
+            continue
+        if (getattr(deal, "entry", None) != getattr(mt5, "DEAL_ENTRY_IN", 0)
+                or getattr(deal, "type", None) not in
+                (getattr(mt5, "DEAL_TYPE_BUY", 0),
+                 getattr(mt5, "DEAL_TYPE_SELL", 1))):
+            continue
+        deal_at = getattr(deal, "time", None)
+        ticket = getattr(deal, "ticket", None)
+        order_ticket = getattr(deal, "order", None)
+        volume = getattr(deal, "volume", None)
+        if (type(deal_at) is not int or deal_at < now - 900 or deal_at > now + 1
+                or type(ticket) is not int or ticket <= 0
+                or type(order_ticket) is not int or order_ticket <= 0
+                or not isinstance(volume, (float, int)) or not math.isfinite(volume)
+                or volume <= 0):
+            continue
+        orders = mt5.history_orders_get(ticket=order_ticket)
+        if not orders or len(orders) != 1:
+            continue
+        order = orders[0]
+        if (getattr(order, "ticket", None) != order_ticket
+                or getattr(order, "symbol", None) != getattr(deal, "symbol", None)):
+            continue
+        sl = getattr(order, "sl", None)
+        tp = getattr(order, "tp", None)
+        if (not isinstance(sl, (float, int)) or not math.isfinite(sl) or sl <= 0
+                or not isinstance(tp, (float, int)) or not math.isfinite(tp) or tp <= 0):
+            continue
+        result[canonical].append({
+            "dealTicket": ticket, "orderTicket": order_ticket,
+            "brokerSymbol": deal.symbol,
+            "side": "BUY" if deal.type == getattr(mt5, "DEAL_TYPE_BUY", 0)
+                    else "SELL",
+            "entry": "IN", "dealAt": deal_at,
+            "volume": float(volume), "stop": float(sl), "target": float(tp)
+        })
+    return result
+
+
 def main():
     terminal = os.environ.get("NABD_TEST_MT5_TERMINAL_PATH")
     output_dir = os.environ.get("NABD_TEST_SENSOR_OUTPUT_DIR")
@@ -109,21 +171,28 @@ def main():
         server = require_demo(mt5)
         now = int(time.time())
         results = {}
+        broker_symbols = {}
         for canonical, env in MARKETS.items():
             broker_symbol = os.environ.get(env, canonical)
             try:
                 results[canonical] = capture(mt5, canonical, broker_symbol, now, server)
+                broker_symbols[canonical] = broker_symbol
             except RuntimeError as exc:
                 results[canonical] = {"status": "BLOCKED", "reason": str(exc),
                                       "symbol": canonical, "executionEnabled": False}
         dest = Path(output_dir).resolve()
         dest.mkdir(parents=True, exist_ok=True)
         # One safe local output. No account login, password, tokens or order commands.
+        # Keep history evidence behind the same signed, read-only DEMO envelope.
+        # No history is fabricated when the broker API is unavailable.
+        account = mt5.account_info()
+        history = recent_broker_history(mt5, now, int(account.login), broker_symbols)
         target = dest / "nabd-demo-research-snapshot.json"
         temp = dest / "nabd-demo-research-snapshot.tmp"
         temp.write_text(json.dumps({"source": "ISOLATED_MT5_DEMO_SENSOR",
                                      "capturedAt": now, "ordersSupported": False,
-                                     "symbols": results}, separators=(",", ":")), encoding="utf-8")
+                                     "symbols": results, "history": history},
+                                   separators=(",", ":")), encoding="utf-8")
         os.replace(temp, target)
         print("NABD DEMO research sensor saved:", str(target))
         for symbol, value in results.items():
