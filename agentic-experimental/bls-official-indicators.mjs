@@ -60,20 +60,48 @@ export function describeBlsFailure(raw){
  const status=typeof raw?.status==='string'&&/^[A-Z_]{3,60}$/.test(raw.status)?raw.status:'UNKNOWN_STATUS';
  return 'BLS_UPSTREAM_REJECTED_'+status;
 }
+// Only two attempts for transient timeout/HTTP 5xx. Never retry 429 or
+// authorization failures, fabricate official figures, or treat data as live.
+const sleepMs=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 export async function fetchBlsIndicators({fetcher=fetch,now=Math.floor(Date.now()/1000),
- registrationKey=process.env.NABD_TEST_BLS_REGISTRATION_KEY}={}){
- // The official v1 API allows up to 25 series in ONE POST. One request instead
- // of three makes restarts and free/shared-IP quotas less likely to break.
- const response=await fetcher(registrationKey?V2_URL:V1_URL,{
-  method:'POST',headers:{accept:'application/json','content-type':'application/json'},
-  body:JSON.stringify({...{seriesid:BLS_SERIES.map(x=>x.id)},
-   ...(registrationKey?{registrationkey:registrationKey}: {})}),
-  redirect:'error',signal:AbortSignal.timeout(12000)});
- if(!response.ok)throw Error('BLS_HTTP_'+response.status);
- const raw=await response.json();
- const reason=describeBlsFailure(raw);
- if(reason)throw Error(reason);
- return BLS_SERIES.map(row=>parseBlsResponse(raw,row.id,now));
+ registrationKey=process.env.NABD_TEST_BLS_REGISTRATION_KEY,wait=sleepMs,
+ timeoutMs=15000}={}){
+ if(!Number.isSafeInteger(timeoutMs)||timeoutMs<1000||timeoutMs>30000)
+  throw Error('BLS_INVALID_TIMEOUT');
+ const url=registrationKey?V2_URL:V1_URL;
+ const body=JSON.stringify({seriesid:BLS_SERIES.map(x=>x.id),
+  ...(registrationKey?{registrationkey:registrationKey}:{})});
+ let code='BLS_NETWORK_ERROR';
+ for(let attempt=0;attempt<2;attempt++){
+  try{
+   const response=await fetcher(url,{method:'POST',
+    headers:{accept:'application/json','content-type':'application/json'},
+    body,redirect:'error',signal:AbortSignal.timeout(timeoutMs)});
+   if(!response.ok){
+    code='BLS_HTTP_'+response.status;
+    if(response.status>=500&&response.status<=599&&attempt===0){
+     await wait(1000);continue;
+    }
+    throw Error(code);
+   }
+   const raw=await response.json();
+   const reason=describeBlsFailure(raw);
+   if(reason)throw Error(reason);
+   return BLS_SERIES.map(row=>parseBlsResponse(raw,row.id,now));
+  }catch(e){
+   const msg=String(e?.message||'');
+   const timeout=e?.name==='TimeoutError'||e?.name==='AbortError'||
+    /(?:timeout|aborted)/i.test(msg);
+   if(timeout)code='BLS_REQUEST_TIMEOUT';
+   else if(/^BLS_[A-Z0-9_]+$/.test(msg))code=msg;
+   else code='BLS_NETWORK_ERROR';
+   if(attempt===0&&(timeout||code==='BLS_NETWORK_ERROR')){
+    await wait(1000);continue;
+   }
+   throw Error(code);
+  }
+ }
+ throw Error(code);
 }
 export function createBlsOfficialMonitor({load=fetchBlsIndicators,
  clock=()=>Math.floor(Date.now()/1000)}={}){
@@ -90,7 +118,11 @@ export function createBlsOfficialMonitor({load=fetchBlsIndicators,
      throw Error('BLS_UNTRUSTED_DATA');
    series=data;lastSuccess=new Date(clock()*1000).toISOString();lastError=null;
    return {status:'OBSERVED',count:series.length};
-  }catch(e){lastError=String(e?.message||e).slice(0,100);return {status:'ERROR',code:lastError};}
+  }catch(e){
+   const reason=String(e?.message||'');
+   lastError=/^BLS_[A-Z0-9_]{1,80}$/.test(reason)?reason:'BLS_INTERNAL_ERROR';
+   return {status:'ERROR',code:lastError};
+  }
   finally{busy=false;}
  }
  return {poll,report:()=>({status:lastError?'FEED_ERROR':lastSuccess?'OBSERVING':'NOT_CHECKED',
