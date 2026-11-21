@@ -8,10 +8,11 @@ const signature=(secret,wire)=>createHmac('sha256',secret).update(wire).digest('
 const openPosition=Object.freeze({XAUUSD:1,BTCUSD:2});
 export function createDemoTradeIntents({
  enabled=false,secret='',clock=()=>Math.floor(Date.now()/1000),quoteProvider=()=>null,
- onAudit=()=>{},onAckDiagnostic=()=>{}
+ onAudit=()=>{},onAckDiagnostic=()=>{},onBrokerHistoryProof=()=>{}
 }={}){
  const keyReady=typeof secret==='string'&&Buffer.byteLength(secret,'utf8')>=32;
  const queue=new Map(),seen=new Set(),delivered=new Map(),acks=new Map();
+ const brokerHistoryMatches=new Map();
  let registeredDemoLogin=null,registeredDemoServer=null,lastExecutorSeen=null,lastAckAt=null;
  let lastExecutorAuthenticatedAt=null,executorWaitingForSensor=0;
  let created=0,pulled=0,rejected=0,brokerFeedMismatch=0;
@@ -109,7 +110,10 @@ export function createDemoTradeIntents({
    const fields=['V1',p.id,p.symbol,p.side,p.bar,p.issued,p.expires,
     p.entry,p.stop,p.target,p.riskPct,p.spreadLimit,p.maxPositions];
    const base=fields.join('|');
-   delivered.set(p.id,{symbol,deliveredAt:n,expires:p.expires});
+   delivered.set(p.id,{symbol,deliveredAt:n,expires:p.expires,
+    accountLogin:fresh.accountLogin,brokerServer:fresh.brokerServer,
+    brokerSymbol:fresh.brokerSymbol,side:p.side,stop:p.stop,target:p.target,
+    tickSize:fresh.tickSize});
    if(delivered.size>500)delivered.delete(delivered.keys().next().value);
    pulled++;audit(symbol,'DELIVERED_TO_DEMO_EA');
    return base+'|'+signature(secret,base);
@@ -224,10 +228,50 @@ export function createDemoTradeIntents({
   const status=parsed.status==='FILLED'?
     (hasBrokerReference?'EA_REPORTED_FILL_WITH_DEAL':'UNVERIFIED_EA_FILL_CLAIM'):
     parsed.status==='REJECTED'?'EA_REPORTED_REJECTION':'EA_UNCERTAIN_BROKER_RESULT';
-  acks.set(parsed.id,{status,at:clock(),hasBrokerReference});
+  acks.set(parsed.id,{status,at:clock(),hasBrokerReference,
+   reportedDealTicket:hasBrokerReference?parsed.brokerDealTicket:null});
   lastAckAt=clock();
   audit(deliveredIntent.symbol,status);
   return {status:'RECORDED'};
+ }
+ // Cross-check the signed read-only sensor's MT5 history, never the executor's
+ // self-reported fill. Neither this API nor the sensor can place broker orders.
+ function observeBrokerHistory(deals,broker){
+  if(!Array.isArray(deals)||deals.length>25||!broker||
+     broker.accountType!=='DEMO'||!Number.isSafeInteger(broker.accountLogin)||
+     broker.accountLogin<=0||!['XAUUSD','BTCUSD'].includes(broker.symbol))
+   return {matched:0,reason:'INVALID_HISTORY_OR_ACCOUNT'};
+  let matched=0;
+  const now=clock();
+  for(const [id,delivery] of delivered){
+   if(delivery.symbol!==broker.symbol||brokerHistoryMatches.has(id)||
+      delivery.accountLogin!==broker.accountLogin||
+      delivery.brokerServer!==broker.brokerServer||
+      delivery.brokerSymbol!==broker.brokerSymbol)continue;
+   const ack=acks.get(id);
+   if(!ack?.hasBrokerReference||!Number.isSafeInteger(ack.reportedDealTicket))continue;
+   for(const d of deals){
+    if(!d||typeof d!=='object'||Array.isArray(d)||
+       !Number.isSafeInteger(d.dealTicket)||d.dealTicket!==ack.reportedDealTicket||
+       !Number.isSafeInteger(d.orderTicket)||d.orderTicket<=0||
+       d.brokerSymbol!==delivery.brokerSymbol||d.side!==delivery.side||
+       d.entry!=='IN'||!Number.isSafeInteger(d.dealAt)||
+       d.dealAt<delivery.deliveredAt-5||d.dealAt>delivery.expires+60||
+       d.dealAt>now+2||!finite(d.volume)||d.volume<=0||
+       !finite(d.stop)||!finite(d.target)||d.stop<=0||d.target<=0)continue;
+    const tick=delivery.tickSize;
+    if(!finite(tick)||tick<=0||
+       Math.abs(d.stop-delivery.stop)>tick*2.01||
+       Math.abs(d.target-delivery.target)>tick*2.01)continue;
+    brokerHistoryMatches.set(id,{at:now,symbol:delivery.symbol});
+    matched++;
+    audit(delivery.symbol,'BROKER_HISTORY_CROSSCHECKED');
+    try{onBrokerHistoryProof({intentId:id,symbol:delivery.symbol,
+     dealTicket:d.dealTicket,observedAt:now});}catch{}
+    break;
+   }
+  }
+  return {matched,reason:matched?'MT5_HISTORY_MATCHED':'NO_MATCHING_DEMO_DEAL'};
  }
  function report(){
   // Read-only telemetry. No broker/account IDs, passwords, signatures or prices.
@@ -250,7 +294,8 @@ export function createDemoTradeIntents({
    const receivedAck=acks.get(id),ageSeconds=Math.max(0,now-item.deliveredAt);
    return {id,symbol:item.symbol,deliveredAt:new Date(item.deliveredAt*1000).toISOString(),
     ageSeconds,ackStatus:receivedAck?.status||null,
-    deliveryState:receivedAck?'ACK_RECEIVED':ageSeconds>=45?'ACK_OVERDUE':'AWAITING_ACK'};
+    deliveryState:receivedAck?'ACK_RECEIVED':ageSeconds>=45?'ACK_OVERDUE':'AWAITING_ACK',
+    historyProof:brokerHistoryMatches.has(id)?'SIGNED_SENSOR_MT5_HISTORY_MATCH':'NOT_VERIFIED'};
   });
   const unacknowledgedDeliveries=[...delivered.keys()].filter(id=>!acks.has(id));
   const overdueAcks=unacknowledgedDeliveries.filter(id=>
@@ -262,6 +307,8 @@ export function createDemoTradeIntents({
    brokerAcks:acks.size,filledAcks:[...acks.values()].filter(x=>x.hasBrokerReference).length,
    eaUnverifiedFillClaims:[...acks.values()].filter(x=>x.status==='UNVERIFIED_EA_FILL_CLAIM').length,
    brokerIndependentlyVerifiedFills:0,
+   mt5HistoryCrossCheckedFills:brokerHistoryMatches.size,
+   historyProofMethod:'SEPARATE_SIGNED_READ_ONLY_DEMO_SENSOR_NOT_BROKER_SIGNED',
    uncertainBrokerResults:[...acks.values()].filter(x=>x.status==='EA_UNCERTAIN_BROKER_RESULT').length,
    queued:[...queue.keys()],lastBySymbol,executorRegistered:registeredDemoLogin!==null,
    executorOnline:lastExecutorSeen!==null&&clock()>=lastExecutorSeen&&clock()-lastExecutorSeen<=15,
@@ -275,5 +322,5 @@ export function createDemoTradeIntents({
    tradeCountVerifiedByBroker:false,
    liveTrading:false,serverPlacesOrders:false,dailyLimitsEnforcedByEA:true};
  }
- return {consider,pull,ack,report};
+ return {consider,pull,ack,observeBrokerHistory,report};
 }
