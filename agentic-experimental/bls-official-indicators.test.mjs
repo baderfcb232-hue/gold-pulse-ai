@@ -68,3 +68,43 @@ test('BLS recognized Results array is never mislabeled rejected request',async()
  const {describeBlsFailure}=await import('./bls-official-indicators.mjs');
  assert.equal(describeBlsFailure(raw),null);
 });
+
+test('one transient official BLS timeout is retried once with bounded backoff',async()=>{
+ let calls=0;const delays=[];
+ const v=await fetchBlsIndicators({now,wait:async ms=>{delays.push(ms);},
+  fetcher:async()=>{
+   calls++;
+   if(calls===1)throw Object.assign(Error('request timed out'),{name:'TimeoutError'});
+   return {ok:true,json:async()=>({status:'REQUEST_SUCCEEDED',Results:{
+    series:BLS_SERIES.map(x=>response(x.id).Results.series[0])}})};
+  }});
+ assert.equal(calls,2);
+ assert.deepEqual(delays,[1000]);
+ assert.equal(v.length,3);
+ assert.equal(v.every(x=>x.eligibleForTrading===false),true);
+});
+test('BLS 503 retries once but rate limit 429 and auth 403 never retry',async()=>{
+ let calls=0;
+ const v=await fetchBlsIndicators({now,wait:async()=>{},
+  fetcher:async()=>{calls++;return calls===1?{ok:false,status:503}:
+   {ok:true,json:async()=>({status:'REQUEST_SUCCEEDED',Results:{
+    series:BLS_SERIES.map(x=>response(x.id).Results.series[0])}})};}});
+ assert.equal(calls,2);assert.equal(v.length,3);
+ for(const code of [403,429]){
+  let once=0;
+  await assert.rejects(fetchBlsIndicators({now,wait:async()=>{},
+   fetcher:async()=>{once++;return {ok:false,status:code}}}),new RegExp('BLS_HTTP_'+code));
+  assert.equal(once,1);
+ }
+});
+test('BLS permanent timeout remains explicitly unavailable, never invents numbers',async()=>{
+ let calls=0;
+ const monitor=createBlsOfficialMonitor({clock:()=>now,
+  load:async()=>fetchBlsIndicators({now,wait:async()=>{},fetcher:async()=>{
+   calls++;throw Object.assign(Error('Provider connection aborted'),{name:'AbortError'});
+  }})});
+ assert.equal((await monitor.poll()).code,'BLS_REQUEST_TIMEOUT');
+ assert.equal(calls,2);
+ assert.equal(monitor.report().series.length,0);
+ assert.equal(monitor.report().actualVsForecastReady,false);
+});
