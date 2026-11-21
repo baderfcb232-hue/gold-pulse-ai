@@ -291,3 +291,14 @@ test('expired ACK envelope is diagnosed but cannot change the broker outcome',()
  assert.equal(d.ack(refreshed).status,'RECORDED');
  assert.equal(d.report().uncertainBrokerResults,1);
 });
+
+test('rejected ACK emits only fixed reason code for durable operational tracing',()=>{
+ const reasons=[];
+ const d=create({onAckDiagnostic:reason=>reasons.push(reason)});
+ d.consider(proposal);d.pull(pull);
+ assert.equal(d.ack({...signed({id:'fake'}),mac:'0'.repeat(64)}).status,'REJECTED');
+ assert.deepEqual(reasons,['ACK_SIGNATURE_INVALID']);
+ assert.equal(d.report().brokerAcks,0);
+ assert.equal(d.report().filledAcks,0);
+ assert.equal(d.report().deliveryNeverRetried,true);
+});
