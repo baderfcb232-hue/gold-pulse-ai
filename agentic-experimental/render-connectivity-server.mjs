@@ -244,7 +244,7 @@ const server=http.createServer(async(req,res)=>{
     }
     send(verdict.status==='OBSERVED'?202:403,{...verdict,researchScheduling});return;
   }
-  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/fred-historical/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-calendar/status','/brain/status','/auto-brain/status','/demo-trade/status','/demo-trade/history-proofs','/demo-sensor/status','/shadow-smoke/status','/decision-audit/status','/forward-evaluation/status','/strategy-comparison/status','/durable-evaluation/status','/operational-audit/status','/quality/status','/incident/status','/integration/status'].includes(pathname)){
+  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/fred-historical/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-news/evidence','/live-calendar/status','/brain/status','/auto-brain/status','/demo-trade/status','/demo-trade/history-proofs','/demo-sensor/status','/shadow-smoke/status','/decision-audit/status','/forward-evaluation/status','/strategy-comparison/status','/durable-evaluation/status','/operational-audit/status','/quality/status','/incident/status','/integration/status'].includes(pathname)){
     res.writeHead(404,{'Content-Type':'application/json','Cache-Control':'no-store'});
     res.end(JSON.stringify({error:'not_found'}));return;
   }
@@ -272,6 +272,25 @@ const server=http.createServer(async(req,res)=>{
       model:researchBrain.report(),journal:journalState,
       durable,forwardWriteFailures:forwardDbWriteFailures});
     res.writeHead(200,headers);res.end(JSON.stringify(quality));return;
+  }
+  if(pathname==='/live-news/evidence'){
+    const headers={'Content-Type':'application/json','Cache-Control':'private, no-store'};
+    if(!authorizedView(req.headers.authorization,process.env.NABD_DEMO_VIEW_TOKEN)){
+      res.writeHead(403,headers);res.end(JSON.stringify({error:'READ_AUTH_REQUIRED'}));return;
+    }
+    if(!connectedJournal?.calendarEvidenceReport){
+      res.writeHead(503,headers);res.end(JSON.stringify({status:'ISOLATED_DB_NOT_CONNECTED'}));return;
+    }
+    try{
+      const archive=await connectedJournal.calendarEvidenceReport();
+      const stream=liveCalendarStream.report();
+      res.writeHead(200,headers);
+      res.end(JSON.stringify({...archive,streamStatus:stream.status,
+        providerConfigured:stream.configured,independentLatencyVerified:false,
+        publicationTimeVerified:false,newsTradingEnabled:false}));return;
+    }catch{
+      res.writeHead(503,headers);res.end(JSON.stringify({status:'NEWS_EVIDENCE_QUERY_FAILED'}));return;
+    }
   }
   if(pathname==='/demo-trade/history-proofs'){
     const headers={'Content-Type':'application/json','Cache-Control':'private, no-store'};
