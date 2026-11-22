@@ -54,7 +54,7 @@ test('reject other accounts or broker symbol mapping before inspecting deals',()
  const h=build({matchHistory:()=>{matched++;return {matched:1}}});
  assert.equal(h.receive(sign({...snapshot,accountLogin:333,deals:[deal]})).code,
   'HISTORY_SENSOR_ACCOUNT_MISMATCH');
- assert.equal(h.receive(sign({...snapshot,symbols:{...snapshot.symbols,BTCUSD:'BTCUSD'}})).code,
+ assert.equal(h.receive(sign({...snapshot,symbols:{...snapshot.symbols,BTCUSD:'BTCUSD'},deals:[deal]})).code,
   'INVALID_HISTORY_DEAL');
  assert.equal(matched,0);
 });
