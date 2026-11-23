@@ -35,6 +35,8 @@ on:
       - 'agentic-experimental/demo-trade-intents.test.mjs'
       - 'agentic-experimental/demo-auto-brain.mjs'
       - 'agentic-experimental/render-connectivity-server.mjs'
+      - 'agentic-experimental/shadow-feed-runner.mjs'
+      - 'agentic-experimental/shadow-feed-rate-limit.test.mjs'
       - 'agentic-experimental/shadow-pipeline.mjs'
       - 'agentic-experimental/shadow-pipeline.test.mjs'
       - 'agentic-experimental/shadow-smoke.mjs'
