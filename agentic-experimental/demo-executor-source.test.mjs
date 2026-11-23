@@ -33,7 +33,7 @@ test('limits are explicit and enforced at both account and BTC symbol levels',()
 });
 test('bounded ACK retry never resends a broker order',()=>{
   assert.match(source,/for\\(int attempt=1;attempt<=2;attempt\\+\\+\\)/);
-  assert.match(source,/Broker ACK/); // evidence of explicitly audited outbound ACK
+  assert.match(source,/ACK UNCONFIRMED/); // explicit audit failure rather than hidden loss
   assert.equal((source.match(/g_trade\\.Buy\\(/g)||[]).length,1);
   assert.equal((source.match(/g_trade\\.Sell\\(/g)||[]).length,1);
   assert(source.indexOf('AuditFill(id,outcome') > source.indexOf('bool sent=buy?'));
