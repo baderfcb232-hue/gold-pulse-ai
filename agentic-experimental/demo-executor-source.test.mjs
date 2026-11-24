@@ -38,3 +38,18 @@ test('bounded ACK retry never resends a broker order',()=>{
   assert.equal((source.match(/g_trade\.Sell\(/g)||[]).length,1);
   assert(source.indexOf('AuditFill(id,outcome') > source.indexOf('bool sent=buy?'));
 });
+
+test('v1.25 heartbeat is read only, domain separated and runs before arming gates',()=>{
+ const v=readFileSync(new URL('./NABD_Demo_Trade_Executor_Safe_v1_25.mq5',import.meta.url),'utf8');
+ const heartbeat=v.slice(v.indexOf('void SendReadOnlyHeartbeat()'),v.indexOf('void PollDemoOrders()'));
+ assert.match(v,/#property version "1\.25"/);
+ assert.match(v,/input bool\s+InpEnableDemoAutoTrading = false/);
+ assert.match(v,/input string InpExecHmacSecret = ""/);
+ assert.match(v,/NABD_HEARTBEAT_V1\\n/);
+ assert.match(heartbeat,/SignedPost\(NABD_HEARTBEAT_URL/);
+ assert.doesNotMatch(heartbeat,/NABD_PULL_URL|ExecuteWire|g_trade\.|AuditFill/);
+ assert.match(v,/void OnTimer\(\)\{SendReadOnlyHeartbeat\(\);PollDemoOrders\(\)/);
+ assert(v.indexOf('NABD DEMO NOT ARMED: Algo Trading disabled') < v.indexOf('SignedPost(NABD_PULL_URL'));
+ assert.equal((v.match(/g_trade\.Buy\(/g)||[]).length,1);
+ assert.equal((v.match(/g_trade\.Sell\(/g)||[]).length,1);
+});
