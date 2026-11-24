@@ -177,3 +177,9 @@ CREATE TABLE IF NOT EXISTS agentic_research.ai_paper_outcomes (
  (state='SCORED' AND exit_at BETWEEN due_at AND due_at+120 AND exit_bid>0 AND exit_ask>exit_bid))
 );
 CREATE INDEX IF NOT EXISTS idx_ai_paper_pending ON agentic_research.ai_paper_outcomes(symbol,due_at) WHERE state='PENDING';
+
+CREATE TABLE IF NOT EXISTS agentic_research.ai_paper_portfolios (
+ symbol TEXT PRIMARY KEY CHECK(symbol IN ('XAUUSD','BTCUSD')),
+ state JSONB NOT NULL CHECK(jsonb_typeof(state)='object'),
+ revision BIGINT NOT NULL DEFAULT 0 CHECK(revision>=0)
+);

@@ -213,3 +213,18 @@ test('paper journal persists WAIT and direction, checks feed identity and dedupl
  assert.equal(report.markets.BTCUSD.directionalSamples,1);assert.ok(report.markets.BTCUSD.netR>0);assert.equal(report.executionPermission,false);
  }finally{if(c)await c.close();}
 });
+
+test('portfolio persists position and closes once across reconnect',{skip:!url},async()=>{
+ let now=1900000200;
+ const q=bid=>({symbol:'XAUUSD',bid,ask:bid+.2,timestamp:now,environment:'EXPERIMENTAL_NABD_AGENTIC',accountType:'DEMO',executionEnabled:false,brokerServer:'JustMarkets-Demo',brokerSymbol:'XAUUSD.m',accountLogin:55});
+ let c=await connectResearchJournal({url,clock:()=>now});assert.equal(c.status,'CONNECTED');
+ try{
+ const input={symbol:'XAUUSD',closedBarTime:now-300,broker:q(100),features:{M5:{atr14:2}},plan:{stance:'BUY_WATCH',confidence:.9,timeHorizonMinutes:1}};
+ assert.equal((await c.journal.portfolioSave(input)).entered,true);
+ assert.equal((await c.journal.portfolioSave(input)).entered,false);
+ await c.close();c=null;now+=10;
+ c=await connectResearchJournal({url,clock:()=>now});assert.equal(c.status,'CONNECTED');
+ await c.journal.portfolioObserve(q(112));await c.journal.portfolioObserve(q(112));
+ const r=await c.journal.portfolioReport();assert.equal(r.markets.XAUUSD.closed,1);assert.equal(r.markets.XAUUSD.targetHits,1);assert.ok(r.markets.XAUUSD.balance>2000);assert.equal(r.executionPermission,false);
+ }finally{if(c)await c.close();}
+});
