@@ -186,3 +186,9 @@ test('durable Fusion A/B reservations, paired outcome and cap survive reconnect'
   assert.equal(JSON.stringify(report).includes('feed_fingerprint'),false);
  }finally{if(c)await c.close();}
 });
+
+ test('V5 statistical review executes against actual isolated PostgreSQL', {skip:!url},async()=>{
+ const c=await connectResearchJournal({url});assert.equal(c.status,'CONNECTED');
+ try{const r=await c.journal.statisticalReview();assert.ok(Array.isArray(r.groups));assert.equal(r.profitabilityMeasured,false);assert.equal(r.executionPermission,false);}
+ finally{await c.close();}
+ });
