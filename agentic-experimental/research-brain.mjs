@@ -84,7 +84,8 @@ export function createResearchBrain({key,model='gpt-4.1-mini',fetcher=fetch,cloc
      instructions:'You are NABD isolated DEMO research analyst. Evaluate M5, M15, H1, H4 closed broker candles and the provided deterministic technicalEvidence, including EMA8/21/200, RSI14, ATR14 and prior structure only where actually available. Do not invent missing indicators or infer upcoming economic news. Compare trend vs reversal, support/resistance, spread, counter-thesis and invalidation. If history is too short, frames conflict, spread is poor, or evidence is weak, choose WAIT. State precise evidence limitations. This is research only: no orders, lot sizing, execution permissions, claims of guaranteed outcomes or profits.',
      input:JSON.stringify(ctx),
      text:{format:{type:'json_schema',name:'isolated_nabd_research_plan',strict:true,schema}}}),
-    signal:AbortSignal.timeout(25000)
+    // Allow bounded provider latency; the independent intent gate still revalidates broker quote and bar.
+    signal:AbortSignal.timeout(40000)
    });
    if(!response.ok)throw Error('AI_HTTP_'+response.status);
    const envelope=await response.json();
