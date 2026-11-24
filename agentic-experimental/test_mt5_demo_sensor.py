@@ -33,7 +33,7 @@ class MockMetaTrader5:
     def copy_rates_from_pos(self, symbol, timeframe, start, count):
         duration={5:300,15:900,60:3600,240:14400}[timeframe]
         return [dict(time=1800000000-duration*i,open=100.0,high=101.0,
-            low=99.0,close=100.4) for i in (3,2,1)]
+            low=99.0,close=100.4,tick_volume=23,real_volume=0) for i in (3,2,1)]
     def order_send(self,*args,**kwargs):
         self.orders_called=True
         raise AssertionError("orders are forbidden")
@@ -54,6 +54,8 @@ class SensorSafetyTests(unittest.TestCase):
         self.assertEqual(len(result["candlesM5"]),3)
         self.assertEqual(len(result["candlesH4"]),3)
         self.assertEqual(result["tickSize"],0.01)
+        self.assertEqual(result["candlesM5"][0]["tickVolume"],23)
+        self.assertEqual(result["candlesM5"][0]["realVolume"],0)
         self.assertFalse(broker.orders_called)
     def test_identity_mismatch_and_missing_login_fail_closed(self):
         with self.assertRaisesRegex(RuntimeError,"DEMO_ACCOUNT_IDENTITY_UNVERIFIED"):

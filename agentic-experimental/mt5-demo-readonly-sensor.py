@@ -44,6 +44,15 @@ def closed_bars(mt5, symbol, timeframe, now):
             "high": float(bar["high"]), "low": float(bar["low"]),
             "close": float(bar["close"]),
         }
+        # MT5 tick_volume is quote activity, not exchange traded volume.
+        # Keep the two fields separate; older sensors remain compatible.
+        for source, target in (("tick_volume", "tickVolume"), ("real_volume", "realVolume")):
+            try:
+                value = int(bar[source])
+                if 0 <= value <= 9007199254740991 and value == bar[source]:
+                    item[target] = value
+            except (KeyError, IndexError, ValueError, TypeError, OverflowError):
+                pass
         if item["time"] + unit > now or item["time"] <= 0:
             raise RuntimeError("UNFINISHED_CANDLE_" + timeframe)
         result.append(item)

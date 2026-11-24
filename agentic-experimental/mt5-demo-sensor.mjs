@@ -2,6 +2,7 @@
 // This is a contract validator for future ISOLATED MT5 demo sensor, not a broker bridge.
 const finite=x=>typeof x==='number'&&Number.isFinite(x);
 const valid=x=>Number.isSafeInteger(x)&&x>0;
+const safeBars=(bars,n)=>bars.slice(-n).map(b=>{const c={time:b.time,open:b.open,high:b.high,low:b.low,close:b.close};for(const k of ['tickVolume','realVolume'])if(Number.isSafeInteger(b[k])&&b[k]>=0)c[k]=b[k];return c;});
 export function validateIsolatedDemoSnapshot(snapshot,now){
  const errors=[];
  if(!snapshot||typeof snapshot!=='object'||Array.isArray(snapshot))
@@ -62,11 +63,11 @@ export function validateIsolatedDemoSnapshot(snapshot,now){
   timestamp:snapshot.timestamp,
   bid:snapshot.bid,ask:snapshot.ask,tickSize:snapshot.tickSize,
   tickValue:snapshot.tickValue,contractSize:snapshot.contractSize,
-  candlesM5:snapshot.candlesM5.slice(-240),
+  candlesM5:safeBars(snapshot.candlesM5,240),
   multiTimeframeVerified,
-  candlesM15:multiTimeframeVerified?snapshot.candlesM15.slice(-100):null,
-  candlesH1:multiTimeframeVerified?snapshot.candlesH1.slice(-80):null,
-  candlesH4:multiTimeframeVerified?snapshot.candlesH4.slice(-60):null},
+  candlesM15:multiTimeframeVerified?safeBars(snapshot.candlesM15,100):null,
+  candlesH1:multiTimeframeVerified?safeBars(snapshot.candlesH1,80):null,
+  candlesH4:multiTimeframeVerified?safeBars(snapshot.candlesH4,60):null},
   executionAllowed:false,ordersSupported:false};
 }
 export function demoSensorReadiness(){
