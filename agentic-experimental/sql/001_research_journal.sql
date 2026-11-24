@@ -137,7 +137,7 @@ CREATE TABLE IF NOT EXISTS agentic_research.fusion_ab_samples (
  reserved_at BIGINT NOT NULL CHECK(reserved_at>0),
  state TEXT NOT NULL DEFAULT 'RESERVED' CHECK(state IN ('RESERVED','FAILED','PENDING','SCORED','EXPIRED')),
  observed_at BIGINT, baseline_tick_at BIGINT, baseline_mid DOUBLE PRECISION CHECK(baseline_mid>0 AND baseline_mid<1000000000),
- feed_fingerprint TEXT CHECK(feed_fingerprint ~ '^[0-9a-f]{64}),
+ feed_fingerprint TEXT CHECK(feed_fingerprint ~ '^[0-9a-f]{64}$'),
  baseline_stance TEXT CHECK(baseline_stance IN ('BUY_WATCH','SELL_WATCH','WAIT')),
  fusion_stance TEXT CHECK(fusion_stance IN ('BUY_WATCH','SELL_WATCH','WAIT')),
  baseline_confidence DOUBLE PRECISION CHECK(baseline_confidence BETWEEN 0 AND 1),
@@ -149,7 +149,7 @@ CREATE INDEX IF NOT EXISTS idx_fusion_ab_reserved ON agentic_research.fusion_ab_
 CREATE INDEX IF NOT EXISTS idx_fusion_ab_pending ON agentic_research.fusion_ab_samples(symbol,observed_at) WHERE state='PENDING';
 -- Serialize reservations across workers and restarts; all attempts consume budget.
 CREATE OR REPLACE FUNCTION agentic_research.reserve_fusion_ab(p_symbol TEXT,p_now BIGINT,p_limit INTEGER,p_interval INTEGER)
-RETURNS BOOLEAN LANGUAGE plpgsql AS $
+RETURNS BOOLEAN LANGUAGE plpgsql AS $fusion_ab$
 BEGIN
  IF p_symbol NOT IN ('XAUUSD','BTCUSD') OR p_now<=0 OR p_limit NOT BETWEEN 1 AND 8 OR p_interval<3600 THEN RETURN FALSE; END IF;
  PERFORM pg_advisory_xact_lock(19476201);
@@ -158,6 +158,6 @@ BEGIN
  THEN RETURN FALSE; END IF;
  INSERT INTO agentic_research.fusion_ab_samples(symbol,reserved_at) VALUES(p_symbol,p_now);
  RETURN TRUE;
-END $;
+END; $fusion_ab$;
 
 COMMIT;
