@@ -131,6 +131,7 @@ const demoAutoBrain=createDemoAutoBrain({brains:{XAUUSD:researchBrain,BTCUSD:btc
     plan:p.plan,broker});
    serializeForwardDb(p.symbol,journal=>journal.saveForward({symbol:p.symbol,
     closedBarTime:p.closedBarTime,plan:p.plan,features:p.features,broker}));
+   serializeForwardDb(p.symbol,journal=>journal.paperSave({symbol:p.symbol,closedBarTime:p.closedBarTime,plan:p.plan,features:p.features,broker}));
    const verdict = demoTradeIntents.consider(p);
    try { observatory.decision(p,verdict); } catch {}
    return verdict;
@@ -273,6 +274,7 @@ const server=http.createServer(async(req,res)=>{
         forwardEvaluation.observe(snapshot);
         fusionRuntime.observe(snapshot);
         serializeForwardDb(symbol,journal=>journal.observeForward(snapshot));
+        serializeForwardDb(symbol,journal=>journal.paperObserve(snapshot));
         // Independently read from the MT5 history API by a signed Demo sensor.
         // Compare against the exact ACK delivery and protective levels; never
         // count self-reported ACK as broker-history proof.
@@ -283,7 +285,7 @@ const server=http.createServer(async(req,res)=>{
     }
     send(verdict.status==='OBSERVED'?202:403,{...verdict,researchScheduling});return;
   }
-  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/fred-historical/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-news/evidence','/live-calendar/status','/brain/status','/auto-brain/status','/demo-trade/status','/demo-trade/history-proofs','/demo-history/status','/demo-sensor/status','/shadow-smoke/status','/decision-audit/status','/forward-evaluation/status','/strategy-comparison/status','/fusion-ab/status','/statistical-review/status','/durable-evaluation/status','/operational-audit/status','/quality/status','/incident/status','/integration/status'].includes(pathname)){
+  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/fred-historical/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-news/evidence','/live-calendar/status','/brain/status','/auto-brain/status','/demo-trade/status','/demo-trade/history-proofs','/demo-history/status','/demo-sensor/status','/shadow-smoke/status','/decision-audit/status','/forward-evaluation/status','/strategy-comparison/status','/fusion-ab/status','/statistical-review/status','/profitability/status','/durable-evaluation/status','/operational-audit/status','/quality/status','/incident/status','/integration/status'].includes(pathname)){
     res.writeHead(404,{'Content-Type':'application/json','Cache-Control':'no-store'});
     res.end(JSON.stringify({error:'not_found'}));return;
   }
@@ -367,6 +369,16 @@ const server=http.createServer(async(req,res)=>{
       res.writeHead(503,headers);
       res.end(JSON.stringify({status:'OPERATIONAL_AUDIT_QUERY_FAILED',
        persistentMetricsAvailable:false}));return;
+    }
+  }
+  if(pathname==='/profitability/status'){
+    const headers={'Content-Type':'application/json','Cache-Control':'no-store'};
+    try{
+      if(!connectedJournal?.paperReport)throw Error('NOT_CONNECTED');
+      const report=await connectedJournal.paperReport();
+      res.writeHead(200,headers);res.end(JSON.stringify({status:'PAPER_RESEARCH_ONLY',...report}));return;
+    }catch{
+      res.writeHead(503,headers);res.end(JSON.stringify({status:'PAPER_REPORT_UNAVAILABLE',executionPermission:false}));return;
     }
   }
   if(pathname==='/statistical-review/status'){
