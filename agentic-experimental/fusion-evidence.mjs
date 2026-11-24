@@ -26,6 +26,18 @@ export function supertrend(bars,period=10,multiplier=3){
  }
  return {period,multiplier,direction,line:round(line),atr:round(atr)};
 }
+// Rolling closed-bar VWAP approximation using typical price. Never mix volume types.
+export function rollingVwap(bars,period=20){
+ if(!Array.isArray(bars)||bars.length<period)return {vwap:null,vwapReason:'INSUFFICIENT_HISTORY'};
+ const window=bars.slice(-period);
+ const complete=key=>window.every(b=>Number.isSafeInteger(b[key])&&b[key]>0);
+ const key=complete('realVolume')?'realVolume':complete('tickVolume')?'tickVolume':null;
+ if(!key)return {vwap:null,vwapReason:'VERIFIED_VOLUME_NOT_REQUIRED_OR_AVAILABLE'};
+ const total=window.reduce((a,b)=>a+b[key],0);
+ const price=window.reduce((a,b)=>a+(b.high+b.low+b.close)/3*b[key],0)/total;
+ if(!Number.isFinite(price)||price<=0)return {vwap:null,vwapReason:'INVALID_WEIGHTED_PRICE'};
+ return {vwap:{value:round(price),period,method:'ROLLING_CLOSED_BAR_TYPICAL_PRICE',volumeSource:key==='realVolume'?'BROKER_REPORTED_REAL_VOLUME':'BROKER_TICK_ACTIVITY_PROXY',closeRelative:window.at(-1).close>price?'ABOVE':window.at(-1).close<price?'BELOW':'AT'},vwapReason:null};
+}
 export function frameEvidence(bars){
  const f=calculateClosedCandleFeatures(bars);
  if(f.status!=='INDICATORS_AVAILABLE')return {status:f.status};
@@ -48,10 +60,10 @@ export function frameEvidence(bars){
   priceAction:{bodyFraction:range>0?round(Math.abs(last.close-last.open)/range):null,
    direction:last.close>last.open?'UP':last.close<last.open?'DOWN':'FLAT',
    previousHighBroken:last.close>prev.high,previousLowBroken:last.close<prev.low},
-  vwap:null,vwapReason:'VERIFIED_VOLUME_NOT_REQUIRED_OR_AVAILABLE',
+  ...rollingVwap(bars),
   supertrend:supertrend(bars)};
 }
 export function buildFusionEvidence(snapshot){
- return {version:'FUSION_STYLE_EVIDENCE_V2',advisoryOnly:true,fullProductionFusion:false,
+ return {version:'FUSION_STYLE_EVIDENCE_V3',advisoryOnly:true,fullProductionFusion:false,
   frames:Object.fromEntries(['M5','M15','H1','H4'].map(tf=>[tf,frameEvidence(snapshot?.['candles'+tf])]))};
 }
