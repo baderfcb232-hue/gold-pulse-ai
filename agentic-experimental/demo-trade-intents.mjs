@@ -19,6 +19,10 @@ export function createDemoTradeIntents({
  const ackRejectCounts=Object.create(null);
  let lastAckRejectReason=null;
  const lastBySymbol={};
+ let heartbeatLast=null,heartbeatMatchedAt=null,heartbeatState=null,heartbeatArmed=null;
+ let heartbeatAccepted=0;
+ const heartbeatRejects=Object.create(null);
+ const heartbeatReplay=new Map();
  function audit(symbol,state,reason=null){
   lastBySymbol[symbol]={at:new Date(clock()*1000).toISOString(),state,reason};
   try{onAudit(symbol,state,reason)}catch{}
@@ -123,6 +127,36 @@ export function createDemoTradeIntents({
 
  // A separate trading-capable EA must authenticate itself. The old read-only
  // observer never requests and never receives execution instructions.
+ // Distinct HMAC domain; heartbeat can never register, dequeue, ACK or arm execution.
+ function heartbeat({body,timestamp,mac,secure=false}={}){
+  const deny=status=>{heartbeatRejects[status]=(heartbeatRejects[status]||0)+1;return {status,executionPermission:false};};
+  if(!keyReady||!secure)return deny('HEARTBEAT_DISABLED');
+  if(typeof body!=='string'||body.length>2000||typeof timestamp!=='string'||!/^\d{10}$/.test(timestamp)||typeof mac!=='string'||!/^[a-f0-9]{64}$/.test(mac))return deny('HEARTBEAT_ENVELOPE_INVALID');
+  const now=clock();
+  if(Math.abs(now-Number(timestamp))>10)return deny('HEARTBEAT_EXPIRED');
+  const expected=signature(secret,'NABD_HEARTBEAT_V1\n'+timestamp+'\n'+body);
+  if(!timingSafeEqual(Buffer.from(expected,'hex'),Buffer.from(mac,'hex')))return deny('HEARTBEAT_SIGNATURE_INVALID');
+  let x;try{x=JSON.parse(body)}catch{return deny('HEARTBEAT_JSON_INVALID')}
+  if(!x||x.source!=='ISOLATED_DEMO_EXECUTOR_HEARTBEAT'||x.version!=='1.25'||x.accountType!=='DEMO'||!Number.isSafeInteger(x.accountLogin)||x.accountLogin<=0||
+    typeof x.brokerServer!=='string'||x.brokerServer.length>100||!x.brokerServer.toLowerCase().includes('demo')||x.brokerServer.toLowerCase().includes('synthetic')||
+    typeof x.armed!=='boolean'||!Number.isSafeInteger(x.capturedAt)||Math.abs(x.capturedAt-Number(timestamp))>2||
+    !x.brokerSymbols||typeof x.brokerSymbols!=='object'||Array.isArray(x.brokerSymbols)||
+    !['XAUUSD','BTCUSD'].every(k=>typeof x.brokerSymbols[k]==='string'&&/^[-A-Za-z0-9._]{1,64}$/.test(x.brokerSymbols[k]))||
+    x.brokerSymbols.XAUUSD===x.brokerSymbols.BTCUSD)return deny('HEARTBEAT_PAYLOAD_INVALID');
+  for(const [k,t] of heartbeatReplay)if(now-t>25)heartbeatReplay.delete(k);
+  if(heartbeatReplay.has(mac))return deny('HEARTBEAT_REPLAY');
+  if(heartbeatReplay.size>=256)return deny('HEARTBEAT_RATE_LIMIT');
+  heartbeatReplay.set(mac,now);
+  heartbeatLast=now;heartbeatAccepted++;heartbeatArmed=x.armed;heartbeatMatchedAt=null;
+  const quotes=['XAUUSD','BTCUSD'].map(k=>[k,quoteProvider(k)]);
+  const fresh=quotes.filter(([k,q])=>q&&q.symbol===k&&Number.isSafeInteger(q.timestamp)&&q.timestamp<=now&&now-q.timestamp<=10);
+  const mismatch=fresh.some(([k,q])=>q.accountType!=='DEMO'||q.environment!=='EXPERIMENTAL_NABD_AGENTIC'||q.executionEnabled!==false||q.accountLogin!==x.accountLogin||q.brokerServer!==x.brokerServer||q.brokerSymbol!==x.brokerSymbols[k])||
+    (registeredDemoLogin!==null&&(registeredDemoLogin!==x.accountLogin||registeredDemoServer!==x.brokerServer));
+  heartbeatState=mismatch?'HEARTBEAT_FEED_MISMATCH':fresh.length!==2?'HEARTBEAT_WAITING_SENSOR':'HEARTBEAT_MATCHED';
+  if(heartbeatState==='HEARTBEAT_MATCHED')heartbeatMatchedAt=now;
+  return {status:heartbeatState,authenticated:true,executionPermission:false};
+ }
+
  function pull({body,timestamp,mac,secure=false}={}){
   if(!enabled||!keyReady||!secure)return {status:'DISABLED',wire:null};
   if(typeof body!=='string'||body.length>2000||
@@ -312,6 +346,7 @@ export function createDemoTradeIntents({
    mt5HistoryCrossCheckedFills:brokerHistoryMatches.size,
    historyProofMethod:'SEPARATE_SIGNED_READ_ONLY_DEMO_SENSOR_NOT_BROKER_SIGNED',
    uncertainBrokerResults:[...acks.values()].filter(x=>x.status==='EA_UNCERTAIN_BROKER_RESULT').length,
+   heartbeat:{version:'1.25',status:heartbeatState,lastAuthenticatedAt:heartbeatLast===null?null:new Date(heartbeatLast*1000).toISOString(),online:heartbeatLast!==null&&now>=heartbeatLast&&now-heartbeatLast<=40,feedMatched:heartbeatMatchedAt!==null&&now>=heartbeatMatchedAt&&now-heartbeatMatchedAt<=40,eaReportsArmed:heartbeatArmed,accepted:heartbeatAccepted,rejected:{...heartbeatRejects},executionPermission:false},
    queued:[...queue.keys()],lastBySymbol,executorRegistered:registeredDemoLogin!==null,
    executorOnline:lastExecutorSeen!==null&&clock()>=lastExecutorSeen&&clock()-lastExecutorSeen<=15,
    lastExecutorSeenAt:lastExecutorSeen===null?null:new Date(lastExecutorSeen*1000).toISOString(),
@@ -324,5 +359,5 @@ export function createDemoTradeIntents({
    tradeCountVerifiedByBroker:false,
    liveTrading:false,serverPlacesOrders:false,dailyLimitsEnforcedByEA:true};
  }
- return {consider,pull,ack,observeBrokerHistory,report};
+ return {consider,pull,ack,heartbeat,observeBrokerHistory,report};
 }
