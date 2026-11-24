@@ -1,15 +1,23 @@
 // Paired, research-only comparison. No broker calls and no automatic strategy selection.
 // Caller supplies frozen, verified historical contexts and future outcomes separately.
 import {buildFusionEvidence} from './fusion-evidence.mjs';
+import {validateIsolatedDemoSnapshot} from './mt5-demo-sensor.mjs';
+import {multiTimeframeFeatures} from './market-features.mjs';
 export async function compareFusionPair({context,snapshot,baselineBrain,fusionBrain}={}){
  if(!context||context.feedType!=='MT5_DEMO_BROKER'||context.accountType!=='DEMO'||!context.candlesVerified||!context.multiTimeframeVerified||
   !snapshot||snapshot.symbol!==context.symbol||snapshot.timestamp!==context.observedAt||
   snapshot.bid!==context.bid||snapshot.ask!==context.ask)throw Error('UNVERIFIED_PAIR_CONTEXT');
+ const validated=validateIsolatedDemoSnapshot(snapshot,context.observedAt);
+ if(validated.status!=='VALIDATED_RESEARCH_SENSOR'||!validated.safe.multiTimeframeVerified)throw Error('UNVERIFIED_PAIR_CONTEXT');
+ const clean=validated.safe;
  const base=structuredClone(context);delete base.fusionEvidence;
- const enhanced={...structuredClone(base),fusionEvidence:buildFusionEvidence(snapshot)};
+ // Both variants derive identical inputs from one validated, frozen snapshot.
+ for(const [tf,n] of Object.entries({M5:40,M15:32,H1:24,H4:24}))base['candles'+tf]=clean['candles'+tf].slice(-n);
+ base.technicalEvidence=multiTimeframeFeatures(clean);
+ const enhanced={...structuredClone(base),fusionEvidence:buildFusionEvidence(clean)};
  const [a,b]=await Promise.all([baselineBrain.analyze(base),fusionBrain.analyze(enhanced)]);
  const normalize=r=>r?.status==='RESEARCH_ANALYSIS_ONLY'&&['BUY_WATCH','SELL_WATCH','WAIT'].includes(r.plan?.stance)?{stance:r.plan.stance,confidence:r.plan.confidence}:null;
- return {symbol:base.symbol,observedAt:base.observedAt,baseline:normalize(a),fusion:normalize(b),executionAllowed:false};
+ return {symbol:base.symbol,observedAt:base.observedAt,baseline:normalize(a),fusion:normalize(b),evaluationMode:'OFFLINE_FROZEN_CONTEXT_REPLAY',executionAllowed:false};
 }
 export function scoreFusionPairs(rows,{minimum=30}={}){
  const result={};
