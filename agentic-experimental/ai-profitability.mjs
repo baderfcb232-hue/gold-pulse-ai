@@ -28,8 +28,8 @@ export function createProfitabilityStore({query,clock=()=>Math.floor(Date.now()/
   const now=clock();if(!verified(q,now))return {scored:0,expired:0};
   const r=await query(`UPDATE agentic_research.ai_paper_outcomes SET
    state=CASE WHEN $3<=due_at+120 THEN 'SCORED' ELSE 'EXPIRED' END,
-   exit_at=$3,exit_bid=CASE WHEN $3<=due_at+120 THEN $4 ELSE NULL END,
-   exit_ask=CASE WHEN $3<=due_at+120 THEN $5 ELSE NULL END
+   exit_at=$3,exit_bid=CASE WHEN $3<=due_at+120 THEN $4::double precision ELSE NULL END,
+   exit_ask=CASE WHEN $3<=due_at+120 THEN $5::double precision ELSE NULL END
    WHERE symbol=$1 AND feed_fingerprint=$2 AND state='PENDING' AND $3>=due_at AND $3>tick_at RETURNING state`,[q.symbol,fingerprint(q),q.timestamp,q.bid,q.ask]);
   return {scored:r.rows.filter(x=>x.state==='SCORED').length,expired:r.rows.filter(x=>x.state==='EXPIRED').length};
  }
