@@ -53,3 +53,15 @@ test('adaptive evidence recognizes range without claiming order book liquidity',
  assert.equal(r.trend,'RANGE_OR_MIXED');assert.equal(r.breakout,'NONE');
  assert.equal(r.liquidityNote,'OHLC_SWEEP_PROXY_NOT_ORDER_BOOK');
 });
+
+import {selectiveEvidence} from './selective-evidence.mjs';
+test('selective V5 separates symbol hypotheses and suppresses automatic regime entry',()=>{
+ const a=bars(60);
+ const gold=buildFusionEvidence({symbol:'XAUUSD',candlesM5:a,candlesM15:a,candlesH1:a,candlesH4:a});
+ assert.equal(gold.version,'FUSION_STYLE_EVIDENCE_V5');assert.equal(gold.adaptive.candidate,'WAIT');
+ assert.equal(gold.selective.historicalEvidence.hypothesis,'TREND_PULLBACK');
+ assert.equal(gold.selective.historicalEvidence.independentlyValidated,false);
+ assert.equal(gold.selective.executionPermission,false);
+ assert.equal(gold.selective.currentContext,null);
+ assert.equal(selectiveEvidence('BTCUSD',{},{}).historicalEvidence.hypothesis,'TREND_ALIGNED_BOLLINGER_REENTRY');
+});
