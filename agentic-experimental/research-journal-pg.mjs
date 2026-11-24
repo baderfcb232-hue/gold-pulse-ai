@@ -1,5 +1,6 @@
 // Disabled-by-default isolated Postgres journal adapter.
 import {readFile} from 'node:fs/promises';
+import {statisticalReview} from './statistical-review.mjs';
 import {createFusionStore} from './fusion-ab-store.mjs';
 import {createDurableForwardStore} from './phase8-durable-forward.mjs';
 import {parseComparable} from './news-surprise.mjs';
@@ -197,7 +198,7 @@ export function createResearchJournal({query,clock}={}){
    recent:rows.rows.map(x=>({intentId:x.intent_id,symbol:x.symbol,
     brokerDealTicket:Number(x.deal_ticket),observedAt:new Date(x.observed_at).toISOString()}))};
  }
- return {fusionStore:{reserve:async x=>{ensure();return fusion.reserve(x)},fail:async x=>{ensure();return fusion.fail(x)},save:async x=>{ensure();return fusion.save(x)},observe:async x=>{ensure();return fusion.observe(x)},report:async()=>{ensure();return fusion.report()}},verify,saveForecast,firstForecast,firstActual,saveActual,saveAnalysis,viewDecisions,
+ return {statisticalReview:async()=>{ensure();return statisticalReview(query)},fusionStore:{reserve:async x=>{ensure();return fusion.reserve(x)},fail:async x=>{ensure();return fusion.fail(x)},save:async x=>{ensure();return fusion.save(x)},observe:async x=>{ensure();return fusion.observe(x)},report:async()=>{ensure();return fusion.report()}},verify,saveForecast,firstForecast,firstActual,saveActual,saveAnalysis,viewDecisions,
   saveOperationalEvent,operationalReport,
   saveBrokerHistoryProof,brokerHistoryProofReport,calendarEvidenceReport,
   saveForward:async x=>{ensure();return durable.save(x)},
