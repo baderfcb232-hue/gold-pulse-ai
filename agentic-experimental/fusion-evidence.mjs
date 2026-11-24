@@ -1,5 +1,6 @@
 // Isolated research evidence, not the production FUSION implementation.
 // No order routes, no votes that override the AI, no fabricated volume.
+import {selectiveEvidence} from './selective-evidence.mjs';
 import {adaptiveEvidence} from './adaptive-regime.mjs';
 import {calculateClosedCandleFeatures} from './market-features.mjs';
 const round=x=>Number.isFinite(x)?Number(x.toPrecision(8)):null;
@@ -65,6 +66,8 @@ export function frameEvidence(bars){
   supertrend:supertrend(bars)};
 }
 export function buildFusionEvidence(snapshot){
- return {version:'FUSION_STYLE_EVIDENCE_V4',advisoryOnly:true,fullProductionFusion:false,adaptive:adaptiveEvidence(snapshot),
-  frames:Object.fromEntries(['M5','M15','H1','H4'].map(tf=>[tf,frameEvidence(snapshot?.['candles'+tf])]))};
+ const frames=Object.fromEntries(['M5','M15','H1','H4'].map(tf=>[tf,frameEvidence(snapshot?.['candles'+tf])]));
+ const adaptive=adaptiveEvidence(snapshot);
+ return {version:'FUSION_STYLE_EVIDENCE_V5',advisoryOnly:true,fullProductionFusion:false,
+  adaptive:{...adaptive,candidate:'WAIT',candidateSuppressed:true},frames,selective:selectiveEvidence(snapshot?.symbol,frames,adaptive)};
 }
