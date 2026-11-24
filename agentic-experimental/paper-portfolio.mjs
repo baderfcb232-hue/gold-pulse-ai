@@ -74,13 +74,13 @@ export function portfolioReport(s){
 // concurrent workers from double booking. Never reset after restart or gap.
 export function createPortfolioStore({query,clock=()=>Math.floor(Date.now()/1000)}){
  async function mutate(symbol,fn){
-  if(!symbols.includes(symbol))return {saved:false,reason:'INVALID_SYMBOL'};
+  if(!symbols.includes(symbol))return {saved:false,entered:false,reason:'INVALID_SYMBOL'};
   await query('INSERT INTO agentic_research.ai_paper_portfolios(symbol,state) VALUES($1,$2::jsonb) ON CONFLICT DO NOTHING',[symbol,JSON.stringify(initialPortfolio(symbol))]);
   for(let i=0;i<3;i++){
    const r=await query('SELECT state,revision FROM agentic_research.ai_paper_portfolios WHERE symbol=$1',[symbol]);
    const row=r.rows[0];if(!row||row.state.version!==POLICY.version)throw Error('PORTFOLIO_VERSION_MISMATCH');
    const outcome=fn(row.state);const state=outcome.state;
-   if(JSON.stringify(state)===JSON.stringify(row.state))return {saved:false,reason:outcome.reason||'UNCHANGED'};
+   if(JSON.stringify(state)===JSON.stringify(row.state))return {saved:false,entered:false,reason:outcome.reason||'UNCHANGED'};
    const u=await query('UPDATE agentic_research.ai_paper_portfolios SET state=$2::jsonb,revision=revision+1 WHERE symbol=$1 AND revision=$3',[symbol,JSON.stringify(state),row.revision]);
    if(u.rowCount===1)return {saved:true,entered:outcome.entered??false,reason:outcome.reason||null};
   }
