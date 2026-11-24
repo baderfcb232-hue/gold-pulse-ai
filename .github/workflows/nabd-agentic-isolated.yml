@@ -36,6 +36,8 @@ on:
       - 'agentic-experimental/NABD_DEMO_EXECUTOR_SAFE_v1_24_INSTALL_AR.md'
       - 'agentic-experimental/demo-trade-intents.mjs'
       - 'agentic-experimental/demo-trade-intents.test.mjs'
+      - 'agentic-experimental/fusion-evidence.mjs'
+      - 'agentic-experimental/fusion-evidence.test.mjs'
       - 'agentic-experimental/demo-auto-brain.mjs'
       - 'agentic-experimental/render-connectivity-server.mjs'
       - 'agentic-experimental/shadow-feed-runner.mjs'
