@@ -192,3 +192,24 @@ test('durable Fusion A/B reservations, paired outcome and cap survive reconnect'
  try{const r=await c.journal.statisticalReview();assert.ok(Array.isArray(r.groups));assert.equal(r.profitabilityMeasured,false);assert.equal(r.executionPermission,false);}
  finally{await c.close();}
  });
+
+test('paper journal persists WAIT and direction, checks feed identity and deduplicates outcomes',{skip:!url},async()=>{
+ let now=1900000200;
+ const q=(symbol='XAUUSD',bid=100)=>({symbol,bid,ask:bid+.2,timestamp:now,environment:'EXPERIMENTAL_NABD_AGENTIC',accountType:'DEMO',executionEnabled:false,brokerServer:'JustMarkets-Demo',brokerSymbol:symbol+'.m',accountLogin:55});
+ let c=await connectResearchJournal({url,clock:()=>now});assert.equal(c.status,'CONNECTED');
+ try{
+ const bar=now-300,features={M5:{atr14:2}};
+ const input={symbol:'XAUUSD',closedBarTime:bar,features,plan:{stance:'WAIT',confidence:.7,timeHorizonMinutes:1},broker:q()};
+ assert.equal((await c.journal.paperSave(input)).inserted,true);
+ assert.equal((await c.journal.paperSave(input)).inserted,false);
+ assert.equal((await c.journal.paperSave({...input,symbol:'BTCUSD',broker:q('BTCUSD'),plan:{...input.plan,stance:'BUY_WATCH'}})).inserted,true);
+ await c.close();c=null;now+=60;
+ c=await connectResearchJournal({url,clock:()=>now});assert.equal(c.status,'CONNECTED');
+ assert.equal((await c.journal.paperObserve({...q('XAUUSD',103),accountLogin:56})).scored,0);
+ assert.equal((await c.journal.paperObserve(q('XAUUSD',103))).scored,1);
+ assert.equal((await c.journal.paperObserve(q('XAUUSD',104))).scored,0);
+ assert.equal((await c.journal.paperObserve(q('BTCUSD',103))).scored,1);
+ const report=await c.journal.paperReport();assert.equal(report.markets.XAUUSD.wait,1);assert.equal(report.markets.XAUUSD.directionalSamples,0);
+ assert.equal(report.markets.BTCUSD.directionalSamples,1);assert.ok(report.markets.BTCUSD.netR>0);assert.equal(report.executionPermission,false);
+ }finally{if(c)await c.close();}
+});

@@ -100,6 +100,22 @@ function serializeForwardDb(symbol,work){
  void next.finally(()=>{if(forwardDbQueue.get(symbol)===next)forwardDbQueue.delete(symbol)});
 }
 
+// Paper work has its own bounded observer queue; never delay existing forward scoring.
+const paperDbQueue=new Map(),paperLastObserve=new Map();
+let paperDbFailures=0,paperObserverSkipped=0;
+function enqueuePaper(symbol,work,observation=false){
+ if(observation){
+  const now=Math.floor(Date.now()/1000);
+  if(now-(paperLastObserve.get(symbol)??-Infinity)<10)return;
+  if(paperDbQueue.has(symbol)){paperObserverSkipped++;return;}
+  paperLastObserve.set(symbol,now);
+ }
+ const previous=paperDbQueue.get(symbol)||Promise.resolve();
+ const next=previous.catch(()=>{}).then(async()=>{if(connectedJournal)await work(connectedJournal);})
+  .catch(()=>{paperDbFailures++;console.log('[NABD PAPER DB] WRITE_FAILED',symbol);});
+ paperDbQueue.set(symbol,next);
+ void next.finally(()=>{if(paperDbQueue.get(symbol)===next)paperDbQueue.delete(symbol)});
+}
 const demoTradeIntents=createDemoTradeIntents({
  enabled:process.env.NABD_TEST_DEMO_AUTO_EXECUTION==='true',
  secret:process.env.NABD_TEST_DEMO_EXEC_HMAC_SECRET||'',
@@ -131,6 +147,7 @@ const demoAutoBrain=createDemoAutoBrain({brains:{XAUUSD:researchBrain,BTCUSD:btc
     plan:p.plan,broker});
    serializeForwardDb(p.symbol,journal=>journal.saveForward({symbol:p.symbol,
     closedBarTime:p.closedBarTime,plan:p.plan,features:p.features,broker}));
+   enqueuePaper(p.symbol,journal=>journal.paperSave({symbol:p.symbol,closedBarTime:p.closedBarTime,plan:p.plan,features:p.features,broker}));
    const verdict = demoTradeIntents.consider(p);
    try { observatory.decision(p,verdict); } catch {}
    return verdict;
@@ -273,6 +290,7 @@ const server=http.createServer(async(req,res)=>{
         forwardEvaluation.observe(snapshot);
         fusionRuntime.observe(snapshot);
         serializeForwardDb(symbol,journal=>journal.observeForward(snapshot));
+        enqueuePaper(symbol,journal=>journal.paperObserve(snapshot),true);
         // Independently read from the MT5 history API by a signed Demo sensor.
         // Compare against the exact ACK delivery and protective levels; never
         // count self-reported ACK as broker-history proof.
@@ -283,7 +301,7 @@ const server=http.createServer(async(req,res)=>{
     }
     send(verdict.status==='OBSERVED'?202:403,{...verdict,researchScheduling});return;
   }
-  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/fred-historical/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-news/evidence','/live-calendar/status','/brain/status','/auto-brain/status','/demo-trade/status','/demo-trade/history-proofs','/demo-history/status','/demo-sensor/status','/shadow-smoke/status','/decision-audit/status','/forward-evaluation/status','/strategy-comparison/status','/fusion-ab/status','/statistical-review/status','/durable-evaluation/status','/operational-audit/status','/quality/status','/incident/status','/integration/status'].includes(pathname)){
+  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/fred-historical/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-news/evidence','/live-calendar/status','/brain/status','/auto-brain/status','/demo-trade/status','/demo-trade/history-proofs','/demo-history/status','/demo-sensor/status','/shadow-smoke/status','/decision-audit/status','/forward-evaluation/status','/strategy-comparison/status','/fusion-ab/status','/statistical-review/status','/profitability/status','/durable-evaluation/status','/operational-audit/status','/quality/status','/incident/status','/integration/status'].includes(pathname)){
     res.writeHead(404,{'Content-Type':'application/json','Cache-Control':'no-store'});
     res.end(JSON.stringify({error:'not_found'}));return;
   }
@@ -367,6 +385,16 @@ const server=http.createServer(async(req,res)=>{
       res.writeHead(503,headers);
       res.end(JSON.stringify({status:'OPERATIONAL_AUDIT_QUERY_FAILED',
        persistentMetricsAvailable:false}));return;
+    }
+  }
+  if(pathname==='/profitability/status'){
+    const headers={'Content-Type':'application/json','Cache-Control':'no-store'};
+    try{
+      if(!connectedJournal?.paperReport)throw Error('NOT_CONNECTED');
+      const report=await connectedJournal.paperReport();
+      res.writeHead(200,headers);res.end(JSON.stringify({status:'PAPER_RESEARCH_ONLY',...report,writeFailures:paperDbFailures,observerBusySkipped:paperObserverSkipped,observationIntervalSeconds:10}));return;
+    }catch{
+      res.writeHead(503,headers);res.end(JSON.stringify({status:'PAPER_REPORT_UNAVAILABLE',executionPermission:false}));return;
     }
   }
   if(pathname==='/statistical-review/status'){

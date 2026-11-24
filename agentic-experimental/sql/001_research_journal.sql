@@ -161,3 +161,19 @@ BEGIN
 END; $fusion_ab$;
 
 COMMIT;
+
+CREATE TABLE IF NOT EXISTS agentic_research.ai_paper_outcomes (
+ symbol TEXT NOT NULL CHECK(symbol IN ('XAUUSD','BTCUSD')),
+ bar_at BIGINT NOT NULL, anchor_at BIGINT NOT NULL, tick_at BIGINT NOT NULL, due_at BIGINT NOT NULL,
+ feed_fingerprint TEXT NOT NULL, stance TEXT NOT NULL CHECK(stance IN ('BUY_WATCH','SELL_WATCH','WAIT')),
+ confidence DOUBLE PRECISION NOT NULL CHECK(confidence BETWEEN 0 AND 1),
+ entry_bid DOUBLE PRECISION NOT NULL CHECK(entry_bid>0), entry_ask DOUBLE PRECISION NOT NULL CHECK(entry_ask>entry_bid),
+ risk_distance DOUBLE PRECISION NOT NULL CHECK(risk_distance>0),
+ state TEXT NOT NULL DEFAULT 'PENDING' CHECK(state IN ('PENDING','SCORED','EXPIRED')),
+ exit_at BIGINT, exit_bid DOUBLE PRECISION, exit_ask DOUBLE PRECISION,
+ PRIMARY KEY(symbol,bar_at), CHECK(tick_at<=anchor_at AND due_at>anchor_at),
+ CHECK((state='PENDING' AND exit_at IS NULL AND exit_bid IS NULL AND exit_ask IS NULL) OR
+ (state='EXPIRED' AND exit_at>due_at+120 AND exit_bid IS NULL AND exit_ask IS NULL) OR
+ (state='SCORED' AND exit_at BETWEEN due_at AND due_at+120 AND exit_bid>0 AND exit_ask>exit_bid))
+);
+CREATE INDEX IF NOT EXISTS idx_ai_paper_pending ON agentic_research.ai_paper_outcomes(symbol,due_at) WHERE state='PENDING';
