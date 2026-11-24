@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {frameEvidence,buildFusionEvidence} from './fusion-evidence.mjs';
+import {frameEvidence,buildFusionEvidence,rollingVwap} from './fusion-evidence.mjs';
 const bars=(n,step=1)=>Array.from({length:n},(_,i)=>{const close=100+i*step;return {time:1700000000+i*300,open:close-step/2,high:close+0.2,low:close-Math.abs(step)-0.2,close};});
 test('prior channel excludes decision candle and detects closed breakout',()=>{
  const a=bars(60);const f=frameEvidence(a);
@@ -25,4 +25,14 @@ test('Supertrend is available from closed OHLC and volume remains unavailable',(
  assert.equal(f.supertrend.period,10);assert.equal(f.supertrend.multiplier,3);
  assert.ok(f.supertrend.line<f.trend.ema200||f.trend.ema200===null||Number.isFinite(f.supertrend.line));
  assert.equal(f.vwap,null);
+});
+
+test('VWAP weights typical prices and does not mix real and tick volumes',()=>{
+ const a=bars(25).map(b=>({...b,tickVolume:2,realVolume:0}));
+ const v=rollingVwap(a);assert.equal(v.vwap.volumeSource,'BROKER_TICK_ACTIVITY_PROXY');
+ const tail=a.slice(-20);const expected=tail.reduce((sum,b)=>sum+(b.high+b.low+b.close)/3,0)/20;
+ assert.ok(Math.abs(v.vwap.value-expected)<0.0001);
+ const real=a.map((b,i)=>({...b,realVolume:i+1}));assert.equal(rollingVwap(real).vwap.volumeSource,'BROKER_REPORTED_REAL_VOLUME');
+ real.at(-1).realVolume=0;assert.equal(rollingVwap(real).vwap.volumeSource,'BROKER_TICK_ACTIVITY_PROXY');
+ delete real.at(-1).tickVolume;assert.equal(rollingVwap(real).vwap,null);
 });
