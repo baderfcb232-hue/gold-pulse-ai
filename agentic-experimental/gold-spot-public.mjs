@@ -20,19 +20,23 @@ export async function fetchPublicGoldSpot({fetcher=fetch,now=Math.floor(Date.now
 }
 export function createPublicGoldObserver({load=fetchPublicGoldSpot,clock=()=>Math.floor(Date.now()/1000)}={}){
   let busy=false,lastAttempt=null,lastSuccess=null,lastError=null,lastPrice=null,lastAsOf=null;
+  let failures=0,nextAttemptAt=0;
   async function poll(){
     if(busy)return {status:'BUSY'};
+    if(clock()<nextAttemptAt)return {status:'BACKOFF',retryAt:new Date(nextAttemptAt*1000).toISOString()};
     busy=true;lastAttempt=new Date(clock()*1000).toISOString();
     try{
       const data=await load({now:clock()});
       if(data.source!==SOURCE||data.executable!==false||data.brokerCompatible!==false||
         data.m5Available!==false||data.symbol!=='XAUUSD')throw Error('GOLD_UNTRUSTED_SOURCE');
-      lastSuccess=new Date(clock()*1000).toISOString();lastPrice=data.price;lastAsOf=data.asOf;lastError=null;
+      lastSuccess=new Date(clock()*1000).toISOString();lastPrice=data.price;lastAsOf=data.asOf;lastError=null;failures=0;nextAttemptAt=0;
       return {status:'OBSERVED_REFERENCE'};
-    }catch(e){lastError=String(e?.message||e).slice(0,100);return {status:'ERROR',code:lastError};}
+    }catch(e){lastError=String(e?.message||e).slice(0,100);failures++;nextAttemptAt=clock()+Math.min(900,60*2**Math.min(failures-1,4));return {status:'ERROR',code:lastError};}
     finally{busy=false;}
   }
   return {poll,report:()=>({status:lastError?'FEED_ERROR':lastSuccess?'OBSERVING_REFERENCE':'NOT_STARTED',
     source:SOURCE,symbol:'XAUUSD',lastAttempt,lastSuccess,lastError,lastPrice,lastAsOf,
+    lastPriceIsFresh:!lastError&&lastAsOf!==null&&clock()*1000-Date.parse(lastAsOf)<=120000,
+    consecutiveFailures:failures,nextRetryAt:nextAttemptAt?new Date(nextAttemptAt*1000).toISOString():null,
     m5Available:false,analysisEligible:false,tradingEnabled:false})};
 }

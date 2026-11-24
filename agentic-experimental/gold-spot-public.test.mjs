@@ -26,3 +26,19 @@ test('observer handles upstream errors as failure not fake price',async()=>{
  assert.equal((await observer.poll()).status,'ERROR');
  assert.equal(observer.report().lastPrice,null);
 });
+
+test('stale reference backs off, exposes freshness and recovers without trade eligibility',async()=>{
+ let t=now,calls=0,down=false;
+ const observer=createPublicGoldObserver({clock:()=>t,load:async()=>{
+  calls++;if(down)throw Error('GOLD_SOURCE_STALE');
+  return parsePublicGoldSpot({...sample,data_state:{status:'fresh',as_of:new Date(t*1000).toISOString()},updated_at:new Date(t*1000).toISOString()},t);
+ }});
+ await observer.poll();assert.equal(observer.report().lastPriceIsFresh,true);
+ down=true;await observer.poll();assert.equal(observer.report().lastPriceIsFresh,false);
+ assert.equal((await observer.poll()).status,'BACKOFF');assert.equal(calls,2);
+ t+=60;await observer.poll();assert.equal(observer.report().consecutiveFailures,2);
+ t+=119;assert.equal((await observer.poll()).status,'BACKOFF');
+ t++;down=false;await observer.poll();assert.equal(observer.report().consecutiveFailures,0);
+ assert.equal(observer.report().lastPriceIsFresh,true);assert.equal(observer.report().tradingEnabled,false);
+ t+=121;assert.equal(observer.report().lastPriceIsFresh,false);
+});
