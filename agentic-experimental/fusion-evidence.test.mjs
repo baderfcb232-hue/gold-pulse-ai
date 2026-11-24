@@ -19,3 +19,10 @@ test('all timeframes are advisory and no production Fusion is claimed',()=>{
  assert.equal(r.advisoryOnly,true);assert.equal(r.fullProductionFusion,false);
  assert.deepEqual(Object.keys(r.frames),['M5','M15','H1','H4']);
 });
+
+test('Supertrend is available from closed OHLC and volume remains unavailable',()=>{
+ const f=frameEvidence(bars(100));assert.equal(f.supertrend.direction,'UP');
+ assert.equal(f.supertrend.period,10);assert.equal(f.supertrend.multiplier,3);
+ assert.ok(f.supertrend.line<f.trend.ema200||f.trend.ema200===null||Number.isFinite(f.supertrend.line));
+ assert.equal(f.vwap,null);
+});
