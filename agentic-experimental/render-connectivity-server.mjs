@@ -232,11 +232,11 @@ const server=http.createServer(async(req,res)=>{
     send(answer.status==='OBSERVED'?202:403,answer);
     return;
   }
-  if((pathname==='/demo-trade/pull'||pathname==='/demo-trade/ack')&&req.method==='POST'){
+  if((pathname==='/demo-trade/pull'||pathname==='/demo-trade/ack'||pathname==='/demo-trade/heartbeat')&&req.method==='POST'){
     const send=(status,payload)=>{res.writeHead(status,{
       'Content-Type':'application/json','Cache-Control':'no-store'});
       res.end(JSON.stringify(payload))};
-    if(!demoTradeIntents.report().enabled){
+    if(pathname!=='/demo-trade/heartbeat'&&!demoTradeIntents.report().enabled){
       send(503,{status:'DISABLED',wire:null});return;
     }
     let body='',size=0;
@@ -250,6 +250,11 @@ const server=http.createServer(async(req,res)=>{
     const auth={body,timestamp:req.headers['x-nabd-exec-timestamp'],
       mac:req.headers['x-nabd-exec-signature'],
       secure:req.socket.encrypted===true||req.headers['x-forwarded-proto']==='https'};
+    if(pathname==='/demo-trade/heartbeat'){
+      const result=demoTradeIntents.heartbeat(auth);
+      const code=result.authenticated?200:result.status==='HEARTBEAT_DISABLED'?503:403;
+      send(code,result);return;
+    }
     const result=pathname==='/demo-trade/pull'?
       demoTradeIntents.pull(auth):demoTradeIntents.ack(auth);
     if(pathname==='/demo-trade/ack' && result.status==='RECORDED') {

@@ -349,3 +349,28 @@ test('a forged or missing Demo broker order SL/TP cannot establish execution pro
  assert.equal(d.observeBrokerHistory([{...base,entry:'OUT'}],{...full(),symbol:'XAUUSD'}).matched,0);
  assert.equal(d.observeBrokerHistory([base],{...full(),symbol:'XAUUSD'}).matched,1);
 });
+
+const heartbeatPayload={source:'ISOLATED_DEMO_EXECUTOR_HEARTBEAT',version:'1.25',accountType:'DEMO',accountLogin:1234567,brokerServer:'Independent-JustMarkets-Demo',brokerSymbols:{XAUUSD:'XAUUSD.m',BTCUSD:'BTCUSD.m'},capturedAt:now,armed:false};
+const hb=(payload=heartbeatPayload,ts=now)=>{const body=JSON.stringify(payload);return {body,timestamp:String(ts),mac:sha('NABD_HEARTBEAT_V1\n'+ts+'\n'+body),secure:true}};
+test('read-only heartbeat matches both fresh signed snapshots without consuming or registering',()=>{
+ const d=create({quoteProvider:sym=>({...full(sym),symbol:sym,executionEnabled:false})});
+ assert.equal(d.consider(proposal).created,true);
+ assert.equal(d.heartbeat(hb()).status,'HEARTBEAT_MATCHED');
+ assert.equal(d.report().heartbeat.online,true);assert.equal(d.report().heartbeat.feedMatched,true);
+ assert.equal(d.report().heartbeat.eaReportsArmed,false);
+ assert.equal(d.report().executorRegistered,false);assert.equal(d.report().delivered,0);
+ assert.equal(d.report().queued.length,1);
+ assert.equal(d.heartbeat(hb()).status,'HEARTBEAT_REPLAY');
+ assert.equal(d.pull(hb()).status,'REJECTED');
+ assert.equal(d.pull(pull).status,'INTENT_DELIVERED');
+});
+test('heartbeat verifies authentication, time, both symbols and account even with trading disabled',()=>{
+ const d=create({enabled:false,quoteProvider:sym=>({...full(sym),symbol:sym,executionEnabled:false})});
+ assert.equal(d.heartbeat({...hb(),mac:'f'.repeat(64)}).status,'HEARTBEAT_SIGNATURE_INVALID');
+ assert.equal(d.heartbeat(hb({...heartbeatPayload,capturedAt:now-11},now-11)).status,'HEARTBEAT_EXPIRED');
+ assert.equal(d.heartbeat(hb({...heartbeatPayload,accountType:'LIVE'})).status,'HEARTBEAT_PAYLOAD_INVALID');
+ assert.equal(d.heartbeat(hb({...heartbeatPayload,accountLogin:222})).status,'HEARTBEAT_FEED_MISMATCH');
+ assert.equal(d.heartbeat(hb()).status,'HEARTBEAT_MATCHED');
+ assert.equal(d.report().executorRegistered,false);
+ assert.equal(create({quoteProvider:()=>null}).heartbeat(hb()).status,'HEARTBEAT_WAITING_SENSOR');
+});
