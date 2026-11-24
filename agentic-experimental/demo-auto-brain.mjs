@@ -11,7 +11,7 @@ const noOrders=Object.freeze({executionAllowed:false,ordersCreated:0,tradeAllowe
 const durations=Object.freeze({M5:300,M15:900,H1:3600,H4:14400});
 export function createDemoAutoBrain({
  brains={},scheduler,clock=()=>Math.floor(Date.now()/1000),
- enabled=false,spreadLimits={XAUUSD:2.5,BTCUSD:80},journalProvider=()=>null,onAudit=()=>{},onPlan=()=>{}
+ enabled=false,spreadLimits={XAUUSD:2.5,BTCUSD:80},journalProvider=()=>null,onAudit=()=>{},onPlan=()=>{},onComparison=()=>{}
 }={}){
  if(!scheduler||typeof scheduler.consider!=='function')throw Error('SCHEDULER_REQUIRED');
  let scheduled=0,completed=0,blocked=0,persistenceFailures=0;
@@ -49,7 +49,9 @@ export function createDemoAutoBrain({
    if(!brain||typeof brain.analyze!=='function'){
     blocked++;record(symbol,'BLOCKED',{reason:'AI_MODEL_NOT_CONFIGURED'});return;
    }
-   const result=await brain.analyze(ctx);
+   const primary=brain.analyze(ctx);
+   try{onComparison(ctx,primary);}catch{}
+   const result=await primary;
    if(result.status!=='RESEARCH_ANALYSIS_ONLY'||!result.plan){
     blocked++;record(symbol,'BLOCKED',{reason:(result.reasons||['AI_ANALYSIS_FAILED']).join(',')});
    }else{
