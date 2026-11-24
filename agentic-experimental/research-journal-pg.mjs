@@ -56,7 +56,7 @@ export function createResearchJournal({query,clock}={}){
  }
 
  async function saveAnalysis({symbol,closedBarAt,analyzedAt,trigger,status,stance=null,
-  confidence=null,reasonCodes=[],plan=null,researchEvidence=null}={}){
+  confidence=null,reasonCodes=[],plan=null,researchEvidence=null,critic=null}={}){
   ensure();
   if(!['XAUUSD','BTCUSD'].includes(symbol)||
      !Number.isSafeInteger(closedBarAt)||closedBarAt<=0||
@@ -77,6 +77,11 @@ export function createResearchJournal({query,clock}={}){
    riskNotes:typeof plan.riskNotes==='string'?plan.riskNotes.slice(0,1000):null,
    timeHorizonMinutes:Number.isSafeInteger(plan.timeHorizonMinutes)?plan.timeHorizonMinutes:null
   }:{};
+  if(critic){
+   const allowed=['INVALID_PLAN','INCOMPLETE_TECHNICAL_EVIDENCE','REGIME_UNVERIFIED','REGIME_CONFLICT','VOLATILITY_EXPANSION','HIGHER_FRAME_COUNTERTREND','OPPOSITE_MARKET_REGIME','PRICE_REJECTION_AGAINST_STANCE','MISSING_MODEL_EVIDENCE','MISSING_COUNTER_THESIS','MISSING_INVALIDATION','SPREAD_OR_ATR_UNFAVORABLE','LIVE_NEWS_NOT_AVAILABLE'];
+   if(critic.version!=='CRITIC_V1'||!['UNAVAILABLE','REVIEWED'].includes(critic.status)||!Array.isArray(critic.flags)||critic.flags.length>allowed.length||critic.flags.some(x=>!allowed.includes(x)))throw Error('INVALID_CRITIC_METADATA');
+   summary.critic={version:critic.version,status:critic.status,flags:[...new Set(critic.flags)],executionPermission:false};
+  }
   // Only bounded, enumerated metadata; no raw market snapshots or account IDs.
   if(researchEvidence){
    const {version,regime,candidate}=researchEvidence;
