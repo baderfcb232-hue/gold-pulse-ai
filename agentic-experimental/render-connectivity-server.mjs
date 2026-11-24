@@ -283,7 +283,7 @@ const server=http.createServer(async(req,res)=>{
     }
     send(verdict.status==='OBSERVED'?202:403,{...verdict,researchScheduling});return;
   }
-  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/fred-historical/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-news/evidence','/live-calendar/status','/brain/status','/auto-brain/status','/demo-trade/status','/demo-trade/history-proofs','/demo-history/status','/demo-sensor/status','/shadow-smoke/status','/decision-audit/status','/forward-evaluation/status','/strategy-comparison/status','/fusion-ab/status','/durable-evaluation/status','/operational-audit/status','/quality/status','/incident/status','/integration/status'].includes(pathname)){
+  if(req.method!=='GET'||!['/healthz','/hybrid/status','/feed/status','/gold/status','/research/status','/news/status','/news/research','/calendar/status','/official-data/status','/fred-historical/status','/journal/status','/delayed-consensus/status','/live-news/status','/live-news/evidence','/live-calendar/status','/brain/status','/auto-brain/status','/demo-trade/status','/demo-trade/history-proofs','/demo-history/status','/demo-sensor/status','/shadow-smoke/status','/decision-audit/status','/forward-evaluation/status','/strategy-comparison/status','/fusion-ab/status','/statistical-review/status','/durable-evaluation/status','/operational-audit/status','/quality/status','/incident/status','/integration/status'].includes(pathname)){
     res.writeHead(404,{'Content-Type':'application/json','Cache-Control':'no-store'});
     res.end(JSON.stringify({error:'not_found'}));return;
   }
@@ -367,6 +367,18 @@ const server=http.createServer(async(req,res)=>{
       res.writeHead(503,headers);
       res.end(JSON.stringify({status:'OPERATIONAL_AUDIT_QUERY_FAILED',
        persistentMetricsAvailable:false}));return;
+    }
+  }
+  if(pathname==='/statistical-review/status'){
+    const headers={'Content-Type':'application/json','Cache-Control':'no-store'};
+    if(!connectedJournal?.statisticalReview){
+      res.writeHead(503,headers);res.end(JSON.stringify({status:'ISOLATED_DATABASE_NOT_CONNECTED',executionPermission:false}));return;
+    }
+    try{
+      const report=await connectedJournal.statisticalReview();
+      res.writeHead(200,headers);res.end(JSON.stringify({status:'DESCRIPTIVE_RESEARCH_ONLY',...report}));return;
+    }catch{
+      res.writeHead(503,headers);res.end(JSON.stringify({status:'STATISTICAL_REVIEW_QUERY_FAILED',executionPermission:false}));return;
     }
   }
   if(pathname==='/durable-evaluation/status'){
