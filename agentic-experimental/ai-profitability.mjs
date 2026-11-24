@@ -5,7 +5,7 @@ const symbols=['XAUUSD','BTCUSD'];
 const positive=x=>Number.isFinite(x)&&x>0;
 const epoch=x=>Number.isSafeInteger(x)&&x>0;
 const fingerprint=q=>typeof q?.brokerServer==='string'&&q.brokerServer.toLowerCase().includes('demo')&&!q.brokerServer.toLowerCase().includes('synthetic')&&typeof q.brokerSymbol==='string'&&q.brokerSymbol.length>0&&epoch(q.accountLogin)?createHash('sha256').update(JSON.stringify([q.brokerServer,q.brokerSymbol,q.accountLogin])).digest('hex'):null;
-const verified=(q,now)=>q?.environment==='EXPERIMENTAL_NABD_AGENTIC'&&q.accountType==='DEMO'&&q.executionEnabled===false&&symbols.includes(q.symbol)&&epoch(q.timestamp)&&q.timestamp<=now&&now-q.timestamp<=2&&positive(q.bid)&&positive(q.ask)&&q.ask>q.bid&&!!fingerprint(q);
+const verified=(q,now)=>q?.environment==='EXPERIMENTAL_NABD_AGENTIC'&&q.accountType==='DEMO'&&q.executionEnabled===false&&symbols.includes(q.symbol)&&epoch(q.timestamp)&&q.timestamp<=now&&now-q.timestamp<=5&&positive(q.bid)&&positive(q.ask)&&q.ask>q.bid&&!!fingerprint(q);
 export function paperOutcome({stance,entryBid,entryAsk,exitBid,exitAsk,riskDistance,commissionR=.05,slippageFraction=.1}={}){
  if(!['BUY_WATCH','SELL_WATCH','WAIT'].includes(stance)||![entryBid,entryAsk,exitBid,exitAsk,riskDistance].every(positive)||entryAsk<=entryBid||exitAsk<=exitBid||!Number.isFinite(commissionR)||commissionR<0||!Number.isFinite(slippageFraction)||slippageFraction<0)throw Error('INVALID_PAPER_OUTCOME');
  const friction=slippageFraction*((entryAsk-entryBid)+(exitAsk-exitBid))/riskDistance+commissionR;
@@ -47,7 +47,7 @@ export function createProfitabilityStore({query,clock=()=>Math.floor(Date.now()/
    markets[symbol]={recorded:rows.length,pending:rows.filter(x=>x.state==='PENDING').length,expired:rows.filter(x=>x.state==='EXPIRED').length,scored:scored.length,directionalSamples:trades,wins,
     netR:grossProfitR-grossLossR,profitFactor:trades>=30&&grossLossR>0?grossProfitR/grossLossR:null,minimumSamples:30,wait,waitBothNegative,waitEitherPositive};
   }
-  return {version:'AI_PAPER_FIXED_HORIZON_V1',markets,retainedWindow:2000,commissionAssumedR:.05,slippageAssumedSpreadFractionPerSide:.1,spreadIncluded:true,actualBrokerProfitability:false,slTpSimulated:false,portfolioDrawdownMeasured:false,overlappingSamplesPossible:true,executionPermission:false,ordersCreated:0};
+  return {version:'AI_PAPER_FIXED_HORIZON_V1',markets,retainedWindow:2000,commissionAssumedR:.05,slippageAssumedSpreadFractionPerSide:.1,spreadIncluded:true,actualBrokerProfitability:false,slTpSimulated:false,portfolioDrawdownMeasured:false,overlappingSamplesPossible:true,waitCounterfactualUsesBothDirections:true,waitCounterfactualNotTradableStrategy:true,executionPermission:false,ordersCreated:0};
  }
  return {save,observe,report};
 }
