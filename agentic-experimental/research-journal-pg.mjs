@@ -80,7 +80,7 @@ export function createResearchJournal({query,clock}={}){
   // Only bounded, enumerated metadata; no raw market snapshots or account IDs.
   if(researchEvidence){
    const {version,regime,candidate}=researchEvidence;
-   if(!['FUSION_STYLE_EVIDENCE_V3','FUSION_STYLE_EVIDENCE_V4'].includes(version)||
+   if(!['FUSION_STYLE_EVIDENCE_V3','FUSION_STYLE_EVIDENCE_V4','FUSION_STYLE_EVIDENCE_V5'].includes(version)||
     !['UNVERIFIED','VOLATILITY_EXPANSION','TREND_UP','TREND_DOWN','RANGE_OR_MIXED','CONFLICT'].includes(regime)||
     !['WAIT','BREAKOUT_RETEST','TREND_PULLBACK_RESEARCH','RANGE_REJECTION_RESEARCH'].includes(candidate))
     throw Error('INVALID_RESEARCH_EVIDENCE_METADATA');
