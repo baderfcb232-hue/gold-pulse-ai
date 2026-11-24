@@ -4,6 +4,7 @@
 import {validateIsolatedDemoSnapshot} from './mt5-demo-sensor.mjs';
 import {validateResearchContext} from './research-brain.mjs';
 import {multiTimeframeFeatures} from './market-features.mjs';
+import {reviewDecision} from './decision-critic.mjs';
 import {buildFusionEvidence} from './fusion-evidence.mjs';
 
 const utc=t=>new Date(t*1000).toISOString();
@@ -52,6 +53,7 @@ export function createDemoAutoBrain({
    const primary=brain.analyze(ctx);
    try{onComparison(ctx,primary);}catch{}
    const result=await primary;
+   const critic=reviewDecision(ctx,result.plan);
    if(result.status!=='RESEARCH_ANALYSIS_ONLY'||!result.plan){
     blocked++;record(symbol,'BLOCKED',{reason:(result.reasons||['AI_ANALYSIS_FAILED']).join(',')});
    }else{
@@ -61,7 +63,7 @@ export function createDemoAutoBrain({
      timeHorizonMinutes:result.plan.timeHorizonMinutes,
      closedBarAt:utc(trigger.closedBarTime),
      trigger:trigger.reason,reasonSummary:(result.plan.thesis||'').slice(0,180),
-     evidenceCount:result.plan.evidence?.length||0,fusionEvidenceVersion:ctx.fusionEvidence.version,simulationOnly:true});
+     evidenceCount:result.plan.evidence?.length||0,fusionEvidenceVersion:ctx.fusionEvidence.version,critic,simulationOnly:true});
    }
    const journal=journalProvider();
    let auditable=false;
@@ -71,7 +73,7 @@ export function createDemoAutoBrain({
       trigger:trigger.reason,status:result.status,
       stance:result.plan?.stance||null,
       confidence:result.plan?.confidence??null,
-      reasonCodes:result.reasons||[],analyzedAt:clock(),plan:result.plan||null,
+      reasonCodes:result.reasons||[],analyzedAt:clock(),plan:result.plan||null,critic,
       researchEvidence:{version:ctx.fusionEvidence.version,regime:ctx.fusionEvidence.adaptive?.regime,candidate:ctx.fusionEvidence.adaptive?.candidate}});
      auditable=saved?.inserted===true;
     }catch{persistenceFailures++;record(symbol,'PERSISTENCE_FAILED',
