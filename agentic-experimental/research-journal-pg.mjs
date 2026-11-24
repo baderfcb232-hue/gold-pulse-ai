@@ -56,7 +56,7 @@ export function createResearchJournal({query,clock}={}){
  }
 
  async function saveAnalysis({symbol,closedBarAt,analyzedAt,trigger,status,stance=null,
-  confidence=null,reasonCodes=[],plan=null}={}){
+  confidence=null,reasonCodes=[],plan=null,researchEvidence=null}={}){
   ensure();
   if(!['XAUUSD','BTCUSD'].includes(symbol)||
      !Number.isSafeInteger(closedBarAt)||closedBarAt<=0||
@@ -77,6 +77,15 @@ export function createResearchJournal({query,clock}={}){
    riskNotes:typeof plan.riskNotes==='string'?plan.riskNotes.slice(0,1000):null,
    timeHorizonMinutes:Number.isSafeInteger(plan.timeHorizonMinutes)?plan.timeHorizonMinutes:null
   }:{};
+  // Only bounded, enumerated metadata; no raw market snapshots or account IDs.
+  if(researchEvidence){
+   const {version,regime,candidate}=researchEvidence;
+   if(!['FUSION_STYLE_EVIDENCE_V3','FUSION_STYLE_EVIDENCE_V4'].includes(version)||
+    !['UNVERIFIED','VOLATILITY_EXPANSION','TREND_UP','TREND_DOWN','RANGE_OR_MIXED','CONFLICT'].includes(regime)||
+    !['WAIT','BREAKOUT_RETEST','TREND_PULLBACK_RESEARCH','RANGE_REJECTION_RESEARCH'].includes(candidate))
+    throw Error('INVALID_RESEARCH_EVIDENCE_METADATA');
+   summary.researchEvidence={version,regime,candidate};
+  }
   const r=await query(
    'INSERT INTO agentic_research.shadow_analysis_decisions (symbol,closed_bar_at,analyzed_at,trigger,analysis_status,stance,confidence,reason_codes,plan_summary) VALUES ($1,to_timestamp($2),to_timestamp($3),$4,$5,$6,$7,$8,$9::jsonb) ON CONFLICT DO NOTHING RETURNING symbol',
    [symbol,closedBarAt,analyzedAt,trigger,status,stance,confidence,reasonCodes,JSON.stringify(summary)]);

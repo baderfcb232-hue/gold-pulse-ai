@@ -71,7 +71,8 @@ export function createDemoAutoBrain({
       trigger:trigger.reason,status:result.status,
       stance:result.plan?.stance||null,
       confidence:result.plan?.confidence??null,
-      reasonCodes:result.reasons||[],analyzedAt:clock(),plan:result.plan||null});
+      reasonCodes:result.reasons||[],analyzedAt:clock(),plan:result.plan||null,
+      researchEvidence:{version:ctx.fusionEvidence.version,regime:ctx.fusionEvidence.adaptive?.regime,candidate:ctx.fusionEvidence.adaptive?.candidate}});
      auditable=saved?.inserted===true;
     }catch{persistenceFailures++;record(symbol,'PERSISTENCE_FAILED',
        {reason:'ISOLATED_RESEARCH_JOURNAL_WRITE_FAILED'});}

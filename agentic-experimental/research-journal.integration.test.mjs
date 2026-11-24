@@ -18,13 +18,17 @@ test('isolated Postgres actually migrates, persists and rejects revised forecast
   assert.deepEqual(await journal.saveActual({provider,id,scheduledAt,observedAt:scheduledAt+30,raw:'3.4%'}),{inserted:true});
   const shadow={symbol:'XAUUSD',closedBarAt:scheduledAt-300,analyzedAt:scheduledAt,
    trigger:'M5_CLOSED',status:'RESEARCH_ANALYSIS_ONLY',stance:'WAIT',
-   confidence:0.51,reasonCodes:[]};
+   confidence:0.51,reasonCodes:[],researchEvidence:{version:'FUSION_STYLE_EVIDENCE_V4',regime:'CONFLICT',candidate:'WAIT'}};
   assert.deepEqual(await journal.saveAnalysis(shadow),{inserted:true});
   assert.deepEqual(await journal.saveAnalysis({...shadow,stance:'BUY_WATCH'}),{inserted:false});
   await assert.rejects(journal.saveAnalysis({...shadow,symbol:'EURUSD'}),/INVALID_ISOLATED_ANALYSIS/);
+  await assert.rejects(journal.saveAnalysis({...shadow,researchEvidence:{...shadow.researchEvidence,regime:'unsafe'}}),/INVALID_RESEARCH_EVIDENCE_METADATA/);
   await connection.close();connection=null;
   const reopened=await connectResearchJournal({url});assert.equal(reopened.status,'CONNECTED');
-  try{assert.deepEqual(await reopened.journal.firstForecast({provider,id,scheduledAt}),{raw:'3.2%',observedAt:scheduledAt-100});}
+  try{assert.deepEqual(await reopened.journal.firstForecast({provider,id,scheduledAt}),{raw:'3.2%',observedAt:scheduledAt-100});
+   const rows=await reopened.journal.viewDecisions('XAUUSD-'+shadow.closedBarAt);
+   const row=rows.find(x=>Number(x.bar)===shadow.closedBarAt&&x.symbol==='XAUUSD');
+   assert.deepEqual(row.plan_summary.researchEvidence,shadow.researchEvidence);assert.equal(row.stance,'WAIT');}
   finally{await reopened.close();}
  }finally{if(connection)await connection.close();}
 });
