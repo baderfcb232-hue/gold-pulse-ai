@@ -4,6 +4,7 @@
 import {validateIsolatedDemoSnapshot} from './mt5-demo-sensor.mjs';
 import {validateResearchContext} from './research-brain.mjs';
 import {multiTimeframeFeatures} from './market-features.mjs';
+import {buildFusionEvidence} from './fusion-evidence.mjs';
 
 const utc=t=>new Date(t*1000).toISOString();
 const noOrders=Object.freeze({executionAllowed:false,ordersCreated:0,tradeAllowed:false});
@@ -37,6 +38,7 @@ export function createDemoAutoBrain({
     candlesH1:clean.candlesH1.slice(-24),candlesH4:clean.candlesH4.slice(-24),
     accountType:'DEMO',
     technicalEvidence:multiTimeframeFeatures(clean),
+    fusionEvidence:buildFusionEvidence(clean),
     // Unlicensed/late economic headlines never become release-time evidence.
     news:{classification:'NONE'}};
    const ready=validateResearchContext(ctx,now);
@@ -57,7 +59,7 @@ export function createDemoAutoBrain({
      timeHorizonMinutes:result.plan.timeHorizonMinutes,
      closedBarAt:utc(trigger.closedBarTime),
      trigger:trigger.reason,reasonSummary:(result.plan.thesis||'').slice(0,180),
-     evidenceCount:result.plan.evidence?.length||0,simulationOnly:true});
+     evidenceCount:result.plan.evidence?.length||0,fusionEvidenceVersion:ctx.fusionEvidence.version,simulationOnly:true});
    }
    const journal=journalProvider();
    let auditable=false;
