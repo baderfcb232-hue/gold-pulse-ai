@@ -155,3 +155,30 @@ test('licensed streaming calendar archive persists first Actual, prior Forecast 
   }finally{await reopened.close();}
  }finally{if(c)await c.close();}
 });
+
+test('durable Fusion A/B reservations, paired outcome and cap survive reconnect', {skip:!url},async()=>{
+ let now=1893456000;
+ const quote=(bid=100)=>({environment:'EXPERIMENTAL_NABD_AGENTIC',accountType:'DEMO',executionEnabled:false,symbol:'XAUUSD',brokerServer:'JustMarkets-Demo',brokerSymbol:'XAUUSD.m',accountLogin:42,timestamp:now,bid,ask:bid+0.2});
+ let c=await connectResearchJournal({url,clock:()=>now});
+ assert.equal(c.status,'CONNECTED');
+ try{
+  const store=c.journal.fusionStore;
+  const reservations=await Promise.all([store.reserve({symbol:'XAUUSD',at:now,maxPerDay:1}),store.reserve({symbol:'BTCUSD',at:now,maxPerDay:1})]);
+  assert.equal(reservations.filter(Boolean).length,1);
+  const symbol=reservations[0]?'XAUUSD':'BTCUSD';
+  const at=now;
+  assert.equal(await store.save({symbol,at,observedAt:now,baseline:{stance:'WAIT',confidence:0.7},fusion:{stance:'BUY_WATCH',confidence:0.8},quote:{...quote(),symbol}}),true);
+  await c.close();c=null;
+  now+=3600;
+  c=await connectResearchJournal({url,clock:()=>now});assert.equal(c.status,'CONNECTED');
+  const reopened=c.journal.fusionStore;
+  assert.equal(await reopened.reserve({symbol,at:now,maxPerDay:1}),false);
+  assert.equal((await reopened.observe({...quote(101),symbol,accountLogin:43})).scored,0);
+  assert.equal((await reopened.observe({...quote(101),symbol})).scored,1);
+  assert.equal((await reopened.observe({...quote(102),symbol})).scored,0);
+  const report=await reopened.report();
+  assert.equal(report.usedToday,1);assert.equal(report.markets[symbol].fusion.hits,1);
+  assert.equal(report.markets[symbol].baseline.wait,1);assert.equal(report.ordersCreated,0);
+  assert.equal(JSON.stringify(report).includes('feed_fingerprint'),false);
+ }finally{if(c)await c.close();}
+});
