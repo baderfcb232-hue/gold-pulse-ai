@@ -9,6 +9,23 @@ function emaSeries(a,n){
  for(const x of a.slice(n)){v+=k*(x-v);out.push(v);}
  return out;
 }
+// Wilder ATR(10), multiplier 3, final bands carried forward from closed bars.
+export function supertrend(bars,period=10,multiplier=3){
+ if(bars.length<period+1)return null;
+ const tr=bars.slice(1).map((b,i)=>Math.max(b.high-b.low,Math.abs(b.high-bars[i].close),Math.abs(b.low-bars[i].close)));
+ let atr=mean(tr.slice(0,period)),upper,lower,line,direction;
+ for(let i=period;i<bars.length;i++){
+  if(i>period)atr=(atr*(period-1)+tr[i-1])/period;
+  const b=bars[i],mid=(b.high+b.low)/2,bu=mid+multiplier*atr,bl=mid-multiplier*atr;
+  if(i===period){upper=bu;lower=bl;direction='DOWN';line=upper;continue;}
+  const prev=bars[i-1].close;
+  upper=bu<upper||prev>upper?bu:upper;
+  lower=bl>lower||prev<lower?bl:lower;
+  direction=direction==='DOWN'?(b.close>upper?'UP':'DOWN'):(b.close<lower?'DOWN':'UP');
+  line=direction==='UP'?lower:upper;
+ }
+ return {period,multiplier,direction,line:round(line),atr:round(atr)};
+}
 export function frameEvidence(bars){
  const f=calculateClosedCandleFeatures(bars);
  if(f.status!=='INDICATORS_AVAILABLE')return {status:f.status};
@@ -32,9 +49,9 @@ export function frameEvidence(bars){
    direction:last.close>last.open?'UP':last.close<last.open?'DOWN':'FLAT',
    previousHighBroken:last.close>prev.high,previousLowBroken:last.close<prev.low},
   vwap:null,vwapReason:'VERIFIED_VOLUME_NOT_REQUIRED_OR_AVAILABLE',
-  supertrend:null,supertrendReason:'NOT_IMPLEMENTED_IN_THIS_ADAPTER'};
+  supertrend:supertrend(bars)};
 }
 export function buildFusionEvidence(snapshot){
- return {version:'FUSION_STYLE_EVIDENCE_V1',advisoryOnly:true,fullProductionFusion:false,
+ return {version:'FUSION_STYLE_EVIDENCE_V2',advisoryOnly:true,fullProductionFusion:false,
   frames:Object.fromEntries(['M5','M15','H1','H4'].map(tf=>[tf,frameEvidence(snapshot?.['candles'+tf])]))};
 }
