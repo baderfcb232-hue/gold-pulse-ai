@@ -4,6 +4,8 @@ import {createHmac} from 'node:crypto';
 import {createDemoIngest,signDemoEnvelope} from './demo-ingest.mjs';
 import {createDemoAutoBrain} from './demo-auto-brain.mjs';
 import {createDemoTradeIntents} from './demo-trade-intents.mjs';
+import {createDemoHistoryIngest} from './demo-history-ingest.mjs';
+import {initialPortfolio,enterPortfolio,advancePortfolio,portfolioReport} from './paper-portfolio.mjs';
 import {HybridScheduler} from './hybrid-scheduler.mjs';
 
 const t=1800000000;
@@ -40,18 +42,18 @@ function compose({journalResult={inserted:true},stance='BUY_WATCH',confidence=.9
   signature:signDemoEnvelope(sensorSecret,t,serialized),secure:true});
  const orders=createDemoTradeIntents({enabled:true,secret:execSecret,clock:()=>t,
   quoteProvider:sym=>ingest.getLatest(sym)});
- let saved=0,called=0;
+ let saved=0,called=0,paper=initialPortfolio('XAUUSD');
  const brains={XAUUSD:{analyze:async ctx=>{
    called++;
    assert.equal(ctx.technicalEvidence.M5.ema200Verified,true);
    assert.equal(ctx.accountType,'DEMO');
    return {status:'RESEARCH_ANALYSIS_ONLY',plan:{
-    stance,confidence,thesis:'confirmed multi-timeframe trend'}};}}};
+    stance,confidence,timeHorizonMinutes:1,thesis:'confirmed multi-timeframe trend'}};}}};
  const brain=createDemoAutoBrain({brains,scheduler:new HybridScheduler(),
   clock:()=>t,enabled:true,
   journalProvider:()=>({saveAnalysis:async()=>{saved++;return journalResult;}}),
-  onPlan:args=>orders.consider(args)});
- return {ingest,result,orders,brain,get called(){return called},get saved(){return saved}};
+  onPlan:args=>{orders.consider(args);paper=enterPortfolio(paper,{...args,broker:ingest.getLatest(args.symbol)},t).state;}});
+ return {ingest,result,orders,brain,get paper(){return paper},get called(){return called},get saved(){return saved}};
 }
 test('isolated signed Demo bars produce one auditable WATCH intent for simulated MT5 pickup',async()=>{
  const system=compose();
@@ -112,4 +114,33 @@ test('full simulated AI -> saved journal -> signed intent -> executor pickup -> 
   'An EA-reported deal number is not independent broker verification');
  assert.equal(system.orders.ack(ack).status,'DUPLICATE');
  assert.equal(system.orders.report().brokerAcks,1);
+});
+
+test('simulated end-to-end entry history cross-check and separate paper TP/SL/time exits',async()=>{
+ for(const outcome of ['TP','SL','TIME']){
+  const x=compose();x.brain.onSnapshot(x.ingest.getLatest('XAUUSD'));await x.brain.flush();
+  const order=x.orders.pull(signedPull());assert.equal(order.status,'INTENT_DELIVERED');
+  const parts=order.wire.split('|');
+  const ackBody=JSON.stringify({id:'XAUUSD-'+(t-300),status:'FILLED',accountType:'DEMO',accountLogin:3214567,occurredAt:t,brokerDealTicket:424242,tradeRetcode:10009,executedVolume:.02});
+  assert.equal(x.orders.ack({body:ackBody,timestamp:String(t),mac:mac(execSecret,t+'\n'+ackBody),secure:true}).status,'RECORDED');
+  const historySecret='separate-read-only-history-test-secret';
+  const history=createDemoHistoryIngest({secret:historySecret,clock:()=>t,quoteProvider:s=>x.ingest.getLatest(s),matchHistory:(deals,broker)=>x.orders.observeBrokerHistory(deals,broker)});
+  const body=JSON.stringify({source:'ISOLATED_DEMO_MT5_HISTORY_VERIFIER',accountType:'DEMO',accountLogin:3214567,brokerServer:'Isolated-JustMarkets-Demo',observedAt:t,symbols:{XAUUSD:'XAUUSD.m',BTCUSD:'BTCUSD.m'},deals:[{symbol:'XAUUSD',brokerSymbol:'XAUUSD.m',dealTicket:424242,orderTicket:424243,entry:'IN',side:'BUY',dealAt:t,volume:.02,stop:Number(parts[8]),target:Number(parts[9])}]});
+  assert.equal(history.receive({body,timestamp:String(t),mac:mac(historySecret,t+'\n'+body),secure:true}).matched,1);
+  assert.equal(x.orders.report().mt5HistoryCrossCheckedFills,1);assert.equal(x.orders.report().brokerIndependentlyVerifiedFills,0);
+  assert.equal(x.paper.positions.length,1);
+  const p=x.paper.positions[0],base=x.ingest.getLatest('XAUUSD');
+  let state=x.paper;
+  // Sample continuously; avoid assuming unseen fills during a gap.
+  const until=outcome==='TIME'?60:10;
+  for(let dt=10;dt<=until;dt+=10){
+    const bid=outcome==='TP'?p.target+.1:outcome==='SL'?p.stop-.1:p.entry;
+    state=advancePortfolio(state,{...base,timestamp:t+dt,bid,ask:bid+.1},t+dt);
+  }
+  const report=portfolioReport(state);assert.equal(report.closed,1);assert.equal(report.open,0);assert.equal(report.frozen,false);
+  assert.equal(report[outcome==='TP'?'targetHits':outcome==='SL'?'stopHits':'timeExits'],1);
+  if(outcome==='TP')assert.ok(report.netProfit>0);
+  if(outcome==='SL')assert.ok(report.netProfit<0);
+  assert.equal(report.executionPermission,false);
+ }
 });

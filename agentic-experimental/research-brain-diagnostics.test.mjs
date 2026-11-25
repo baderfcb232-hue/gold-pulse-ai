@@ -30,3 +30,18 @@ test('failed model call returns diagnosable reason without sending an order or l
  assert.equal(brain.report().lastError,'AI_RATE_LIMITED');
  assert.equal(brain.report().blocked,1);
 });
+
+test('evidence-balanced decision policy retains WATCH and WAIT without granting orders',async()=>{
+ const now=1800000000;const ctx={symbol:'XAUUSD',feedType:'MT5_DEMO_BROKER',observedAt:now-1,bid:100,ask:100.2,spreadLimit:2.5,candlesVerified:true,multiTimeframeVerified:true,accountType:'DEMO',news:{classification:'NONE'}};
+ for(const stance of ['WAIT','BUY_WATCH','SELL_WATCH']){
+  const plan={stance,confidence:.8,thesis:'verified structure',counterThesis:'opposing evidence',evidence:['closed bar'],invalidation:'level fails',riskNotes:'reassess on next confirmed bar',timeHorizonMinutes:30};
+  const brain=createResearchBrain({key:'test-only',clock:()=>now,fetcher:async(url,opts)=>{
+   const request=JSON.parse(opts.body);
+   assert.match(request.instructions,/Do not target any trade frequency/);
+   assert.match(request.instructions,/specific missing confirmation/);
+   assert.match(request.instructions,/do not inflate it/);
+   return {ok:true,json:async()=>({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(plan)}]}]})};
+  }});
+  const r=await brain.analyze(ctx);assert.equal(r.plan.stance,stance);assert.equal(r.tradeAllowed,false);assert.equal(r.plan.executionPermission,false);assert.equal(r.order,null);assert.equal(brain.report().policyVersion,'V6_EVIDENCE_BALANCED');
+ }
+});
