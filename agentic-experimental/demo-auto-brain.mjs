@@ -55,7 +55,7 @@ export function createDemoAutoBrain({
      const journal=journalProvider();
      if(!journal?.reservePrimarySlot)throw Error('NO_DURABLE_BUDGET');
      const claim=await journal.reservePrimarySlot({symbol,slotStart:trigger.slotStart});
-     if(!claim.inserted){blocked++;record(symbol,'BLOCKED',{reason:'DURABLE_SLOT_ALREADY_USED_OR_EXPIRED'});return;}
+     if(!claim.inserted){blocked++;record(symbol,'BLOCKED',{reason:'DURABLE_SLOT_OR_DAILY_BUDGET_UNAVAILABLE'});return;}
     }catch{persistenceFailures++;blocked++;record(symbol,'BLOCKED',{reason:'DURABLE_BUDGET_UNAVAILABLE'});return;}
    }
    const primary=brain.analyze(ctx);
