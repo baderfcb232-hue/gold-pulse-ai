@@ -183,3 +183,11 @@ CREATE TABLE IF NOT EXISTS agentic_research.ai_paper_portfolios (
  state JSONB NOT NULL CHECK(jsonb_typeof(state)='object'),
  revision BIGINT NOT NULL DEFAULT 0 CHECK(revision>=0)
 );
+
+-- One primary AI attempt per symbol per 48-minute UTC window; survives restarts.
+CREATE TABLE IF NOT EXISTS agentic_research.primary_analysis_slots (
+ symbol TEXT NOT NULL CHECK(symbol IN ('XAUUSD','BTCUSD')),
+ slot_start BIGINT NOT NULL CHECK(slot_start>0 AND slot_start%2880=0),
+ reserved_at BIGINT NOT NULL CHECK(reserved_at>=slot_start AND reserved_at<slot_start+2880),
+ PRIMARY KEY(symbol,slot_start)
+);
