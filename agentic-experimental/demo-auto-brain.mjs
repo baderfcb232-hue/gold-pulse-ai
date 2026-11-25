@@ -16,7 +16,7 @@ export function createDemoAutoBrain({
 }={}){
  if(!scheduler||typeof scheduler.consider!=='function')throw Error('SCHEDULER_REQUIRED');
  let scheduled=0,completed=0,blocked=0,persistenceFailures=0;
- const active=new Set(),tasks=new Set(),lastBySymbol={};
+ const active=new Set(),tasks=new Set(),lastBySymbol={},scheduleDiagnostics={};
  const record=(symbol,stage,details={})=>{
   lastBySymbol[symbol]={stage,at:utc(clock()),...details};
   if(stage!=='SCHEDULED')try{onAudit(symbol,lastBySymbol[symbol]);}catch{}
@@ -49,6 +49,14 @@ export function createDemoAutoBrain({
    const brain=brains[symbol];
    if(!brain||typeof brain.analyze!=='function'){
     blocked++;record(symbol,'BLOCKED',{reason:'AI_MODEL_NOT_CONFIGURED'});return;
+   }
+   if(trigger.slotStart!==null&&trigger.slotStart!==undefined){
+    try{
+     const journal=journalProvider();
+     if(!journal?.reservePrimarySlot)throw Error('NO_DURABLE_BUDGET');
+     const claim=await journal.reservePrimarySlot({symbol,slotStart:trigger.slotStart});
+     if(!claim.inserted){blocked++;record(symbol,'BLOCKED',{reason:'DURABLE_SLOT_ALREADY_USED_OR_EXPIRED'});return;}
+    }catch{persistenceFailures++;blocked++;record(symbol,'BLOCKED',{reason:'DURABLE_BUDGET_UNAVAILABLE'});return;}
    }
    const primary=brain.analyze(ctx);
    try{onComparison(ctx,primary);}catch{}
@@ -96,22 +104,29 @@ export function createDemoAutoBrain({
   if(!s||!['XAUUSD','BTCUSD'].includes(s.symbol))
    return {scheduled:false,reason:'UNSUPPORTED_SYMBOL',...noOrders};
   const symbol=s.symbol,now=clock();
+  const diag=scheduleDiagnostics[symbol]??={};
+  diag.lastSnapshotAt=utc(now);
   const checked=validateIsolatedDemoSnapshot(s,now);
   if(checked.status!=='VALIDATED_RESEARCH_SENSOR'||!checked.safe.multiTimeframeVerified){
    blocked++;record(symbol,'BLOCKED',{reason:'INVALID_BROKER_SNAPSHOT'});
+   diag.lastSnapshotReason='INVALID_BROKER_SNAPSHOT';
    return {scheduled:false,reason:'INVALID_BROKER_SNAPSHOT',...noOrders};
   }
   const depth=checked.safe;
   // The MT5 EA sends a tiny signed heartbeat between complete M5 snapshots.
   // A heartbeat must never spend AI tokens on 2-16 bars or consume a candle trigger.
+  diag.depth=Object.fromEntries(Object.keys(durations).map(tf=>[tf,depth['candles'+tf].length]));
   if(depth.candlesM5.length<205||depth.candlesM15.length<30||
      depth.candlesH1.length<30||depth.candlesH4.length<25)
-   return {scheduled:false,reason:'WAITING_DEEP_CLOSED_BARS',...noOrders};
-  if(active.has(symbol))return {scheduled:false,reason:'MODEL_BUSY_FOR_SYMBOL',...noOrders};
+   {diag.lastSnapshotReason='WAITING_DEEP_CLOSED_BARS';return {scheduled:false,reason:'WAITING_DEEP_CLOSED_BARS',...noOrders};}
+  diag.lastDeepAt=utc(now);
+  diag.lastDeepBarAt=utc(depth.candlesM5.at(-1).time);
+  if(active.has(symbol)){diag.lastSnapshotReason='MODEL_BUSY_FOR_SYMBOL';return {scheduled:false,reason:'MODEL_BUSY_FOR_SYMBOL',...noOrders};}
   const clean=checked.safe;
   const bars=Object.fromEntries(Object.keys(durations).map(tf=>[tf,clean['candles'+tf]]));
   const trigger=scheduler.consider({symbol,now,quote:{bid:clean.bid,ask:clean.ask,
    time:clean.timestamp},bars,news:[]});
+  diag.lastDeepReason=trigger.reason;diag.lastSnapshotReason=trigger.reason;
   if(!trigger.callAI)return {scheduled:false,reason:trigger.reason,...noOrders};
   active.add(symbol);scheduled++;
   record(symbol,'SCHEDULED',{trigger:trigger.reason,closedBarAt:utc(trigger.closedBarTime)});
@@ -124,7 +139,7 @@ export function createDemoAutoBrain({
   return {status:!enabled?'DISABLED':completed?'SHADOW_ANALYSIS_OBSERVED':
    scheduled?'AWAITING_AI_RESULT':'AWAITING_VERIFIED_M5_TRIGGER',
    enabled,mode:'AUTHENTICATED_DEMO_SHADOW_ONLY',scheduled,completed,blocked,
-   persistenceFailures,active:[...active],lastBySymbol,
+   persistenceFailures,active:[...active],lastBySymbol,scheduleDiagnostics:structuredClone(scheduleDiagnostics),
    newsTradingEnabled:false,brokerOrderRoutes:false,...noOrders};
  }
  return {onSnapshot,report,flush};
