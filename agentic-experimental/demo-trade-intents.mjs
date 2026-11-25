@@ -1,14 +1,14 @@
 // NABD isolated DEMO order intents. Broker execution happens ONLY inside a separate
 // opt-in DEMO MT5 EA after independent broker/account/lot/stop/drawdown guards.
 // No imports from production, no LIVE order route, and no order credentials.
-import {createHmac,timingSafeEqual} from 'node:crypto';
+import {createHmac,timingSafeEqual,createHash} from 'node:crypto';
 const finite=x=>typeof x==='number'&&Number.isFinite(x);
 const round=x=>Number(x.toFixed(8));
 const signature=(secret,wire)=>createHmac('sha256',secret).update(wire).digest('hex');
 const openPosition=Object.freeze({XAUUSD:1,BTCUSD:2});
 export function createDemoTradeIntents({
  enabled=false,secret='',clock=()=>Math.floor(Date.now()/1000),quoteProvider=()=>null,
- onAudit=()=>{},onAckDiagnostic=()=>{},onBrokerHistoryProof=()=>{}
+ onAudit=()=>{},onAckDiagnostic=()=>{},onBrokerHistoryProof=()=>{},onLifecycleAnchor=()=>{}
 }={}){
  const keyReady=typeof secret==='string'&&Buffer.byteLength(secret,'utf8')>=32;
  const queue=new Map(),seen=new Set(),delivered=new Map(),acks=new Map();
@@ -304,6 +304,8 @@ export function createDemoTradeIntents({
     audit(delivery.symbol,'BROKER_HISTORY_CROSSCHECKED');
     try{onBrokerHistoryProof({intentId:id,symbol:delivery.symbol,
      dealTicket:d.dealTicket,observedAt:now});}catch{}
+    try{onLifecycleAnchor({intentId:id,symbol:delivery.symbol,dealTicket:d.dealTicket,openedAt:d.dealAt,side:d.side,volume:d.volume,
+     feed:createHash('sha256').update(JSON.stringify([broker.brokerServer,broker.brokerSymbol,broker.accountLogin])).digest('hex')});}catch{}
     break;
    }
   }
