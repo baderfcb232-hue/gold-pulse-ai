@@ -125,3 +125,21 @@ test('Actual seen without pre-release forecast never gets a trusted surprise',as
  assert.equal(row.comparisonStatus,'NO_POINT_IN_TIME_BASELINE');
  assert.equal(row.eligibleForExecution,false);stream.stop();
 });
+
+test('revised actual never replaces first observed surprise or latency',async()=>{
+ let time=now;const release=now+120,handlers=new Map(),forecasts=new Map(),actuals=new Map();
+ const socket={addEventListener:(k,f)=>handlers.set(k,f),send:()=>{},close:()=>{}};
+ const journal={saveForecast:async e=>{if(!forecasts.has(e.id))forecasts.set(e.id,{raw:e.raw,observedAt:e.observedAt});},
+ saveActual:async e=>{if(!actuals.has(e.id))actuals.set(e.id,{raw:e.raw,observedAt:e.observedAt});},
+ firstForecast:async e=>forecasts.get(e.id)||null,firstActual:async e=>actuals.get(e.id)||null};
+ const stream=createLiveCalendarStream({key:'test',secret:'test',clock:()=>time,journalProvider:()=>journal,wsFactory:()=>socket});
+ const event={...base,date:new Date(release*1000).toISOString(),actual:'',forecast:'3.0%'};
+ stream.connect();handlers.get('open')();handlers.get('message')({data:JSON.stringify(event)});
+ time=release+2;handlers.get('message')({data:JSON.stringify({...event,actual:'3.5%'})});
+ time=release+100;handlers.get('message')({data:JSON.stringify({...event,actual:'2.5%',forecast:'3.4%'})});
+ for(let i=0;i<12;i++)await new Promise(resolve=>setImmediate(resolve));
+ const row=stream.report().latestEvents[0];
+ assert.equal(row.firstActualAsObserved,'3.5%');assert.equal(row.forecastAsObservedBeforeRelease,'3.0%');
+ assert.equal(row.comparison.direction,'ABOVE_FORECAST');assert.equal(row.observationSecondsAfterScheduled,2);
+ assert.equal(row.eligibleForExecution,false);stream.stop();
+});
