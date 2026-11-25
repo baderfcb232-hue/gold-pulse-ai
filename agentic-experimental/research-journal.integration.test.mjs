@@ -248,3 +248,23 @@ test('primary AI slot reservation is atomic, independent per market and durable 
  assert.equal((await b.journal.reservePrimarySlot({...args,slotStart:slot+2880})).inserted,true);
  }finally{if(a)await a.close();if(b)await b.close();}
 });
+
+test('isolated closure metrics require matched entry proof and survive reconnect without double counting',{skip:!url},async()=>{
+ const t=1930000200,id='XAUUSD-'+t,feed='a'.repeat(64);
+ let c=await connectResearchJournal({url});assert.equal(c.status,'CONNECTED');
+ const anchor={intentId:id,symbol:'XAUUSD',dealTicket:891231,openedAt:t,side:'BUY',volume:.02,feed};
+ const p={symbol:'XAUUSD',feed,positionId:991231,entryTicket:891231,openedAt:t,closedAt:t+600,side:'BUY',volume:.02,currency:'USD',grossProfit:10,commission:-1,swap:-.1,fee:-.2,net:8.7,exitCount:2};
+ try{
+ assert.equal((await c.journal.saveLifecycleAnchor(anchor)).inserted,false);
+ assert.equal((await c.journal.saveClosedPosition(p)).matched,false);
+ await c.journal.saveBrokerHistoryProof({intentId:id,symbol:'XAUUSD',dealTicket:891231,observedAt:t});
+ assert.equal((await c.journal.saveLifecycleAnchor(anchor)).inserted,true);
+ assert.equal((await c.journal.saveClosedPosition({...p,feed:'b'.repeat(64)})).matched,false);
+ assert.equal((await c.journal.saveClosedPosition({...p,volume:.01})).matched,false);
+ assert.deepEqual(await c.journal.saveClosedPosition(p),{inserted:true,matched:true});
+ assert.deepEqual(await c.journal.saveClosedPosition(p),{inserted:false,matched:true});
+ await c.close();c=null;
+ const d=await connectResearchJournal({url});assert.equal(d.status,'CONNECTED');
+ try{assert.deepEqual(await d.journal.saveClosedPosition(p),{inserted:false,matched:true});const r=await d.journal.closedPositionReport();const gold=r.markets.find(x=>x.symbol==='XAUUSD'&&x.currency==='USD');assert.equal(gold.closed,1);assert.equal(gold.wins,1);assert.equal(gold.net,8.7);assert.equal(gold.profitFactor,null);assert.equal(r.profitabilityEstablished,false);}finally{await d.close();}
+ }finally{if(c)await c.close();}
+});

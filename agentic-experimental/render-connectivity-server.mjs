@@ -23,6 +23,7 @@ import {createDemoIngest} from './demo-ingest.mjs';
 import {createDemoAutoBrain} from './demo-auto-brain.mjs';
 import {createFusionRuntime} from './fusion-ab-runtime.mjs';
 import {createDemoTradeIntents} from './demo-trade-intents.mjs';
+import {createClosedHistoryIngest} from './demo-closed-history.mjs';
 import {createDemoHistoryIngest} from './demo-history-ingest.mjs';
 import {createFredHistoricalMonitor} from './fred-historical-fallback.mjs';
 import {createIsolatedDecisionAudit} from './phase5-decision-audit.mjs';
@@ -128,8 +129,10 @@ const demoTradeIntents=createDemoTradeIntents({
  onAckDiagnostic:reason=>recordOperational('ACK','REJECTED',null,reason),
  onBrokerHistoryProof:proof=>{
   serializeForwardDb(proof.symbol,journal=>journal.saveBrokerHistoryProof(proof));
- }
+ },
+ onLifecycleAnchor:anchor=>serializeForwardDb(anchor.symbol,journal=>journal.saveLifecycleAnchor(anchor))
 });
+const closureIngest=createClosedHistoryIngest({secret:process.env.NABD_TEST_DEMO_HISTORY_HMAC_SECRET||'',quoteProvider:s=>demoIngest.getLatest(s),journalProvider:()=>connectedJournal});
 const demoHistoryIngest=createDemoHistoryIngest({
  secret:process.env.NABD_TEST_DEMO_HISTORY_HMAC_SECRET||'',
  quoteProvider:symbol=>demoIngest.getLatest(symbol),
@@ -208,6 +211,20 @@ const server=http.createServer(async(req,res)=>{
       res.writeHead(503,headers);res.end(JSON.stringify({error:'TELEMETRY_UNAVAILABLE'}));
     }
     return;
+  }
+  if(pathname==='/demo-history/closures/status'&&req.method==='GET'){
+    const headers={'Content-Type':'application/json','Cache-Control':'private, no-store'};
+    if(!authorizedView(req.headers.authorization,process.env.NABD_DEMO_VIEW_TOKEN)){res.writeHead(403,headers);res.end(JSON.stringify({error:'READ_AUTH_REQUIRED'}));return;}
+    try{const data=await connectedJournal.closedPositionReport();res.writeHead(200,headers);res.end(JSON.stringify({...data,ingest:closureIngest.report()}));}
+    catch{res.writeHead(503,headers);res.end(JSON.stringify({error:'CLOSURE_JOURNAL_UNAVAILABLE'}));}return;
+  }
+  if(pathname==='/demo-history/closures'&&req.method==='POST'){
+    const send=(status,payload)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'private, no-store'});res.end(JSON.stringify(payload));};
+    let chunks=[],size=0;
+    try{for await(const chunk of req){size+=chunk.length;if(size>64000){send(413,{status:'REJECTED',ordersCreated:0});return;}chunks.push(chunk);}}
+    catch{if(!res.writableEnded)send(400,{status:'REJECTED',ordersCreated:0});return;}
+    const answer=await closureIngest.receive({body:Buffer.concat(chunks).toString('utf8'),timestamp:req.headers['x-nabd-history-timestamp'],mac:req.headers['x-nabd-history-signature'],secure:req.socket.encrypted===true||req.headers['x-forwarded-proto']==='https'});
+    send(answer.status==='OBSERVED'?202:403,answer);return;
   }
   if(pathname==='/demo-history/observe'&&req.method==='POST'){
     const send=(status,payload)=>{res.writeHead(status,{
@@ -444,7 +461,7 @@ const server=http.createServer(async(req,res)=>{
     }
   }
   res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});
-  res.end(JSON.stringify(pathname==='/fusion-ab/status' ? await fusionRuntime.durableReport() : pathname==='/strategy-comparison/status' ? strategyComparison.report() : pathname==='/forward-evaluation/status' ? forwardEvaluation.report() : pathname==='/decision-audit/status' ? decisionAudit.report() : pathname==='/integration/status' ? buildExperimentReadiness({bls:blsIndicators.report(),fred:fredHistorical.report(),brain:researchBrain.report(),autoBrain:demoAutoBrain.report(),execution:demoTradeIntents.report(),demo:{...demoSensorReadiness(),brokerConnected:Object.values(demoIngest.report().markets).some(m=>m.status==='SENSOR_OBSERVED')},journal:journalState,smoke:shadowSmoke,fxStreetAuthorized:false,officialReleaseVerified:false}) : pathname==='/shadow-smoke/status' ? shadowSmoke : pathname==='/brain/status' ? {...researchBrain.report(),BTCUSD:btcResearchBrain.report(),autoResearch:demoAutoBrain.report()} : pathname==='/auto-brain/status' ? demoAutoBrain.report() : pathname==='/demo-trade/status' ? demoTradeIntents.report() : pathname==='/demo-history/status' ? demoHistoryIngest.report() : pathname==='/demo-sensor/status' ? {...demoSensorReadiness(),status:Object.values(demoIngest.report().markets).some(x=>x.status==='SENSOR_OBSERVED')?'OBSERVING_ISOLATED_DEMO':'AWAITING_ISOLATED_DEMO_SENSOR',acceptedMethod:demoIngest.report().authentication==='HMAC_SHA256_CONFIGURED'?'HMAC_SHA256_AUTHENTICATED_HTTP':'DISABLED',autoResearch:demoAutoBrain.report(),httpIngestEnabled:demoIngest.report().authentication==='HMAC_SHA256_CONFIGURED',brokerConnected:Object.values(demoIngest.report().markets).some(x=>x.status==='SENSOR_OBSERVED'),ingestion:demoIngest.report()} : pathname==='/live-calendar/status' ? liveCalendarStream.report() : pathname==='/live-news/status' ? liveNewsSystemStatus({journalConnected:!!connectedJournal,calendarKeyConfigured:!!process.env.NABD_TEST_TRADING_ECONOMICS_STREAM_KEY&&!!process.env.NABD_TEST_TRADING_ECONOMICS_STREAM_SECRET,realtimeFeedVerified:false,officialReleaseTimestampVerified:false,preReleaseForecastCaptured:false,brokerFeedVerified:false}) : pathname==='/delayed-consensus/status' ? delayedCalendar.report() : pathname==='/journal/status' ? journalState : pathname==='/fred-historical/status' ? fredHistorical.report() : pathname==='/official-data/status' ? blsIndicators.report() : pathname==='/calendar/status' ? economicCalendar.report() : pathname==='/news/research' ? newsResearchReadiness({calendarConfigured:!!process.env.NABD_TEST_TRADING_ECONOMICS_KEY,verifiedReleaseArchive:false,goldBrokerCandles:false,btcBrokerCandles:false,openaiConnected:state==='CONNECTED'}) : pathname==='/news/status' ? officialNews.report() : pathname==='/gold/status' ? goldSpot.report() : pathname==='/research/status' ? sources.report() : pathname==='/feed/status' ? feed.report() : pathname==='/hybrid/status' ? {...hybrid.report(),durable:await (async()=>{try{return await connectedJournal?.primarySlotReport()||null}catch{return null}})(),marketAdapter:Object.values(demoIngest.report().markets).some(m=>m.status==='SENSOR_OBSERVED')?'isolated_demo_sensor':'not_connected'} : {service:'nabd-agentic-ai-test',experimental:true,reference_only:true,trading_enabled:false,model_connection:state,last_checked:checkTime}));
+  res.end(JSON.stringify(pathname==='/fusion-ab/status' ? await fusionRuntime.durableReport() : pathname==='/strategy-comparison/status' ? strategyComparison.report() : pathname==='/forward-evaluation/status' ? forwardEvaluation.report() : pathname==='/decision-audit/status' ? decisionAudit.report() : pathname==='/integration/status' ? buildExperimentReadiness({bls:blsIndicators.report(),fred:fredHistorical.report(),brain:researchBrain.report(),autoBrain:demoAutoBrain.report(),execution:demoTradeIntents.report(),demo:{...demoSensorReadiness(),brokerConnected:Object.values(demoIngest.report().markets).some(m=>m.status==='SENSOR_OBSERVED')},journal:journalState,smoke:shadowSmoke,fxStreetAuthorized:false,officialReleaseVerified:false}) : pathname==='/shadow-smoke/status' ? shadowSmoke : pathname==='/brain/status' ? {...researchBrain.report(),BTCUSD:btcResearchBrain.report(),autoResearch:demoAutoBrain.report()} : pathname==='/auto-brain/status' ? demoAutoBrain.report() : pathname==='/demo-trade/status' ? demoTradeIntents.report() : pathname==='/demo-history/status' ? {...demoHistoryIngest.report(),closures:closureIngest.report()} : pathname==='/demo-sensor/status' ? {...demoSensorReadiness(),status:Object.values(demoIngest.report().markets).some(x=>x.status==='SENSOR_OBSERVED')?'OBSERVING_ISOLATED_DEMO':'AWAITING_ISOLATED_DEMO_SENSOR',acceptedMethod:demoIngest.report().authentication==='HMAC_SHA256_CONFIGURED'?'HMAC_SHA256_AUTHENTICATED_HTTP':'DISABLED',autoResearch:demoAutoBrain.report(),httpIngestEnabled:demoIngest.report().authentication==='HMAC_SHA256_CONFIGURED',brokerConnected:Object.values(demoIngest.report().markets).some(x=>x.status==='SENSOR_OBSERVED'),ingestion:demoIngest.report()} : pathname==='/live-calendar/status' ? liveCalendarStream.report() : pathname==='/live-news/status' ? liveNewsSystemStatus({journalConnected:!!connectedJournal,calendarKeyConfigured:!!process.env.NABD_TEST_TRADING_ECONOMICS_STREAM_KEY&&!!process.env.NABD_TEST_TRADING_ECONOMICS_STREAM_SECRET,realtimeFeedVerified:false,officialReleaseTimestampVerified:false,preReleaseForecastCaptured:false,brokerFeedVerified:false}) : pathname==='/delayed-consensus/status' ? delayedCalendar.report() : pathname==='/journal/status' ? journalState : pathname==='/fred-historical/status' ? fredHistorical.report() : pathname==='/official-data/status' ? blsIndicators.report() : pathname==='/calendar/status' ? economicCalendar.report() : pathname==='/news/research' ? newsResearchReadiness({calendarConfigured:!!process.env.NABD_TEST_TRADING_ECONOMICS_KEY,verifiedReleaseArchive:false,goldBrokerCandles:false,btcBrokerCandles:false,openaiConnected:state==='CONNECTED'}) : pathname==='/news/status' ? officialNews.report() : pathname==='/gold/status' ? goldSpot.report() : pathname==='/research/status' ? sources.report() : pathname==='/feed/status' ? feed.report() : pathname==='/hybrid/status' ? {...hybrid.report(),durable:await (async()=>{try{return await connectedJournal?.primarySlotReport()||null}catch{return null}})(),marketAdapter:Object.values(demoIngest.report().markets).some(m=>m.status==='SENSOR_OBSERVED')?'isolated_demo_sensor':'not_connected'} : {service:'nabd-agentic-ai-test',experimental:true,reference_only:true,trading_enabled:false,model_connection:state,last_checked:checkTime}));
 });
 server.listen(port,'0.0.0.0',()=>{console.log('[NABD AGENTIC TEST] ready on port',port);void verify();
   void runSyntheticShadowSmoke().then(result=>{shadowSmoke=result;

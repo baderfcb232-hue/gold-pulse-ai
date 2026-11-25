@@ -306,8 +306,8 @@ test('rejected ACK emits only fixed reason code for durable operational tracing'
 });
 
 test('independent signed Demo sensor History must match ACK ticket, broker identity and original SL/TP',()=>{
- const proofs=[];
- const d=create({onBrokerHistoryProof:proof=>proofs.push(proof)});
+ const proofs=[],anchors=[];
+ const d=create({onBrokerHistoryProof:proof=>proofs.push(proof),onLifecycleAnchor:a=>anchors.push(a)});
  assert.equal(d.consider(proposal).created,true);
  const pullResult=d.pull(pull);
  assert.equal(pullResult.status,'INTENT_DELIVERED');
@@ -332,6 +332,7 @@ test('independent signed Demo sensor History must match ACK ticket, broker ident
  assert.equal(d.report().brokerIndependentlyVerifiedFills,0,
    'a same-terminal MT5 history read is not a broker-signed independent attestation');
  assert.equal(d.report().recentDeliveries[0].historyProof,'SIGNED_SENSOR_MT5_HISTORY_MATCH');
+ assert.equal(anchors.length,1);assert.equal(anchors[0].dealTicket,887122);assert.equal(anchors[0].volume,.02);assert.match(anchors[0].feed,/^[a-f0-9]{64}$/);
  assert.deepEqual(proofs,[{intentId:ack.id,symbol:'XAUUSD',
   dealTicket:887122,observedAt:now}]);
 });

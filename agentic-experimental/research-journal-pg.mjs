@@ -218,7 +218,32 @@ export function createResearchJournal({query,clock}={}){
   const r=await query('SELECT symbol,count(*)::integer AS attempts FROM agentic_research.primary_analysis_slots WHERE slot_start >= $1 AND slot_start < $2 GROUP BY symbol',[day,day+86400]);
   return {day:new Date(day*1000).toISOString().slice(0,10),counts:Object.fromEntries(['XAUUSD','BTCUSD'].map(s=>[s,r.rows.find(x=>x.symbol===s)?.attempts||0])),limitPerSymbol:30};
  }
- return {reservePrimarySlot,primarySlotReport,portfolioSave:async x=>{ensure();return portfolio.save(x)},portfolioObserve:async x=>{ensure();return portfolio.observe(x)},portfolioReport:async()=>{ensure();return portfolio.report()},paperSave:async x=>{ensure();return paper.save(x)},paperObserve:async x=>{ensure();return paper.observe(x)},paperReport:async()=>{ensure();return paper.report()},statisticalReview:async()=>{ensure();return statisticalReview(query)},fusionStore:{reserve:async x=>{ensure();return fusion.reserve(x)},fail:async x=>{ensure();return fusion.fail(x)},save:async x=>{ensure();return fusion.save(x)},observe:async x=>{ensure();return fusion.observe(x)},report:async()=>{ensure();return fusion.report()}},verify,saveForecast,firstForecast,firstActual,saveActual,saveAnalysis,viewDecisions,
+ async function saveLifecycleAnchor(a){
+  ensure();
+  const r=await query('INSERT INTO agentic_research.demo_lifecycle_anchors(intent_id,symbol,feed,entry_ticket,opened_at,side,volume) SELECT $1,$2,$3,$4,$5,$6,$7 WHERE EXISTS (SELECT 1 FROM agentic_research.demo_broker_history_proofs WHERE intent_id=$1 AND symbol=$2 AND deal_ticket=$4::bigint) ON CONFLICT DO NOTHING RETURNING intent_id',[a.intentId,a.symbol,a.feed,a.dealTicket,a.openedAt,a.side,a.volume]);
+  return {inserted:r.rowCount===1};
+ }
+ async function saveClosedPosition(p){
+  ensure();
+  const r=await query(`INSERT INTO agentic_research.demo_closed_positions(intent_id,feed,position_id,closed_at,currency,gross_profit,commission,swap,fee,net,exit_count)
+   SELECT intent_id,feed,$1,$2,$3,$4,$5,$6,$7,$8,$9 FROM agentic_research.demo_lifecycle_anchors
+   WHERE symbol=$10 AND feed=$11 AND entry_ticket=$12 AND opened_at=$13 AND side=$14 AND abs(volume-$15::numeric)<=0.00000001 AND opened_at<=$2
+   ON CONFLICT DO NOTHING RETURNING intent_id`,[p.positionId,p.closedAt,p.currency,p.grossProfit,p.commission,p.swap,p.fee,p.net,p.exitCount,p.symbol,p.feed,p.entryTicket,p.openedAt,p.side,p.volume]);
+  if(r.rowCount===1)return {inserted:true,matched:true};
+  const old=await query('SELECT 1 FROM agentic_research.demo_closed_positions c JOIN agentic_research.demo_lifecycle_anchors a USING(intent_id) WHERE a.feed=$1 AND a.entry_ticket=$2 AND c.position_id=$3',[p.feed,p.entryTicket,p.positionId]);
+  return {inserted:false,matched:old.rowCount===1};
+ }
+ async function closedPositionReport(){
+  ensure();
+  const a=await query('SELECT count(*)::int AS n FROM agentic_research.demo_lifecycle_anchors',[]);
+  const r=await query(`SELECT a.symbol,c.currency,count(*)::int AS closed,count(*) FILTER(WHERE c.net>0)::int AS wins,
+   sum(c.net)::float8 AS net,sum(c.gross_profit)::float8 AS gross_profit,sum(c.commission)::float8 AS commission,sum(c.swap)::float8 AS swap,sum(c.fee)::float8 AS fee,
+   sum(CASE WHEN c.net>0 THEN c.net ELSE 0 END)::float8 AS positive_net,
+   sum(CASE WHEN c.net<0 THEN -c.net ELSE 0 END)::float8 AS negative_net
+   FROM agentic_research.demo_closed_positions c JOIN agentic_research.demo_lifecycle_anchors a USING(intent_id) GROUP BY a.symbol,c.currency ORDER BY a.symbol,c.currency`,[]);
+  return {status:'SIGNED_DEMO_CLOSED_POSITION_COHORT',anchors:a.rows[0].n,markets:r.rows.map(x=>({...x,winRate:x.closed?x.wins/x.closed:null,profitFactor:x.negative_net>0?x.positive_net/x.negative_net:null})),brokerSigned:false,cohortOnly:true,drawdown:null,accountWideCostsIncluded:false,profitabilityEstablished:false};
+ }
+ return {saveLifecycleAnchor,saveClosedPosition,closedPositionReport,reservePrimarySlot,primarySlotReport,portfolioSave:async x=>{ensure();return portfolio.save(x)},portfolioObserve:async x=>{ensure();return portfolio.observe(x)},portfolioReport:async()=>{ensure();return portfolio.report()},paperSave:async x=>{ensure();return paper.save(x)},paperObserve:async x=>{ensure();return paper.observe(x)},paperReport:async()=>{ensure();return paper.report()},statisticalReview:async()=>{ensure();return statisticalReview(query)},fusionStore:{reserve:async x=>{ensure();return fusion.reserve(x)},fail:async x=>{ensure();return fusion.fail(x)},save:async x=>{ensure();return fusion.save(x)},observe:async x=>{ensure();return fusion.observe(x)},report:async()=>{ensure();return fusion.report()}},verify,saveForecast,firstForecast,firstActual,saveActual,saveAnalysis,viewDecisions,
   saveOperationalEvent,operationalReport,
   saveBrokerHistoryProof,brokerHistoryProofReport,calendarEvidenceReport,
   saveForward:async x=>{ensure();return durable.save(x)},
