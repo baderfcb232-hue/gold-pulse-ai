@@ -210,3 +210,19 @@ BEGIN
  INSERT INTO agentic_research.primary_analysis_slots(symbol,slot_start,reserved_at) VALUES(p_symbol,p_slot,p_now) ON CONFLICT DO NOTHING;
  RETURN FOUND;
 END; $primary_slot$;
+
+-- Signed entry anchors and reconciled closed positions, isolated Demo only.
+CREATE TABLE IF NOT EXISTS agentic_research.demo_lifecycle_anchors (
+ intent_id TEXT PRIMARY KEY, symbol TEXT NOT NULL CHECK(symbol IN ('XAUUSD','BTCUSD')),
+ feed TEXT NOT NULL CHECK(feed ~ '^[a-f0-9]{64}$'), entry_ticket BIGINT NOT NULL CHECK(entry_ticket>0),
+ opened_at BIGINT NOT NULL, side TEXT NOT NULL CHECK(side IN ('BUY','SELL')),
+ volume NUMERIC NOT NULL CHECK(volume>0 AND volume<=1000), UNIQUE(feed,entry_ticket)
+);
+CREATE TABLE IF NOT EXISTS agentic_research.demo_closed_positions (
+ intent_id TEXT PRIMARY KEY REFERENCES agentic_research.demo_lifecycle_anchors(intent_id),
+ feed TEXT NOT NULL, position_id BIGINT NOT NULL CHECK(position_id>0), closed_at BIGINT NOT NULL,
+ currency TEXT NOT NULL CHECK(currency ~ '^[A-Z]{3,8}$'), gross_profit NUMERIC NOT NULL,
+ commission NUMERIC NOT NULL, swap NUMERIC NOT NULL, fee NUMERIC NOT NULL, net NUMERIC NOT NULL,
+ exit_count INTEGER NOT NULL CHECK(exit_count BETWEEN 1 AND 24),
+ UNIQUE(feed,position_id)
+);
