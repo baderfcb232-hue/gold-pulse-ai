@@ -228,3 +228,23 @@ test('portfolio persists position and closes once across reconnect',{skip:!url},
  const r=await c.journal.portfolioReport();assert.equal(r.markets.XAUUSD.closed,1);assert.equal(r.markets.XAUUSD.targetHits,1);assert.ok(r.markets.XAUUSD.balance>2000);assert.equal(r.executionPermission,false);
  }finally{if(c)await c.close();}
 });
+
+
+test('primary AI slot reservation is atomic, independent per market and durable across reconnect',{skip:!url},async()=>{
+ let now=1920000010;
+ const slot=Math.floor(now/2880)*2880;
+ let a=await connectResearchJournal({url,clock:()=>now}),b=await connectResearchJournal({url,clock:()=>now});
+ assert.equal(a.status,'CONNECTED');assert.equal(b.status,'CONNECTED');
+ try{
+ const args={symbol:'BTCUSD',slotStart:slot};
+ const claims=await Promise.all([a.journal.reservePrimarySlot(args),b.journal.reservePrimarySlot(args)]);
+ assert.equal(claims.filter(x=>x.inserted).length,1);
+ assert.equal((await a.journal.reservePrimarySlot({...args,symbol:'XAUUSD'})).inserted,true);
+ assert.equal((await a.journal.reservePrimarySlot({...args,slotStart:slot+2880})).inserted,false);
+ const report=await b.journal.primarySlotReport();assert.deepEqual(report.counts,{XAUUSD:1,BTCUSD:1});
+ await a.close();a=null;
+ assert.equal((await b.journal.reservePrimarySlot(args)).inserted,false);
+ now=slot+2880+10;
+ assert.equal((await b.journal.reservePrimarySlot({...args,slotStart:slot+2880})).inserted,true);
+ }finally{if(a)await a.close();if(b)await b.close();}
+});

@@ -101,3 +101,18 @@ test('AI API failures fail closed and are auditable',async()=>{
  assert.equal(ai.report().completed,0);
  assert.equal(ai.report().lastBySymbol.XAUUSD.reason,'AI_ANALYSIS_FAILED');
 });
+
+
+test('paced scheduler requires durable reservation before any model invocation',async()=>{
+ const calls=[],ai=createDemoAutoBrain({brains:{XAUUSD:fakeBrain(calls)},scheduler:new HybridScheduler({paced:true,perSymbolLimit:30}),clock:()=>now,enabled:true});
+ ai.onSnapshot(snapshot());await ai.flush();
+ assert.equal(calls.length,0);assert.equal(ai.report().lastBySymbol.XAUUSD.reason,'DURABLE_BUDGET_UNAVAILABLE');
+});
+test('paced restart cannot repeat reserved slot; deep diagnostics survive shallow heartbeat',async()=>{
+ const calls=[],claims=new Set(),journal={reservePrimarySlot:async ({symbol,slotStart})=>{const k=symbol+slotStart;if(claims.has(k))return {inserted:false};claims.add(k);return {inserted:true}}};
+ const make=()=>createDemoAutoBrain({brains:{XAUUSD:fakeBrain(calls)},scheduler:new HybridScheduler({paced:true,perSymbolLimit:30}),clock:()=>now,enabled:true,journalProvider:()=>journal});
+ const a=make();a.onSnapshot(snapshot());await a.flush();
+ const shallow=snapshot();for(const tf of ['M5','M15','H1','H4'])shallow['candles'+tf]=shallow['candles'+tf].slice(-2);
+ a.onSnapshot(shallow);assert.equal(a.report().scheduleDiagnostics.XAUUSD.lastDeepReason,'M5_CLOSED');assert.equal(a.report().scheduleDiagnostics.XAUUSD.lastSnapshotReason,'WAITING_DEEP_CLOSED_BARS');
+ const b=make();b.onSnapshot(snapshot());await b.flush();assert.equal(calls.length,1);assert.equal(b.report().lastBySymbol.XAUUSD.reason,'DURABLE_SLOT_OR_DAILY_BUDGET_UNAVAILABLE');
+});

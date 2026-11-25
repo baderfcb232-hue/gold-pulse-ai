@@ -202,7 +202,19 @@ export function createResearchJournal({query,clock}={}){
    recent:rows.rows.map(x=>({intentId:x.intent_id,symbol:x.symbol,
     brokerDealTicket:Number(x.deal_ticket),observedAt:new Date(x.observed_at).toISOString()}))};
  }
- return {portfolioSave:async x=>{ensure();return portfolio.save(x)},portfolioObserve:async x=>{ensure();return portfolio.observe(x)},portfolioReport:async()=>{ensure();return portfolio.report()},paperSave:async x=>{ensure();return paper.save(x)},paperObserve:async x=>{ensure();return paper.observe(x)},paperReport:async()=>{ensure();return paper.report()},statisticalReview:async()=>{ensure();return statisticalReview(query)},fusionStore:{reserve:async x=>{ensure();return fusion.reserve(x)},fail:async x=>{ensure();return fusion.fail(x)},save:async x=>{ensure();return fusion.save(x)},observe:async x=>{ensure();return fusion.observe(x)},report:async()=>{ensure();return fusion.report()}},verify,saveForecast,firstForecast,firstActual,saveActual,saveAnalysis,viewDecisions,
+ async function reservePrimarySlot({symbol,slotStart}={}){
+  ensure();
+  const now=(clock||(()=>Math.floor(Date.now()/1000)))();
+  if(!['XAUUSD','BTCUSD'].includes(symbol)||!Number.isSafeInteger(slotStart)||slotStart<=0||slotStart%2880!==0||!Number.isSafeInteger(now)||now<slotStart||now>=slotStart+2880)return {inserted:false};
+  const r=await query('SELECT agentic_research.reserve_primary_analysis_slot($1,$2,$3) AS reserved',[symbol,slotStart,now]);
+  return {inserted:r.rows?.[0]?.reserved===true};
+ }
+ async function primarySlotReport(){
+  ensure();const now=(clock||(()=>Math.floor(Date.now()/1000)))();const day=now-now%86400;
+  const r=await query('SELECT symbol,count(*)::integer AS attempts FROM agentic_research.primary_analysis_slots WHERE slot_start >= $1 AND slot_start < $2 GROUP BY symbol',[day,day+86400]);
+  return {day:new Date(day*1000).toISOString().slice(0,10),counts:Object.fromEntries(['XAUUSD','BTCUSD'].map(s=>[s,r.rows.find(x=>x.symbol===s)?.attempts||0])),limitPerSymbol:30};
+ }
+ return {reservePrimarySlot,primarySlotReport,portfolioSave:async x=>{ensure();return portfolio.save(x)},portfolioObserve:async x=>{ensure();return portfolio.observe(x)},portfolioReport:async()=>{ensure();return portfolio.report()},paperSave:async x=>{ensure();return paper.save(x)},paperObserve:async x=>{ensure();return paper.observe(x)},paperReport:async()=>{ensure();return paper.report()},statisticalReview:async()=>{ensure();return statisticalReview(query)},fusionStore:{reserve:async x=>{ensure();return fusion.reserve(x)},fail:async x=>{ensure();return fusion.fail(x)},save:async x=>{ensure();return fusion.save(x)},observe:async x=>{ensure();return fusion.observe(x)},report:async()=>{ensure();return fusion.report()}},verify,saveForecast,firstForecast,firstActual,saveActual,saveAnalysis,viewDecisions,
   saveOperationalEvent,operationalReport,
   saveBrokerHistoryProof,brokerHistoryProofReport,calendarEvidenceReport,
   saveForward:async x=>{ensure();return durable.save(x)},

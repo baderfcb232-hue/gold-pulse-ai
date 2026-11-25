@@ -56,3 +56,22 @@ test('report exposes no trading endpoints',()=>{
  const s=new HybridScheduler().report();assert.equal(s.tradingEnabled,false);
  assert.equal(s.marketAdapter,'not_connected');assert.equal(s.analysisMode,'shadow_only');
 });
+
+test('paced mode distributes 60 calls across UTC day without borrowing either market budget',()=>{
+ const day=Math.floor(T/86400)*86400;
+ const s=new HybridScheduler({dailyLimit:60,perSymbolLimit:30,paced:true});
+ let btc=0,gold=0;
+ for(let t=day+10;t<day+86400;t+=300){
+  if(s.consider(input(t,'BTCUSD')).callAI)btc++;
+  if(s.consider(input(t,'XAUUSD')).callAI)gold++;
+  if(t<day+3600){assert.ok(btc<=2);assert.ok(gold<=2);}
+ }
+ assert.equal(btc,30);assert.equal(gold,30);
+ assert.equal(s.report().slotSeconds,2880);
+ assert.equal(s.consider(input(day+86400+10,'BTCUSD')).callAI,true);
+});
+test('missed market windows cannot accumulate into a burst',()=>{
+ const day=Math.floor(T/86400)*86400,s=new HybridScheduler({paced:true,perSymbolLimit:30});
+ assert.equal(s.consider(input(day+40000)).callAI,true);
+ assert.equal(s.consider(input(day+40300)).reason,'PACED_SLOT_USED');
+});
