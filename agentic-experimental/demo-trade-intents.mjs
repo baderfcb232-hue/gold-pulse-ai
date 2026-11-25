@@ -263,7 +263,7 @@ export function createDemoTradeIntents({
     (hasBrokerReference?'EA_REPORTED_FILL_WITH_DEAL':'UNVERIFIED_EA_FILL_CLAIM'):
     parsed.status==='REJECTED'?'EA_REPORTED_REJECTION':'EA_UNCERTAIN_BROKER_RESULT';
   acks.set(parsed.id,{status,at:clock(),hasBrokerReference,
-   reportedDealTicket:hasBrokerReference?parsed.brokerDealTicket:null});
+   reportedDealTicket:hasBrokerReference?parsed.brokerDealTicket:null,reportedVolume:hasBrokerReference?parsed.executedVolume:null});
   lastAckAt=clock();
   audit(deliveredIntent.symbol,status);
   return {status:'RECORDED'};
@@ -304,7 +304,7 @@ export function createDemoTradeIntents({
     audit(delivery.symbol,'BROKER_HISTORY_CROSSCHECKED');
     try{onBrokerHistoryProof({intentId:id,symbol:delivery.symbol,
      dealTicket:d.dealTicket,observedAt:now});}catch{}
-    try{onLifecycleAnchor({intentId:id,symbol:delivery.symbol,dealTicket:d.dealTicket,openedAt:d.dealAt,side:d.side,volume:d.volume,
+    if(finite(ack.reportedVolume)&&Math.abs(ack.reportedVolume-d.volume)<=1e-8)try{onLifecycleAnchor({intentId:id,symbol:delivery.symbol,dealTicket:d.dealTicket,openedAt:d.dealAt,side:d.side,volume:d.volume,
      feed:createHash('sha256').update(JSON.stringify([broker.brokerServer,broker.brokerSymbol,broker.accountLogin])).digest('hex')});}catch{}
     break;
    }
