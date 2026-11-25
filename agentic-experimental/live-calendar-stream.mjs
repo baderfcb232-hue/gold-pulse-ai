@@ -53,7 +53,7 @@ export function createLiveCalendarStream({
 }={}){
  let ws=null,status=key&&secret?'READY_TO_CONNECT':'NOT_CONFIGURED',
   lastConnected=null,lastMessageAt=null,lastError=null,received=0,accepted=0,complete=0;
- const errors=[],recent=[],forecastObserved=new Map(),seenActual=new Set();
+ const errors=[],recent=[],forecastObserved=new Map(),seenActual=new Map();
  let busy=false,reconnectTimer=null,stopped=false,writeQueue=Promise.resolve();
  function safeError(x){return String(x||'UNKNOWN').slice(0,80).replace(/(key|secret|token|password)=[^\s&]+/gi,'$1=[REDACTED]');}
  const pushError=x=>{const y=safeError(x);errors.push(y);if(errors.length>6)errors.shift();lastError=y;};
@@ -69,20 +69,23 @@ export function createLiveCalendarStream({
    if(journal)await journal.saveActual({provider:SOURCE,id:event.id,scheduledAt:event.eventAt,
      observedAt:event.receivedAt,raw:event.actualRaw,
      previousRaw:event.previousRaw});
-   seenActual.add(id);
+   seenActual.set(id,{raw:event.actualRaw,observedAt:event.receivedAt});
   }
   let saved=journal?await journal.firstForecast({provider:SOURCE,id:event.id,scheduledAt:event.eventAt}):null;
   saved ||=forecastObserved.get(id)||null;
   const reference=parseComparable(saved?.raw??'');
-  const actual=parseComparable(event.actualRaw??'');
-  const pointInTime=!!saved&&saved.observedAt<event.eventAt&&!!actual&&!!reference&&actual.unit===reference.unit;
+  const first=journal?.firstActual?await journal.firstActual({provider:SOURCE,id:event.id,scheduledAt:event.eventAt}):seenActual.get(id)||null;
+  const actual=parseComparable(first?.raw??'');
+  const pointInTime=!!saved&&saved.observedAt<event.eventAt&&!!first&&first.observedAt>=event.eventAt&&!!actual&&!!reference&&actual.unit===reference.unit;
   const difference=pointInTime?actual.value-reference.value:null;
   recent.unshift({...event,
     comparison:pointInTime?{difference,unit:actual.unit,
       direction:difference>0?'ABOVE_FORECAST':difference<0?'BELOW_FORECAST':'IN_LINE'}:null,
     comparisonStatus:pointInTime?'PRE_RELEASE_FORECAST_RECORDED':'NO_POINT_IN_TIME_BASELINE',
-    actualForecastPreviousObserved:pointInTime&&event.allThreeComparable,
-    observationSecondsAfterScheduled:event.secondsAfterScheduled,
+    actualForecastPreviousObserved:pointInTime&&parseComparable(event.previousRaw??'')?.unit===actual.unit,
+    firstActualAsObserved:pointInTime?first.raw:null,
+    firstActualObservedAt:pointInTime?first.observedAt:null,
+    observationSecondsAfterScheduled:pointInTime?first.observedAt-event.eventAt:event.secondsAfterScheduled,
     preReleaseForecastAvailable:pointInTime,
     forecastAsObservedBeforeRelease:pointInTime?saved.raw:null,
     officialPublicationTimestampVerified:false,
@@ -91,7 +94,7 @@ export function createLiveCalendarStream({
   if(recent.length>15)recent.length=15;
   // Bound memory, DB is source of truth across restarts.
   if(forecastObserved.size>300)forecastObserved.delete(forecastObserved.keys().next().value);
-  if(seenActual.size>300)seenActual.delete(seenActual.values().next().value);
+  if(seenActual.size>300)seenActual.delete(seenActual.keys().next().value);
  }
  function scheduleReconnect(){
   if(stopped||reconnectTimer||!key||!secret)return;
