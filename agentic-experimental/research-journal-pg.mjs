@@ -206,8 +206,8 @@ export function createResearchJournal({query,clock}={}){
   ensure();
   const now=(clock||(()=>Math.floor(Date.now()/1000)))();
   if(!['XAUUSD','BTCUSD'].includes(symbol)||!Number.isSafeInteger(slotStart)||slotStart<=0||slotStart%2880!==0||!Number.isSafeInteger(now)||now<slotStart||now>=slotStart+2880)return {inserted:false};
-  const r=await query('INSERT INTO agentic_research.primary_analysis_slots(symbol,slot_start,reserved_at) VALUES($1,$2,$3) ON CONFLICT DO NOTHING RETURNING symbol',[symbol,slotStart,now]);
-  return {inserted:r.rowCount===1};
+  const r=await query('SELECT agentic_research.reserve_primary_analysis_slot($1,$2,$3) AS reserved',[symbol,slotStart,now]);
+  return {inserted:r.rows?.[0]?.reserved===true};
  }
  async function primarySlotReport(){
   ensure();const now=(clock||(()=>Math.floor(Date.now()/1000)))();const day=now-now%86400;
