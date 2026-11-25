@@ -2,7 +2,7 @@
 // Only accepts snapshots already authenticated + validated by demo-ingest.mjs.
 // No MT5 order, signal dispatch, Telegram, or production imports.
 import {validateIsolatedDemoSnapshot} from './mt5-demo-sensor.mjs';
-import {validateResearchContext} from './research-brain.mjs';
+import {validateResearchContext,DECISION_POLICY_VERSION} from './research-brain.mjs';
 import {multiTimeframeFeatures} from './market-features.mjs';
 import {reviewDecision} from './decision-critic.mjs';
 import {buildFusionEvidence} from './fusion-evidence.mjs';
@@ -70,7 +70,7 @@ export function createDemoAutoBrain({
      confidence:result.plan.confidence,
      timeHorizonMinutes:result.plan.timeHorizonMinutes,
      closedBarAt:utc(trigger.closedBarTime),
-     trigger:trigger.reason,reasonSummary:(result.plan.thesis||'').slice(0,180),
+     trigger:trigger.reason,decisionPolicyVersion:DECISION_POLICY_VERSION,waitReassessment:result.plan.stance==='WAIT'?(result.plan.riskNotes||'').slice(0,240):null,reasonSummary:(result.plan.thesis||'').slice(0,180),
      evidenceCount:result.plan.evidence?.length||0,fusionEvidenceVersion:ctx.fusionEvidence.version,critic,simulationOnly:true});
    }
    const journal=journalProvider();
@@ -78,7 +78,7 @@ export function createDemoAutoBrain({
    if(journal?.saveAnalysis){
     try{
      const saved=await journal.saveAnalysis({symbol,closedBarAt:trigger.closedBarTime,
-      trigger:trigger.reason,status:result.status,
+      trigger:trigger.reason,status:result.status,decisionPolicyVersion:DECISION_POLICY_VERSION,
       stance:result.plan?.stance||null,
       confidence:result.plan?.confidence??null,
       reasonCodes:result.reasons||[],analyzedAt:clock(),plan:result.plan||null,critic,
