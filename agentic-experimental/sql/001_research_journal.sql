@@ -226,3 +226,9 @@ CREATE TABLE IF NOT EXISTS agentic_research.demo_closed_positions (
  exit_count INTEGER NOT NULL CHECK(exit_count BETWEEN 1 AND 24),
  UNIQUE(feed,position_id)
 );
+
+-- Fixed H4 gold research cohort; never creates an order.
+CREATE TABLE IF NOT EXISTS agentic_research.gold_h4_research (
+ id INTEGER PRIMARY KEY CHECK(id=1), state JSONB NOT NULL CHECK(jsonb_typeof(state)='object'),
+ revision BIGINT NOT NULL DEFAULT 0 CHECK(revision>=0)
+);

@@ -101,6 +101,15 @@ function serializeForwardDb(symbol,work){
  void next.finally(()=>{if(forwardDbQueue.get(symbol)===next)forwardDbQueue.delete(symbol)});
 }
 
+// Independent gold H4 research probe: one sampled quote per minute, plus new deep H4 bars.
+let goldH4Busy=false,goldH4LastTick=0,goldH4LastBar=0,goldH4Errors=0;
+function observeGoldH4(q){
+ if(q?.symbol!=='XAUUSD'||!connectedJournal?.goldH4Observe||goldH4Busy)return;
+ const bar=q.multiTimeframeVerified&&q.candlesH4?.length>=21?q.candlesH4.at(-1)?.time||0:0;
+ if(bar<=goldH4LastBar&&q.timestamp-goldH4LastTick<60)return;
+ goldH4Busy=true;
+ void connectedJournal.goldH4Observe(q).then(()=>{goldH4LastTick=q.timestamp;goldH4LastBar=Math.max(goldH4LastBar,bar);}).catch(()=>{goldH4Errors++;console.log('[NABD GOLD H4] WRITE_FAILED');}).finally(()=>{goldH4Busy=false});
+}
 // Paper work has its own bounded observer queue; never delay existing forward scoring.
 const paperDbQueue=new Map(),paperLastObserve=new Map();
 let paperDbFailures=0,paperObserverSkipped=0;
@@ -212,6 +221,12 @@ const server=http.createServer(async(req,res)=>{
     }
     return;
   }
+  if(pathname==='/gold-h4-research/status'&&req.method==='GET'){
+    const headers={'Content-Type':'application/json','Cache-Control':'private, no-store'};
+    if(!authorizedView(req.headers.authorization,process.env.NABD_DEMO_VIEW_TOKEN)){res.writeHead(403,headers);res.end(JSON.stringify({error:'READ_AUTH_REQUIRED'}));return;}
+    try{const data=await connectedJournal.goldH4Report();res.writeHead(200,headers);res.end(JSON.stringify({...data,probeErrors:goldH4Errors}));}
+    catch{res.writeHead(503,headers);res.end(JSON.stringify({error:'H4_RESEARCH_JOURNAL_UNAVAILABLE'}));}return;
+  }
   if(pathname==='/demo-history/closures/status'&&req.method==='GET'){
     const headers={'Content-Type':'application/json','Cache-Control':'private, no-store'};
     if(!authorizedView(req.headers.authorization,process.env.NABD_DEMO_VIEW_TOKEN)){res.writeHead(403,headers);res.end(JSON.stringify({error:'READ_AUTH_REQUIRED'}));return;}
@@ -313,6 +328,7 @@ const server=http.createServer(async(req,res)=>{
       try {historyPacket=JSON.parse(body).history;} catch {}
       for(const symbol of verdict.symbols){
         const snapshot=demoIngest.getLatest(symbol);
+        observeGoldH4(snapshot);
         forwardEvaluation.observe(snapshot);
         fusionRuntime.observe(snapshot);
         serializeForwardDb(symbol,journal=>journal.observeForward(snapshot));

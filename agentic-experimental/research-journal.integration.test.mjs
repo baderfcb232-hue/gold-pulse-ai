@@ -268,3 +268,15 @@ test('isolated closure metrics require matched entry proof and survive reconnect
  try{assert.deepEqual(await d.journal.saveClosedPosition(p),{inserted:false,matched:true});const r=await d.journal.closedPositionReport();const gold=r.markets.find(x=>x.symbol==='XAUUSD'&&x.currency==='USD');assert.equal(gold.closed,1);assert.equal(gold.wins,1);assert.equal(gold.net,8.7);assert.equal(gold.profitFactor,null);assert.equal(r.profitabilityEstablished,false);}finally{await d.close();}
  }finally{if(c)await c.close();}
 });
+
+test('H4 research persists a single paper entry across database reconnect',{skip:!url},async()=>{
+ const t=1944000000,now=Math.floor(t/14400)*14400;
+ const bars=Array.from({length:21},(_,i)=>({time:now-(21-i)*14400,open:100,high:102,low:98,close:100}));
+ bars[20]={...bars[20],close:104,high:105};
+ const q={environment:'EXPERIMENTAL_NABD_AGENTIC',accountType:'DEMO',executionEnabled:false,symbol:'XAUUSD',timestamp:now,bid:104,ask:104.2,brokerServer:'Demo-test-broker',brokerSymbol:'XAUUSD.m',accountLogin:555,multiTimeframeVerified:true,candlesH4:bars};
+ let c=await connectResearchJournal({url,clock:()=>now});assert.equal(c.status,'CONNECTED');
+ try{await c.journal.goldH4Observe(q);assert.equal((await c.journal.goldH4Report()).entries,1);await c.close();c=null;
+ const d=await connectResearchJournal({url,clock:()=>now});assert.equal(d.status,'CONNECTED');
+ try{await d.journal.goldH4Observe(q);const r=await d.journal.goldH4Report();assert.equal(r.entries,1);assert.equal(r.open,1);assert.equal(r.ordersCreated,0);}finally{await d.close();}
+ }finally{if(c)await c.close();}
+});

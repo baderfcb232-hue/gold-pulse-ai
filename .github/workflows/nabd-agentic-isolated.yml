@@ -29,6 +29,8 @@ on:
       - 'agentic-experimental/research-journal-pg.mjs'
       - 'agentic-experimental/research-journal.integration.test.mjs'
       - 'agentic-experimental/sql/001_research_journal.sql'
+      - 'agentic-experimental/gold-h4-research.mjs'
+      - 'agentic-experimental/gold-h4-research.test.mjs'
       - 'agentic-experimental/market-features.mjs'
       - 'agentic-experimental/market-features.test.mjs'
       - 'agentic-experimental/research-brain.mjs'
