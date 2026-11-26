@@ -39,7 +39,8 @@ export function calculateClosedCandleFeatures(bars){
   (i>0&&b.time<=bars[i-1].time)))return {status:'INVALID_CANDLES'};
  const closes=bars.map(b=>b.close),last=bars.at(-1);
  const e8=ema(closes,8),e21=ema(closes,21),e200=ema(closes,200);
- const recent=bars.slice(-20);
+ // Exclude the bar being evaluated from its own historical reference range.
+ const recent=bars.slice(-21,-1);
  return {status:bars.length>=22?'INDICATORS_AVAILABLE':'INSUFFICIENT_HISTORY',
   candles:bars.length,lastClose:round(last.close),lastClosedBarStart:last.time,
   ema8:e8,ema21:e21,ema200:e200,rsi14:rsi(closes),atr14:atr(bars),
