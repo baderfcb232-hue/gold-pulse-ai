@@ -29,6 +29,8 @@ on:
       - 'agentic-experimental/research-journal-pg.mjs'
       - 'agentic-experimental/research-journal.integration.test.mjs'
       - 'agentic-experimental/sql/001_research_journal.sql'
+      - 'agentic-experimental/market-features.mjs'
+      - 'agentic-experimental/market-features.test.mjs'
       - 'agentic-experimental/research-brain.mjs'
       - 'agentic-experimental/research-brain-diagnostics.test.mjs'
       - 'agentic-experimental/NABD_Demo_Trade_Executor_Safe_v1_24.mq5'
