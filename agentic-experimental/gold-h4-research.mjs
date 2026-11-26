@@ -44,7 +44,7 @@ export function observe(state,q,now){
   return s;
  }
  if(!setup.side){append(s,{type:'NO_CHANNEL_BREAKOUT',at:q.timestamp,bar:setup.bar});return s;}
- if(q.timestamp-setup.closedAt>POLICY.maxEntryDelay){append(s,{type:'MISSED_BREAKOUT_WINDOW',at:q.timestamp,bar:setup.bar});return s;}
+ if(q.timestamp<setup.closedAt||q.timestamp-setup.closedAt>POLICY.maxEntryDelay){append(s,{type:'MISSED_BREAKOUT_WINDOW',at:q.timestamp,bar:setup.bar});return s;}
  const spread=q.ask-q.bid;
  if(!pos(setup.atr)||spread>2.5||spread>setup.atr*.25){append(s,{type:'SPREAD_OR_ATR_BLOCK',at:q.timestamp,bar:setup.bar});return s;}
  const side=setup.side,entry=(side===1?q.ask:q.bid)+side*POLICY.slippageSpread*spread,distance=Math.max(2*setup.atr,4*spread),stop=entry-side*distance;
