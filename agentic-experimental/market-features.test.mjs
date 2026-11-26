@@ -35,3 +35,13 @@ test('research features cover M5 M15 H1 H4 individually',()=>{
  assert.deepEqual(Object.keys(a),['M5','M15','H1','H4']);
  assert.equal(a.H4.status,'INSUFFICIENT_HISTORY');
 });
+
+test('prior 20 range excludes the candle being evaluated, allowing real breakouts',()=>{
+ const base=bars(21),prior=base.slice(0,-1);
+ const high=Math.max(...prior.map(b=>b.high)),low=Math.min(...prior.map(b=>b.low));
+ const up=calculateClosedCandleFeatures([...prior,{...base.at(-1),open:high,close:high+3,high:high+4,low:high-1}]);
+ assert.equal(up.prior20High,Number(high.toPrecision(8)));assert.ok(up.lastClose>up.prior20High);
+ const down=calculateClosedCandleFeatures([...prior,{...base.at(-1),open:low,close:low-3,high:low+1,low:low-4}]);
+ assert.equal(down.prior20Low,Number(low.toPrecision(8)));assert.ok(down.lastClose<down.prior20Low);
+ assert.equal(calculateClosedCandleFeatures(bars(20)).prior20High,null);
+});
