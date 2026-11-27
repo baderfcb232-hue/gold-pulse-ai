@@ -281,3 +281,17 @@ test('H4 research persists a single paper entry across database reconnect',{skip
  try{await d.journal.goldH4Observe(q);const r=await d.journal.goldH4Report();assert.equal(r.entries,1);assert.equal(r.open,1);assert.equal(r.ordersCreated,0);}finally{await d.close();}
  }finally{if(c)await c.close();}
 });
+
+test('LW candidates persist and deduplicate for both directions independently of AI slots',{skip:!url},async()=>{
+ const start=1950048000,now=start+600;
+ const c=await connectResearchJournal({url,clock:()=>now});assert.equal(c.status,'CONNECTED');
+ try{
+ for(const side of [1,-1]){
+ const closed=Array.from({length:21},(_,i)=>{const price=100+side*i;return {time:start-(21-i)*86400,open:price,high:price+2,low:price-2,close:price}});
+ const open=closed.at(-1).close,price=open+side*2.5;
+ const q={environment:'EXPERIMENTAL_NABD_AGENTIC',accountType:'DEMO',executionEnabled:false,symbol:'XAUUSD',brokerServer:'Isolated-LW-Demo',brokerSymbol:'XAUUSD.m',accountLogin:side===1?8181:8182,timestamp:now,bid:price,ask:price+.1,dailySession:{start,open,closed},candlesM5:[{time:start,open,high:open+1,low:open-1,close:open},{time:start+300,open,high:open+3,low:open-3,close:price}]};
+ assert.equal((await c.journal.lwObserve(q)).inserted,true);assert.equal((await c.journal.lwObserve(q)).inserted,false);
+ }
+ const r=await c.journal.lwReport();assert.equal(r.executionPermission,false);assert.equal(r.candidates.filter(x=>x.status==='OBSERVED_CANDIDATE').length,2);
+ }finally{await c.close();}
+});
