@@ -1,7 +1,7 @@
 // Pure shadow-only event scheduler. No network access, MT5, or trading actions.
 export class HybridScheduler {
-  constructor({dailyLimit=60,perSymbolLimit=35,minGapSec=60,newsCooldownSec=180,paced=false}={}) {
-    this.config={dailyLimit,perSymbolLimit,minGapSec,newsCooldownSec,paced};
+  constructor({dailyLimit=60,perSymbolLimit=35,minGapSec=60,newsCooldownSec=180,paced=false,opportunityPaced=false}={}) {
+    this.config={dailyLimit,perSymbolLimit,minGapSec,newsCooldownSec,paced,opportunityPaced};
     this.slotsPerSymbol=paced?Math.min(perSymbolLimit,Math.floor(dailyLimit/2),288):null;
     if(paced&&(!Number.isSafeInteger(this.slotsPerSymbol)||this.slotsPerSymbol<1))throw Error('INVALID_PACED_BUDGET');
     this.diagnostics={};
@@ -45,6 +45,25 @@ export class HybridScheduler {
     const slot=this.config.paced?Math.floor((now-dayStart)*this.slotsPerSymbol/86400):null;
     const slotStart=this.config.paced?dayStart+Math.ceil(slot*86400/this.slotsPerSymbol):null;
     if(this.config.paced&&prior.slotStart===slotStart)return stop('PACED_SLOT_USED');
+    // Spend an existing slot preferentially on observable closed-bar events.
+    // This is scheduling, NOT a proven entry rule or a directional recommendation.
+    // A late-slot fallback preserves regular market review when no event occurs.
+    let schedulingEvidence='REGULAR_REVIEW';
+    if(this.config.paced&&this.config.opportunityPaced){
+      const a=bars.M5;
+      if(a.length<21)return stop('WAITING_OPPORTUNITY_HISTORY');
+      const prior=a.slice(-21,-1),p=prior.at(-1);
+      const high=Math.max(...prior.map(b=>b.high)),low=Math.min(...prior.map(b=>b.low));
+      const ranges=prior.slice(-14).map((b,i)=>{const prev=prior[prior.length-15+i].close;return Math.max(b.high-b.low,Math.abs(b.high-prev),Math.abs(b.low-prev));});
+      const atr=ranges.reduce((v,x)=>v+x,0)/ranges.length;
+      const channel=last.close>high||last.close<low;
+      const impulse=atr>0&&Math.abs(last.close-last.open)>=atr&&Math.abs(last.close-p.close)>=atr;
+      const rejection=(last.high>high&&last.close<high)||(last.low<low&&last.close>low);
+      const slotEnd=dayStart+Math.ceil((slot+1)*86400/this.slotsPerSymbol);
+      const fallback=now>=slotEnd-Math.min(600,Math.floor(86400/this.slotsPerSymbol/3));
+      schedulingEvidence=event?'VERIFIED_NEWS':channel?'CHANNEL_BREAK':impulse?'VOLATILITY_IMPULSE':rejection?'CHANNEL_REJECTION':fallback?'LATE_SLOT_REVIEW':null;
+      if(!schedulingEvidence)return stop('WAITING_OPPORTUNITY_OR_SLOT_FALLBACK');
+    }
     if(this.total>=this.config.dailyLimit||(this.counts[symbol]||0)>=this.config.perSymbolLimit)
       return stop('DAILY_BUDGET_EXHAUSTED');
     if(prior.lastCall!=null&&now-prior.lastCall<this.config.minGapSec)return stop('RATE_LIMITED');
@@ -54,8 +73,8 @@ export class HybridScheduler {
     this.state.set(symbol,{m5,slotStart,lastCall:now,lastNewsCall:event?now:prior.lastNewsCall,
       seen:[...(prior.seen||[]),...verified.map(e=>e.id)].slice(-100),
       spike:spikeKey||prior.spike});
-    this.diagnostics[symbol]={reason,at:now};
-    return {callAI:true,reason,symbol,slotStart,referenceOnly:true,tradingEnabled:false,
+    this.diagnostics[symbol]={reason,at:now,schedulingEvidence};
+    return {callAI:true,reason,symbol,slotStart,schedulingEvidence,referenceOnly:true,tradingEnabled:false,
       closedBarTime:m5,dataAsOf:now,requestsToday:this.counts[symbol]};
   }
   report(){
@@ -63,7 +82,7 @@ export class HybridScheduler {
       newsAdapter:'not_connected',analysisMode:'shadow_only',
       scheduling:'event_driven',dailyLimit:this.config.dailyLimit,
       perSymbolLimit:this.config.perSymbolLimit,callsToday:this.total,utcDay:this.day,counts:{...this.counts},
-      paced:this.config.paced,slotsPerSymbol:this.slotsPerSymbol,slotSeconds:this.config.paced?86400/this.slotsPerSymbol:null,
+      paced:this.config.paced,opportunityPaced:this.config.opportunityPaced,slotsPerSymbol:this.slotsPerSymbol,slotSeconds:this.config.paced?86400/this.slotsPerSymbol:null,
       lastBySymbol:{...this.diagnostics},durableReservationRequired:this.config.paced};
   }
 }

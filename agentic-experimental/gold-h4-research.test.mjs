@@ -21,7 +21,7 @@ test('sampled gold paper position has costs, stop, no order and no duplicate ent
 test('missed observations invalidate rather than claim hypothetical gains',()=>{
  const s=observe(initial(),q(),barEnd);
  const end=observe(s,q(barEnd+181),barEnd+181);
- assert.equal(end.invalidated,1);assert.equal(end.closed,0);assert.equal(end.position,null);assert.equal(end.balance,2000);
+ assert.equal(end.invalidated,1);assert.equal(report(end).status,'INCOMPLETE_COHORT_NOT_SCORABLE');assert.equal(report(end).profitFactor,null);assert.equal(end.closed,0);assert.equal(end.position,null);assert.equal(end.balance,2000);
  assert.equal(observe(end,q(barEnd+182),barEnd+182),end);
 });
 test('wrong identity or late entry cannot manufacture a result',()=>{

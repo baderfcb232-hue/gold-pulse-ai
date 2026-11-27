@@ -11,7 +11,7 @@ export function signDemoEnvelope(secret,timestamp,body){
 }
 export function createDemoIngest({secret='',clock=safeNow}={}){
  const configured=typeof secret==='string'&&Buffer.byteLength(secret,'utf8')>=32;
- const recent=new Map(),latest=new Map();
+ const recent=new Map(),latest=new Map(),marketInput=new Map();
  let accepted=0,rejected=0,lastReceipt=null,lastReject=null;
  // Keep only fixed validator reason codes and market names; never expose quotes,
  // account logins, payloads, signatures or credentials on a public status URL.
@@ -45,7 +45,7 @@ export function createDemoIngest({secret='',clock=safeNow}={}){
    transport:'TLS_REQUIRED',maxBytes:120000,accepted,rejected,lastReceipt,lastReject,
    rejectCounts:{...rejectCounts},invalidSnapshotCounts:{...invalidSnapshotCounts},
    lastInvalidSnapshot,partialMarketSkips,
-   markets,brokerOrderRoutes:false,allowTrading:false,aiAutoInvocation:false};
+   markets,marketInput:Object.fromEntries(marketInput),brokerOrderRoutes:false,allowTrading:false,aiAutoInvocation:false};
  }
  function receive({body,timestamp,signature,secure=true}={}){
   if(!configured)return deny('INGEST_DISABLED');
@@ -74,12 +74,13 @@ export function createDemoIngest({secret='',clock=safeNow}={}){
   const entries=[],invalid=[];
   for(const symbol of Object.keys(record.symbols)){
    const snapshot=record.symbols[symbol];
-   if(snapshot?.status==='BLOCKED')continue;
+   if(snapshot?.status==='BLOCKED'){marketInput.set(symbol,{status:'SENSOR_REPORTED_BLOCKED',at:new Date(now*1000).toISOString()});continue;}
    if(snapshot?.symbol!==symbol||snapshot?.brokerServer==='SYNTHETIC-Demo')
     return deny('BROKER_IDENTITY_UNVERIFIED');
    const result=validateIsolatedDemoSnapshot(snapshot,now);
    if(result.status!=='VALIDATED_RESEARCH_SENSOR'||!result.safe?.multiTimeframeVerified){
     invalid.push({symbol,errors:result.errors?.length?result.errors:['MULTI_TIMEFRAME_NOT_VERIFIED']});
+    marketInput.set(symbol,{status:'INVALID_SNAPSHOT',at:new Date(now*1000).toISOString(),reasons:invalid.at(-1).errors});
     // Never promote the invalid symbol, but do not discard a different,
     // independently validated market in the same signed DEMO envelope.
     continue;
@@ -94,6 +95,7 @@ export function createDemoIngest({secret='',clock=safeNow}={}){
   recent.set(digest,now+20);
   for(const {symbol,safe} of entries){
    latest.set(symbol,{...safe,receivedAt:now});
+   marketInput.set(symbol,{status:'ACCEPTED',at:new Date(now*1000).toISOString()});
   }
   accepted++;lastReceipt=new Date(now*1000).toISOString();lastReject=null;
   return {status:'OBSERVED',symbols:entries.map(x=>x.symbol),

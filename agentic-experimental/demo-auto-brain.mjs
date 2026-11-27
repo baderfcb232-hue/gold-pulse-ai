@@ -70,7 +70,7 @@ export function createDemoAutoBrain({
      confidence:result.plan.confidence,
      timeHorizonMinutes:result.plan.timeHorizonMinutes,
      closedBarAt:utc(trigger.closedBarTime),
-     trigger:trigger.reason,decisionPolicyVersion:DECISION_POLICY_VERSION,waitReassessment:result.plan.stance==='WAIT'?(result.plan.riskNotes||'').slice(0,240):null,reasonSummary:(result.plan.thesis||'').slice(0,180),
+     trigger:trigger.reason,schedulingEvidence:trigger.schedulingEvidence||null,decisionPolicyVersion:DECISION_POLICY_VERSION,waitReassessment:result.plan.stance==='WAIT'?(result.plan.riskNotes||'').slice(0,240):null,reasonSummary:(result.plan.thesis||'').slice(0,180),
      evidenceCount:result.plan.evidence?.length||0,fusionEvidenceVersion:ctx.fusionEvidence.version,critic,simulationOnly:true});
    }
    const journal=journalProvider();
@@ -127,6 +127,7 @@ export function createDemoAutoBrain({
   const trigger=scheduler.consider({symbol,now,quote:{bid:clean.bid,ask:clean.ask,
    time:clean.timestamp},bars,news:[]});
   diag.lastDeepReason=trigger.reason;diag.lastSnapshotReason=trigger.reason;
+  diag.lastSchedulingEvidence=trigger.schedulingEvidence||null;
   if(!trigger.callAI)return {scheduled:false,reason:trigger.reason,...noOrders};
   active.add(symbol);scheduled++;
   record(symbol,'SCHEDULED',{trigger:trigger.reason,closedBarAt:utc(trigger.closedBarTime)});

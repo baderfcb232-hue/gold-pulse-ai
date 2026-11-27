@@ -134,3 +134,15 @@ test('sensor does not trust fresh quote with missing or misaligned timeframe bar
  assert.equal(wrong.code,'MARKET_SNAPSHOT_INVALID');
  assert.equal(ingest.report().invalidSnapshotCounts.INVALID_M15_CANDLES,1);
 });
+
+test('authenticated blocked gold is distinguishable from missing gold and working BTC',()=>{
+ const ingest=createDemoIngest({secret,clock:()=>now});
+ const packet=JSON.stringify({source:'ISOLATED_MT5_DEMO_SENSOR',capturedAt:now,ordersSupported:false,
+ symbols:{XAUUSD:{status:'BLOCKED'},BTCUSD:{...snapshot,symbol:'BTCUSD'}}});
+ assert.equal(ingest.receive({...signed(packet),signature:'0'.repeat(64)}).code,'SIGNATURE_INVALID');
+ assert.deepEqual(ingest.report().marketInput,{});
+ const res=ingest.receive(signed(packet));assert.equal(res.status,'OBSERVED');
+ assert.equal(ingest.report().marketInput.XAUUSD.status,'SENSOR_REPORTED_BLOCKED');
+ assert.equal(ingest.report().marketInput.BTCUSD.status,'ACCEPTED');
+ assert.equal(ingest.getLatest('XAUUSD'),null);
+});
