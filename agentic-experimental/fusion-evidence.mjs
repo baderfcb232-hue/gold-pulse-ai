@@ -1,5 +1,6 @@
 // Isolated research evidence, not the production FUSION implementation.
 // No order routes, no votes that override the AI, no fabricated volume.
+import {lwEvidence} from './lw-momentum20.mjs';
 import {sessionStructureEvidence} from './session-structure-evidence.mjs';
 import {selectiveEvidence} from './selective-evidence.mjs';
 import {adaptiveEvidence} from './adaptive-regime.mjs';
@@ -69,6 +70,6 @@ export function frameEvidence(bars){
 export function buildFusionEvidence(snapshot){
  const frames=Object.fromEntries(['M5','M15','H1','H4'].map(tf=>[tf,frameEvidence(snapshot?.['candles'+tf])]));
  const adaptive=adaptiveEvidence(snapshot);
- return {version:'FUSION_STYLE_EVIDENCE_V5',advisoryOnly:true,fullProductionFusion:false,sessionStructure:sessionStructureEvidence(snapshot),
+ return {version:'FUSION_STYLE_EVIDENCE_V5',advisoryOnly:true,fullProductionFusion:false,sessionStructure:sessionStructureEvidence(snapshot),larryWilliams:lwEvidence(snapshot),
   adaptive:{...adaptive,candidate:'WAIT',candidateSuppressed:true},frames,selective:selectiveEvidence(snapshot?.symbol,frames,adaptive)};
 }

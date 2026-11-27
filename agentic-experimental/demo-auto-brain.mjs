@@ -82,7 +82,7 @@ export function createDemoAutoBrain({
       stance:result.plan?.stance||null,
       confidence:result.plan?.confidence??null,
       reasonCodes:result.reasons||[],analyzedAt:clock(),plan:result.plan||null,critic,
-      researchEvidence:{version:ctx.fusionEvidence.version,regime:ctx.fusionEvidence.adaptive?.regime,candidate:ctx.fusionEvidence.adaptive?.candidate}});
+      researchEvidence:{version:ctx.fusionEvidence.version,regime:ctx.fusionEvidence.adaptive?.regime,candidate:ctx.fusionEvidence.adaptive?.candidate,lwPolicy:ctx.fusionEvidence.larryWilliams?.version,lwStatus:ctx.fusionEvidence.larryWilliams?.status,lwCandidate:ctx.fusionEvidence.larryWilliams?.candidate||null}});
      auditable=saved?.inserted===true;
     }catch{persistenceFailures++;record(symbol,'PERSISTENCE_FAILED',
        {reason:'ISOLATED_RESEARCH_JOURNAL_WRITE_FAILED'});}

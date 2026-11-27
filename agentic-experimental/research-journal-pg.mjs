@@ -1,5 +1,6 @@
 // Disabled-by-default isolated Postgres journal adapter.
 import {readFile} from 'node:fs/promises';
+import {createLWStore} from './lw-momentum20.mjs';
 import {createGoldH4Store} from './gold-h4-research.mjs';
 import {createPortfolioStore} from './paper-portfolio.mjs';
 import {createProfitabilityStore} from './ai-profitability.mjs';
@@ -20,6 +21,7 @@ export function createResearchJournal({query,clock}={}){
  const paper=createProfitabilityStore({query,clock});
  const portfolio=createPortfolioStore({query,clock});
  const goldH4=createGoldH4Store({query,clock});
+ const lw=createLWStore({query});
  const fusion=createFusionStore({query,clock});
  async function verify(){
   const result=await query('SELECT current_database() AS database_name',[]);
@@ -247,7 +249,7 @@ export function createResearchJournal({query,clock}={}){
    FROM agentic_research.demo_closed_positions c JOIN agentic_research.demo_lifecycle_anchors a USING(intent_id) GROUP BY a.symbol,c.currency ORDER BY a.symbol,c.currency`,[]);
   return {status:'SIGNED_DEMO_CLOSED_POSITION_COHORT',anchors:a.rows[0].n,markets:r.rows.map(x=>({...x,winRate:x.closed?x.wins/x.closed:null,profitFactor:x.negative_net>0?x.positive_net/x.negative_net:null})),brokerSigned:false,cohortOnly:true,drawdown:null,accountWideCostsIncluded:false,profitabilityEstablished:false};
  }
- return {goldH4Observe:async q=>{ensure();return goldH4.observe(q)},goldH4Report:async()=>{ensure();return goldH4.report()},saveLifecycleAnchor,saveClosedPosition,closedPositionReport,reservePrimarySlot,primarySlotReport,portfolioSave:async x=>{ensure();return portfolio.save(x)},portfolioObserve:async x=>{ensure();return portfolio.observe(x)},portfolioReport:async()=>{ensure();return portfolio.report()},paperSave:async x=>{ensure();return paper.save(x)},paperObserve:async x=>{ensure();return paper.observe(x)},paperReport:async()=>{ensure();return paper.report()},statisticalReview:async()=>{ensure();return statisticalReview(query)},fusionStore:{reserve:async x=>{ensure();return fusion.reserve(x)},fail:async x=>{ensure();return fusion.fail(x)},save:async x=>{ensure();return fusion.save(x)},observe:async x=>{ensure();return fusion.observe(x)},report:async()=>{ensure();return fusion.report()}},verify,saveForecast,firstForecast,firstActual,saveActual,saveAnalysis,viewDecisions,
+ return {lwObserve:async q=>{ensure();return lw.observe(q)},lwReport:async()=>{ensure();return lw.report()},goldH4Observe:async q=>{ensure();return goldH4.observe(q)},goldH4Report:async()=>{ensure();return goldH4.report()},saveLifecycleAnchor,saveClosedPosition,closedPositionReport,reservePrimarySlot,primarySlotReport,portfolioSave:async x=>{ensure();return portfolio.save(x)},portfolioObserve:async x=>{ensure();return portfolio.observe(x)},portfolioReport:async()=>{ensure();return portfolio.report()},paperSave:async x=>{ensure();return paper.save(x)},paperObserve:async x=>{ensure();return paper.observe(x)},paperReport:async()=>{ensure();return paper.report()},statisticalReview:async()=>{ensure();return statisticalReview(query)},fusionStore:{reserve:async x=>{ensure();return fusion.reserve(x)},fail:async x=>{ensure();return fusion.fail(x)},save:async x=>{ensure();return fusion.save(x)},observe:async x=>{ensure();return fusion.observe(x)},report:async()=>{ensure();return fusion.report()}},verify,saveForecast,firstForecast,firstActual,saveActual,saveAnalysis,viewDecisions,
   saveOperationalEvent,operationalReport,
   saveBrokerHistoryProof,brokerHistoryProofReport,calendarEvidenceReport,
   saveForward:async x=>{ensure();return durable.save(x)},

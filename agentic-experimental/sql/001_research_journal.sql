@@ -239,3 +239,8 @@ CREATE TABLE IF NOT EXISTS agentic_research.gold_h4_research (
  id INTEGER PRIMARY KEY CHECK(id=1), state JSONB NOT NULL CHECK(jsonb_typeof(state)='object'),
  revision BIGINT NOT NULL DEFAULT 0 CHECK(revision>=0)
 );
+
+-- Deduplicated observations, not trade orders or P&L.
+CREATE TABLE IF NOT EXISTS agentic_research.lw_momentum20_candidates (
+ feed TEXT NOT NULL CHECK(feed ~ '^[a-f0-9]{64}$'), closed_bar BIGINT NOT NULL CHECK(closed_bar>0), side TEXT NOT NULL CHECK(side IN ('BUY','SELL')), status TEXT NOT NULL CHECK(status IN ('OBSERVED_CANDIDATE','CANDIDATE_QUOTE_BLOCKED')), evidence JSONB NOT NULL CHECK(jsonb_typeof(evidence)='object'), PRIMARY KEY(feed,closed_bar)
+);
