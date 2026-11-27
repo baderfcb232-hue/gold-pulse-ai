@@ -53,7 +53,7 @@ export function observe(state,q,now){
  s.position={side,entry,stop,units,fee:units*distance*POLICY.feeR,openedAt:q.timestamp,bar:setup.bar};s.entries++;
  append(s,{type:side===1?'PAPER_LONG':'PAPER_SHORT',at:q.timestamp,bar:setup.bar});return s;
 }
-export function report(s){return {policy:POLICY,status:'RESEARCH_ONLY_UNVALIDATED',initialBalance:2000,observedBalance:s.balance,netProfit:s.balance-2000,entries:s.entries,closed:s.closed,open:s.position?1:0,invalidated:s.invalidated,wins:s.wins,profitFactor:s.closed>=30&&s.grossLoss>0?s.grossProfit/s.grossLoss:null,maxRealizedDrawdownPct:100*s.maxRealizedDrawdown,lastClosedH4Bar:s.lastBar||null,latest:s.latest,recent:s.recent,simulated:true,swapIncluded:false,quoteSamplingOnly:true,invalidatedPositionsExcluded:true,profitabilityEstablished:false,ordersCreated:0,executionPermission:false};}
+export function report(s){return {policy:POLICY,status:s.invalidated?'INCOMPLETE_COHORT_NOT_SCORABLE':'RESEARCH_ONLY_UNVALIDATED',initialBalance:2000,observedBalance:s.balance,netProfit:s.balance-2000,entries:s.entries,closed:s.closed,open:s.position?1:0,invalidated:s.invalidated,wins:s.wins,profitFactor:s.invalidated===0&&s.closed>=30&&s.grossLoss>0?s.grossProfit/s.grossLoss:null,maxRealizedDrawdownPct:100*s.maxRealizedDrawdown,lastClosedH4Bar:s.lastBar||null,latest:s.latest,recent:s.recent,simulated:true,swapIncluded:false,quoteSamplingOnly:true,invalidatedPositionsExcluded:true,cohortComplete:s.invalidated===0,profitabilityEstablished:false,ordersCreated:0,executionPermission:false};}
 export function createGoldH4Store({query,clock=()=>Math.floor(Date.now()/1000)}){
  async function observeQuote(q){
   const now=clock();if(!valid(q,now))return;
