@@ -55,8 +55,8 @@ export function createDemoAutoBrain({
      const journal=journalProvider();
      if(!journal?.reservePrimarySlot)throw Error('NO_DURABLE_BUDGET');
      const claim=await journal.reservePrimarySlot({symbol,slotStart:trigger.slotStart});
-     if(!claim.inserted){blocked++;record(symbol,'BLOCKED',{reason:'DURABLE_SLOT_OR_DAILY_BUDGET_UNAVAILABLE'});return;}
-    }catch{persistenceFailures++;blocked++;record(symbol,'BLOCKED',{reason:'DURABLE_BUDGET_UNAVAILABLE'});return;}
+     if(!claim.inserted){blocked++;record(symbol,'BLOCKED',{reason:claim.reason||'DURABLE_SLOT_OR_DAILY_BUDGET_UNAVAILABLE'});return;}
+    }catch{scheduler.releaseUnspent?.(trigger);persistenceFailures++;blocked++;record(symbol,'BLOCKED',{reason:'DURABLE_BUDGET_UNAVAILABLE'});return;}
    }
    const primary=brain.analyze(ctx);
    try{onComparison(ctx,primary);}catch{}
@@ -119,6 +119,7 @@ export function createDemoAutoBrain({
   if(depth.candlesM5.length<205||depth.candlesM15.length<30||
      depth.candlesH1.length<30||depth.candlesH4.length<25)
    {diag.lastSnapshotReason='WAITING_DEEP_CLOSED_BARS';return {scheduled:false,reason:'WAITING_DEEP_CLOSED_BARS',...noOrders};}
+  diag.lastDeepDepth={...diag.depth};
   diag.lastDeepAt=utc(now);
   diag.lastDeepBarAt=utc(depth.candlesM5.at(-1).time);
   if(active.has(symbol)){diag.lastSnapshotReason='MODEL_BUSY_FOR_SYMBOL';return {scheduled:false,reason:'MODEL_BUSY_FOR_SYMBOL',...noOrders};}
