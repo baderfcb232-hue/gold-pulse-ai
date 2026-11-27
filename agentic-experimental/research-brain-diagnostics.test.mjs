@@ -40,8 +40,10 @@ test('evidence-balanced decision policy retains WATCH and WAIT without granting 
    assert.match(request.instructions,/Do not target any trade frequency/);
    assert.match(request.instructions,/specific missing confirmation/);
    assert.match(request.instructions,/do not inflate it/);
+   assert.match(request.instructions,/Chandelier values are raw exit references, never active broker stops/);
+   assert.match(request.instructions,/null is unavailable, not a negative signal/);
    return {ok:true,json:async()=>({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(plan)}]}]})};
   }});
-  const r=await brain.analyze(ctx);assert.equal(r.plan.stance,stance);assert.equal(r.tradeAllowed,false);assert.equal(r.plan.executionPermission,false);assert.equal(r.order,null);assert.equal(brain.report().policyVersion,'V6_EVIDENCE_BALANCED');
+  const r=await brain.analyze(ctx);assert.equal(r.plan.stance,stance);assert.equal(r.tradeAllowed,false);assert.equal(r.plan.executionPermission,false);assert.equal(r.order,null);assert.equal(brain.report().policyVersion,'V7_SESSION_STRUCTURE');
  }
 });
