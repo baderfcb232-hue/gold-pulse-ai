@@ -1,5 +1,6 @@
 // Accepts test envelopes only through an injected function, not an HTTP route.
 // This is a contract validator for future ISOLATED MT5 demo sensor, not a broker bridge.
+import {validateDailySession} from './lw-momentum20.mjs';
 const finite=x=>typeof x==='number'&&Number.isFinite(x);
 const valid=x=>Number.isSafeInteger(x)&&x>0;
 const safeBars=(bars,n)=>bars.slice(-n).map(b=>{const c={time:b.time,open:b.open,high:b.high,low:b.low,close:b.close};for(const k of ['tickVolume','realVolume'])if(Number.isSafeInteger(b[k])&&b[k]>=0)c[k]=b[k];return c;});
@@ -65,6 +66,7 @@ export function validateIsolatedDemoSnapshot(snapshot,now){
   tickValue:snapshot.tickValue,contractSize:snapshot.contractSize,
   candlesM5:safeBars(snapshot.candlesM5,240),
   multiTimeframeVerified,
+  dailySession:snapshot.symbol==='XAUUSD'?validateDailySession(snapshot.dailySession,snapshot.timestamp):null,
   candlesM15:multiTimeframeVerified?safeBars(snapshot.candlesM15,100):null,
   candlesH1:multiTimeframeVerified?safeBars(snapshot.candlesH1,80):null,
   candlesH4:multiTimeframeVerified?safeBars(snapshot.candlesH4,60):null},
