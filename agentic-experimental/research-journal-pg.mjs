@@ -211,9 +211,11 @@ export function createResearchJournal({query,clock}={}){
  async function reservePrimarySlot({symbol,slotStart}={}){
   ensure();
   const now=(clock||(()=>Math.floor(Date.now()/1000)))();
-  if(!['XAUUSD','BTCUSD'].includes(symbol)||!Number.isSafeInteger(slotStart)||slotStart<=0||slotStart%2880!==0||!Number.isSafeInteger(now)||now<slotStart||now>=slotStart+2880)return {inserted:false};
-  const r=await query('SELECT agentic_research.reserve_primary_analysis_slot($1,$2,$3) AS reserved',[symbol,slotStart,now]);
-  return {inserted:r.rows?.[0]?.reserved===true};
+  if(!['XAUUSD','BTCUSD'].includes(symbol)||!Number.isSafeInteger(slotStart)||slotStart<=0||slotStart%2880!==0||!Number.isSafeInteger(now)||now<slotStart||now>=slotStart+2880)return {inserted:false,reason:'INVALID_SLOT'};
+  const r=await query('SELECT agentic_research.claim_primary_analysis_slot_v2($1,$2,$3) AS reason',[symbol,slotStart,now]);
+  const reason=r.rows?.[0]?.reason;
+  if(!['RESERVED','INVALID_SLOT','SLOT_ALREADY_RESERVED','GLOBAL_DAILY_LIMIT','SYMBOL_DAILY_LIMIT'].includes(reason))throw Error('UNKNOWN_SLOT_CLAIM_RESULT');
+  return {inserted:reason==='RESERVED',reason};
  }
  async function primarySlotReport(){
   ensure();const now=(clock||(()=>Math.floor(Date.now()/1000)))();const day=now-now%86400;

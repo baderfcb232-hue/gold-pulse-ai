@@ -239,8 +239,9 @@ test('primary AI slot reservation is atomic, independent per market and durable 
  const args={symbol:'BTCUSD',slotStart:slot};
  const claims=await Promise.all([a.journal.reservePrimarySlot(args),b.journal.reservePrimarySlot(args)]);
  assert.equal(claims.filter(x=>x.inserted).length,1);
+ assert.equal(claims.find(x=>!x.inserted).reason,'SLOT_ALREADY_RESERVED');
  assert.equal((await a.journal.reservePrimarySlot({...args,symbol:'XAUUSD'})).inserted,true);
- assert.equal((await a.journal.reservePrimarySlot({...args,slotStart:slot+2880})).inserted,false);
+ assert.deepEqual(await a.journal.reservePrimarySlot({...args,slotStart:slot+2880}),{inserted:false,reason:'INVALID_SLOT'});
  const report=await b.journal.primarySlotReport();assert.deepEqual(report.counts,{XAUUSD:1,BTCUSD:1});
  await a.close();a=null;
  assert.equal((await b.journal.reservePrimarySlot(args)).inserted,false);

@@ -116,3 +116,16 @@ test('paced restart cannot repeat reserved slot; deep diagnostics survive shallo
  a.onSnapshot(shallow);assert.equal(a.report().scheduleDiagnostics.XAUUSD.lastDeepReason,'M5_CLOSED');assert.equal(a.report().scheduleDiagnostics.XAUUSD.lastSnapshotReason,'WAITING_DEEP_CLOSED_BARS');
  const b=make();b.onSnapshot(snapshot());await b.flush();assert.equal(calls.length,1);assert.equal(b.report().lastBySymbol.XAUUSD.reason,'DURABLE_SLOT_OR_DAILY_BUDGET_UNAVAILABLE');
 });
+
+test('transient durable failure releases unused local slot, safely retries after cooldown',async()=>{
+ let t=now,calls=[],attempts=0;
+ const ai=createDemoAutoBrain({brains:{XAUUSD:fakeBrain(calls)},scheduler:new HybridScheduler({paced:true,perSymbolLimit:30}),clock:()=>t,enabled:true,journalProvider:()=>({reservePrimarySlot:async()=>{attempts++;if(attempts===1)throw Error('temporary');return {inserted:true,reason:'RESERVED'}}})});
+ ai.onSnapshot(snapshot());await ai.flush();assert.equal(calls.length,0);
+ t+=1;assert.equal(ai.onSnapshot({...snapshot(),timestamp:t-1}).reason,'RATE_LIMITED');
+ t+=60;assert.equal(ai.onSnapshot({...snapshot(),timestamp:t-1}).scheduled,true);await ai.flush();assert.equal(calls.length,1);assert.equal(attempts,2);
+ assert.equal(ai.onSnapshot({...snapshot(),timestamp:t}).reason,'NO_NEW_TRIGGER');
+});
+test('already reserved slot is not retried or counted as new model use',async()=>{
+ const calls=[],ai=createDemoAutoBrain({brains:{XAUUSD:fakeBrain(calls)},scheduler:new HybridScheduler({paced:true,perSymbolLimit:30}),clock:()=>now,enabled:true,journalProvider:()=>({reservePrimarySlot:async()=>({inserted:false,reason:'SLOT_ALREADY_RESERVED'})})});
+ ai.onSnapshot(snapshot());await ai.flush();assert.equal(calls.length,0);assert.equal(ai.report().lastBySymbol.XAUUSD.reason,'SLOT_ALREADY_RESERVED');
+});
