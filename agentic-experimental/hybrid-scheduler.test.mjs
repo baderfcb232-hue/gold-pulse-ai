@@ -75,3 +75,20 @@ test('missed market windows cannot accumulate into a burst',()=>{
  assert.equal(s.consider(input(day+40000)).callAI,true);
  assert.equal(s.consider(input(day+40300)).reason,'PACED_SLOT_USED');
 });
+
+test('opportunity pacing prefers a real closed-bar event but never adds a slot',()=>{
+ const day=Math.floor(T/86400)*86400;
+ const s=new HybridScheduler({dailyLimit:60,perSymbolLimit:30,paced:true,opportunityPaced:true});
+ function deep(now,breakout=false){
+  const x=input(now);const t=x.bars.M5.at(-1).time;
+  x.bars.M5=Array.from({length:21},(_,i)=>({time:t-(20-i)*300,open:100,high:101,low:99,close:100}));
+  if(breakout)x.bars.M5[20]={time:t,open:100,high:105,low:99,close:104};
+  return x;
+ }
+ assert.equal(s.consider(deep(day+300)).reason,'WAITING_OPPORTUNITY_OR_SLOT_FALLBACK');
+ const x=s.consider(deep(day+600,true));assert.equal(x.callAI,true);assert.equal(x.schedulingEvidence,'CHANNEL_BREAK');
+ assert.equal(s.consider(deep(day+900,true)).reason,'PACED_SLOT_USED');
+ assert.equal(s.consider(deep(day+2880+300)).reason,'WAITING_OPPORTUNITY_OR_SLOT_FALLBACK');
+ const y=s.consider(deep(day+2880+2400));assert.equal(y.callAI,true);assert.equal(y.schedulingEvidence,'LATE_SLOT_REVIEW');
+ assert.equal(s.report().callsToday,2);
+});
