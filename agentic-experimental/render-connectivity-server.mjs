@@ -110,6 +110,19 @@ function observeGoldH4(q){
  goldH4Busy=true;
  void connectedJournal.goldH4Observe(q).then(()=>{goldH4LastTick=q.timestamp;goldH4LastBar=Math.max(goldH4LastBar,bar);}).catch(()=>{goldH4Errors++;console.log('[NABD GOLD H4] WRITE_FAILED');}).finally(()=>{goldH4Busy=false});
 }
+// Monitor each received closed M5 crossing independently of the AI budget.
+let lwBusy=false,lwLastKey=null,lwErrors=0,lwLatest=null,lwBusySkips=0;
+function observeLW(q){
+ if(q?.symbol!=='XAUUSD'||!connectedJournal?.lwObserve)return;
+ const bar=q.candlesM5?.at(-1)?.time;
+ if(!bar)return;
+ if(!q.dailySession){lwLatest='WAITING_VERIFIED_BROKER_D1';return;}
+ const key=JSON.stringify([q.brokerServer,q.accountLogin,q.brokerSymbol,bar,q.dailySession.start]);
+ if(key===lwLastKey)return;
+ if(lwBusy){lwBusySkips++;return;}
+ lwBusy=true;
+ void connectedJournal.lwObserve(q).then(r=>{lwLastKey=key;lwLatest=r.status;}).catch(()=>{lwErrors++;console.log('[NABD LW] WRITE_FAILED');}).finally(()=>{lwBusy=false;});
+}
 // Paper work has its own bounded observer queue; never delay existing forward scoring.
 const paperDbQueue=new Map(),paperLastObserve=new Map();
 let paperDbFailures=0,paperObserverSkipped=0;
@@ -221,6 +234,12 @@ const server=http.createServer(async(req,res)=>{
     }
     return;
   }
+  if(pathname==='/lw-momentum20/status'&&req.method==='GET'){
+    const headers={'Content-Type':'application/json','Cache-Control':'private, no-store'};
+    if(!authorizedView(req.headers.authorization,process.env.NABD_DEMO_VIEW_TOKEN)){res.writeHead(403,headers);res.end(JSON.stringify({error:'READ_AUTH_REQUIRED'}));return;}
+    try{const data=await connectedJournal.lwReport();res.writeHead(200,headers);res.end(JSON.stringify({...data,latestStatus:lwLatest,writeErrors:lwErrors,busySkips:lwBusySkips}));}
+    catch{res.writeHead(503,headers);res.end(JSON.stringify({error:'LW_RESEARCH_JOURNAL_UNAVAILABLE'}));}return;
+  }
   if(pathname==='/gold-h4-research/status'&&req.method==='GET'){
     const headers={'Content-Type':'application/json','Cache-Control':'private, no-store'};
     if(!authorizedView(req.headers.authorization,process.env.NABD_DEMO_VIEW_TOKEN)){res.writeHead(403,headers);res.end(JSON.stringify({error:'READ_AUTH_REQUIRED'}));return;}
@@ -329,6 +348,7 @@ const server=http.createServer(async(req,res)=>{
       for(const symbol of verdict.symbols){
         const snapshot=demoIngest.getLatest(symbol);
         observeGoldH4(snapshot);
+        observeLW(snapshot);
         forwardEvaluation.observe(snapshot);
         fusionRuntime.observe(snapshot);
         serializeForwardDb(symbol,journal=>journal.observeForward(snapshot));
