@@ -77,6 +77,18 @@ export class HybridScheduler {
     return {callAI:true,reason,symbol,slotStart,schedulingEvidence,referenceOnly:true,tradingEnabled:false,
       closedBarTime:m5,dataAsOf:now,requestsToday:this.counts[symbol]};
   }
+  // Recover only before a model call has been attempted. The database claim
+  // is still mandatory, even when a previous claim response was lost.
+  releaseUnspent(trigger){
+    if(!this.config.paced||!trigger||trigger.slotStart==null)return false;
+    const prior=this.state.get(trigger.symbol);
+    if(!prior||prior.slotStart!==trigger.slotStart||prior.lastCall!==trigger.dataAsOf||
+       this.day!==new Date(trigger.dataAsOf*1000).toISOString().slice(0,10))return false;
+    this.state.set(trigger.symbol,{...prior,m5:null,slotStart:null});
+    this.total=Math.max(0,this.total-1);
+    this.counts[trigger.symbol]=Math.max(0,(this.counts[trigger.symbol]||0)-1);
+    return true;
+  }
   report(){
     return {experimental:true,tradingEnabled:false,marketAdapter:'not_connected',
       newsAdapter:'not_connected',analysisMode:'shadow_only',
