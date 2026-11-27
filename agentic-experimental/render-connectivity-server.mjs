@@ -502,7 +502,7 @@ server.listen(port,'0.0.0.0',()=>{console.log('[NABD AGENTIC TEST] ready on port
       const m=sensor.markets[symbol], d=brain.scheduleDiagnostics[symbol];
       console.log('[NABD MARKET DIAG]',symbol,JSON.stringify({
         feed:m?.status||'NO_VALID_SNAPSHOT_SINCE_START',quoteAgeSeconds:m?.quoteAgeSeconds??null,
-        lastInvalid:sensor.lastInvalidSnapshot?.symbol===symbol?sensor.lastInvalidSnapshot.reasons:[],
+        input:sensor.marketInput[symbol]||null,lastInvalid:sensor.lastInvalidSnapshot?.symbol===symbol?sensor.lastInvalidSnapshot.reasons:[],
         lastDeepAt:d?.lastDeepAt||null,lastDeepReason:d?.lastDeepReason||null,depth:d?.depth||null,
         schedulingEvidence:d?.lastSchedulingEvidence||null,decision:brain.lastBySymbol[symbol]?.stance||null,
         executorReason:trade.lastBySymbol[symbol]?.reason||null
