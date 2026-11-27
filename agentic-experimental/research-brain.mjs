@@ -41,7 +41,7 @@ export function validateResearchContext(ctx,now){
  return {status:reasons.length?'BLOCKED':'RESEARCH_CONTEXT_READY',
   reasons,tradeAllowed:false,order:null};
 }
-export const DECISION_POLICY_VERSION='V7_SESSION_STRUCTURE';
+export const DECISION_POLICY_VERSION='V8_LW_MOMENTUM20';
 const schema={
  type:'object',additionalProperties:false,
  properties:{
