@@ -34,7 +34,7 @@ import {createIncidentMonitor} from './phase10-incident-monitor.mjs';
 const feed=createShadowFeedRunner();
 const goldSpot=createPublicGoldObserver();
 const sources=createResearchSources({goldKey:process.env.NABD_TEST_GOLD_TWELVEDATA_KEY}); // Calendar polled only by economicCalendar to avoid duplicate paid-provider calls.
-const hybrid=new HybridScheduler({dailyLimit:60,perSymbolLimit:30,paced:true});
+const hybrid=new HybridScheduler({dailyLimit:60,perSymbolLimit:30,paced:true,opportunityPaced:true});
 let shadowSmoke={status:'NOT_RUN',syntheticDataOnly:true,brokerTradingEnabled:false};
 const researchBrain=createResearchBrain({key:process.env.OPENAI_API_KEY,model:process.env.NABD_RESEARCH_MODEL||'gpt-4.1-mini'});
 // Use a separate in-flight guard for each market; a slow gold analysis never
@@ -495,6 +495,20 @@ server.listen(port,'0.0.0.0',()=>{console.log('[NABD AGENTIC TEST] ready on port
   void sources.check().then(r=>console.log('[NABD RESEARCH SOURCES]',JSON.stringify(r)));
   void officialNews.poll().then(r=>console.log('[NABD OFFICIAL NEWS]',r.status,JSON.stringify(r.providers)));
   const officialNewsTimer=setInterval(()=>void officialNews.poll().then(r=>{if(r.status!=='OK')console.log('[NABD OFFICIAL NEWS]',r.status);}),5*60000); officialNewsTimer.unref();
+  // Bounded, redacted per-market diagnostics. Never log prices, credentials or account IDs.
+  const marketDiagTimer=setInterval(()=>{
+    const sensor=demoIngest.report(), brain=demoAutoBrain.report(), trade=demoTradeIntents.report();
+    for(const symbol of ['XAUUSD','BTCUSD']){
+      const m=sensor.markets[symbol], d=brain.scheduleDiagnostics[symbol];
+      console.log('[NABD MARKET DIAG]',symbol,JSON.stringify({
+        feed:m?.status||'NO_VALID_SNAPSHOT_SINCE_START',quoteAgeSeconds:m?.quoteAgeSeconds??null,
+        lastInvalid:sensor.lastInvalidSnapshot?.symbol===symbol?sensor.lastInvalidSnapshot.reasons:[],
+        lastDeepAt:d?.lastDeepAt||null,lastDeepReason:d?.lastDeepReason||null,depth:d?.depth||null,
+        schedulingEvidence:d?.lastSchedulingEvidence||null,decision:brain.lastBySymbol[symbol]?.stance||null,
+        executorReason:trade.lastBySymbol[symbol]?.reason||null
+      }));
+    }
+  },300000);marketDiagTimer.unref();
   const auditTimer=setInterval(()=>void flushOperational(),30*1000);auditTimer.unref();
   const timer=setInterval(()=>void feed.poll().then(r=>{if(r.status==='ERROR')console.log('[NABD REFERENCE FEED] ERROR',r.code);}),60000);
   timer.unref();
