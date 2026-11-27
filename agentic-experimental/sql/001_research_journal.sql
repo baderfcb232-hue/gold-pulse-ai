@@ -194,22 +194,29 @@ CREATE TABLE IF NOT EXISTS agentic_research.primary_analysis_slots (
 
 -- Preserve today's already journaled decisions when switching from the old scheduler.
 -- The reservation transaction serializes all workers; no retry after a failed call.
-CREATE OR REPLACE FUNCTION agentic_research.reserve_primary_analysis_slot(p_symbol TEXT,p_slot BIGINT,p_now BIGINT)
-RETURNS BOOLEAN LANGUAGE plpgsql AS $primary_slot$
+CREATE OR REPLACE FUNCTION agentic_research.claim_primary_analysis_slot_v2(p_symbol TEXT,p_slot BIGINT,p_now BIGINT)
+RETURNS TEXT LANGUAGE plpgsql AS $primary_slot$
 DECLARE day_start BIGINT; cutover BIGINT; legacy_total INTEGER; legacy_symbol INTEGER; reserved_total INTEGER; reserved_symbol INTEGER;
 BEGIN
- IF p_symbol NOT IN ('XAUUSD','BTCUSD') OR p_slot<=0 OR p_slot%2880<>0 OR p_now<p_slot OR p_now>=p_slot+2880 THEN RETURN FALSE; END IF;
+ IF p_symbol NOT IN ('XAUUSD','BTCUSD') OR p_slot<=0 OR p_slot%2880<>0 OR p_now<p_slot OR p_now>=p_slot+2880 THEN RETURN 'INVALID_SLOT'; END IF;
  day_start:=p_now-p_now%86400;
  PERFORM pg_advisory_xact_lock(19476202);
+ IF EXISTS(SELECT 1 FROM agentic_research.primary_analysis_slots WHERE symbol=p_symbol AND slot_start=p_slot) THEN RETURN 'SLOT_ALREADY_RESERVED'; END IF;
  SELECT COALESCE(min(reserved_at),p_now) INTO cutover FROM agentic_research.primary_analysis_slots WHERE slot_start>=day_start AND slot_start<day_start+86400;
  SELECT count(*),count(*) FILTER(WHERE symbol=p_symbol) INTO legacy_total,legacy_symbol
  FROM agentic_research.shadow_analysis_decisions WHERE analyzed_at>=to_timestamp(day_start) AND analyzed_at<to_timestamp(cutover);
  SELECT count(*),count(*) FILTER(WHERE symbol=p_symbol) INTO reserved_total,reserved_symbol
  FROM agentic_research.primary_analysis_slots WHERE slot_start>=day_start AND slot_start<day_start+86400;
- IF legacy_total+reserved_total>=60 OR legacy_symbol+reserved_symbol>=30 THEN RETURN FALSE; END IF;
+ IF legacy_total+reserved_total>=60 THEN RETURN 'GLOBAL_DAILY_LIMIT'; END IF;
+ IF legacy_symbol+reserved_symbol>=30 THEN RETURN 'SYMBOL_DAILY_LIMIT'; END IF;
  INSERT INTO agentic_research.primary_analysis_slots(symbol,slot_start,reserved_at) VALUES(p_symbol,p_slot,p_now) ON CONFLICT DO NOTHING;
- RETURN FOUND;
+ IF FOUND THEN RETURN 'RESERVED'; END IF;
+ RETURN 'SLOT_ALREADY_RESERVED';
 END; $primary_slot$;
+CREATE OR REPLACE FUNCTION agentic_research.reserve_primary_analysis_slot(p_symbol TEXT,p_slot BIGINT,p_now BIGINT)
+RETURNS BOOLEAN LANGUAGE sql AS $primary_slot_compat$
+ SELECT agentic_research.claim_primary_analysis_slot_v2(p_symbol,p_slot,p_now)='RESERVED';
+$primary_slot_compat$;
 
 -- Signed entry anchors and reconciled closed positions, isolated Demo only.
 CREATE TABLE IF NOT EXISTS agentic_research.demo_lifecycle_anchors (
