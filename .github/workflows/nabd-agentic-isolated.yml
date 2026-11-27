@@ -36,6 +36,8 @@ on:
       - 'agentic-experimental/demo-auto-brain.test.mjs'
       - 'agentic-experimental/session-structure-evidence.mjs'
       - 'agentic-experimental/session-structure-evidence.test.mjs'
+      - 'agentic-experimental/lw-momentum20.mjs'
+      - 'agentic-experimental/lw-momentum20.test.mjs'
       - 'agentic-experimental/market-features.mjs'
       - 'agentic-experimental/market-features.test.mjs'
       - 'agentic-experimental/research-brain.mjs'
