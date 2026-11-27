@@ -70,6 +70,22 @@ def closed_bars(mt5, symbol, timeframe, now):
         raise RuntimeError("STALE_CANDLES_" + timeframe)
     return result
 
+def optional_daily_session(mt5, symbol, now):
+    """Read the current broker D1 open and 21 prior completed sessions only."""
+    if not hasattr(mt5, "TIMEFRAME_D1"):
+        return None
+    try:
+        bars = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_D1, 0, 22)
+        if bars is None or len(bars) != 22:
+            return None
+        rows = sorted([{"time": int(b["time"]), **{k: float(b[k]) for k in ("open","high","low","close")}} for b in bars], key=lambda b:b["time"])
+        last = rows[-1]
+        if last["time"] > now or now-last["time"] >= 95040:
+            return None
+        return {"start": last["time"], "open": last["open"], "closed": rows[:-1]}
+    except (ValueError, TypeError, KeyError, IndexError, OverflowError):
+        return None
+
 def capture(mt5, canonical, broker_symbol, now, server):
     account = mt5.account_info()
     if (account is None or account.trade_mode != mt5.ACCOUNT_TRADE_MODE_DEMO or
@@ -103,6 +119,10 @@ def capture(mt5, canonical, broker_symbol, now, server):
     }
     for frame in TIMEFRAMES:
         payload["candles" + frame] = closed_bars(mt5, broker_symbol, frame, now)
+    if canonical == "XAUUSD":
+        daily = optional_daily_session(mt5, broker_symbol, now)
+        if daily is not None:
+            payload["dailySession"] = daily
     return payload
 
 def recent_broker_history(mt5, now, account_login, broker_symbols):
